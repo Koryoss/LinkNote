@@ -1,0 +1,28 @@
+# Render 배포 설정 (Blueprint)
+# 이 파일이 있는 study-rag-api 폴더를 git 저장소 루트로 올린다고 가정합니다.
+services:
+  - type: web
+    name: linknote
+    runtime: python
+    plan: starter            # 영구 디스크는 유료 플랜 필요(약 $7/월)
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn api_server:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11.9"
+      - key: EMBED_PROVIDER
+        value: openai          # 웹에선 Ollama 없으므로 OpenAI 임베딩
+      - key: DATA_DIR
+        value: /var/data
+      - key: CHROMA_PATH
+        value: /var/data/chroma_db
+      - key: AUTH_SECRET
+        generateValue: true    # 토큰 서명 비밀키 자동 생성
+      - key: OPENAI_API_KEY
+        sync: false            # 대시보드에서 직접 입력(비밀)
+      - key: GOOGLE_CLIENT_ID
+        sync: false            # 대시보드에서 직접 입력
+    disk:
+      name: linknote-data
+      mountPath: /var/data     # 데이터·ChromaDB 영구 저장
+      sizeGB: 1

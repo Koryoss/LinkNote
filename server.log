@@ -1,0 +1,75 @@
+INFO:     Started server process [67226]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
+INFO:     127.0.0.1:62982 - "GET /docs HTTP/1.1" 200 OK
+WARNING:  Invalid HTTP request received.
+WARNING:  Invalid HTTP request received.
+INFO:     127.0.0.1:62985 - "POST /reindex-concepts HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63030 - "GET /library?user_id=%EC%A0%95%EC%9C%A0%EC%A7%84 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63030 - "GET /timetable/entries HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63032 - "GET /units?user_id=%EC%A0%95%EC%9C%A0%EC%A7%84&semester=2026-1&course=%EB%B3%91%ED%83%9C%EC%83%9D%EB%A6%AC%ED%95%99%201 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63032 - "GET /timetable/entries HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63032 - "GET /concepts?user_id=%EC%A0%95%EC%9C%A0%EC%A7%84&semester=2026-1&course=%EB%B3%91%ED%83%9C%EC%83%9D%EB%A6%AC%ED%95%99%201&unit=%EC%88%98%EB%B6%84%20%EC%A0%84%ED%95%B4%EC%A7%88%20%EC%82%B0%EC%97%BC%EA%B8%B0%20%EB%B6%88%EA%B7%A0%ED%98%95 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63032 - "GET /timetable/entries HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63032 - "GET /library?user_id=%EC%A0%95%EC%9C%A0%EC%A7%84 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63032 - "GET /timetable/entries HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63032 - "GET /units?user_id=%EC%A0%95%EC%9C%A0%EC%A7%84&semester=2026-1&course=%EA%B0%84%ED%98%B8%ED%86%B5%EA%B3%84%ED%95%99 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63032 - "GET /timetable/entries HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63032 - "GET /concepts?user_id=%EC%A0%95%EC%9C%A0%EC%A7%84&semester=2026-1&course=%EA%B0%84%ED%98%B8%ED%86%B5%EA%B3%84%ED%95%99&unit=%EA%B8%B0%EC%88%A0%ED%86%B5%EA%B3%84 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63032 - "GET /timetable/entries HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63032 - "GET /library?user_id=%EC%A0%95%EC%9C%A0%EC%A7%84 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63032 - "GET /timetable/entries HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63032 - "GET /units?user_id=%EC%A0%95%EC%9C%A0%EC%A7%84&semester=2026-1&course=%EB%B3%91%ED%83%9C%EC%83%9D%EB%A6%AC%ED%95%99%201 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63032 - "GET /timetable/entries HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63032 - "GET /concepts?user_id=%EC%A0%95%EC%9C%A0%EC%A7%84&semester=2026-1&course=%EB%B3%91%ED%83%9C%EC%83%9D%EB%A6%AC%ED%95%99%201&unit=%EC%A0%84%EB%A6%BD%EC%84%A0%EC%97%BC%2C%20%EC%96%91%EC%84%B1%20%EC%A0%84%EB%A6%BD%EC%84%A0%20%EB%B9%84%EB%8C%80%EC%A6%9D%2C%20%EC%A0%84%EB%A6%BD%EC%84%A0%EC%95%94%2C%20%EC%9E%90%EA%B6%81%EB%82%B4%EB%A7%89%EC%A6%9D%2C%20%EC%9E%90%EA%B6%81%EA%B7%BC%EC%A2%85%2C%20%EC%9E%90%EA%B6%81%EA%B2%BD%EB%B6%80%EC%95%94%2C%20%EC%9E%90%EA%B6%81%EB%82%B4%EB%A7%89%EC%95%94 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63032 - "GET /timetable/entries HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63037 - "GET /library?user_id=%EC%A0%95%EC%9C%A0%EC%A7%84 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63037 - "GET /timetable/entries HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63037 - "GET /units?user_id=%EC%A0%95%EC%9C%A0%EC%A7%84&semester=2026-1&course=%EC%9D%B8%EC%B2%B4%20%EA%B5%AC%EC%A1%B0%EC%99%80%20%EA%B8%B0%EB%8A%A5%202 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63037 - "GET /timetable/entries HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63037 - "GET /library?user_id=%EC%A0%95%EC%9C%A0%EC%A7%84 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63037 - "GET /timetable/entries HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63037 - "GET /units?user_id=%EC%A0%95%EC%9C%A0%EC%A7%84&semester=2026-1&course=%EB%B3%91%ED%83%9C%EC%83%9D%EB%A6%AC%ED%95%99%201 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63037 - "GET /timetable/entries HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63037 - "GET /concepts?user_id=%EC%A0%95%EC%9C%A0%EC%A7%84&semester=2026-1&course=%EB%B3%91%ED%83%9C%EC%83%9D%EB%A6%AC%ED%95%99%201&unit=%EB%A9%B4%EC%97%AD%EC%9E%A5%EC%95%A0 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63037 - "GET /timetable/entries HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63037 - "GET /library?user_id=%EC%A0%95%EC%9C%A0%EC%A7%84 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63037 - "GET /timetable/entries HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63037 - "GET /units?user_id=%EC%A0%95%EC%9C%A0%EC%A7%84&semester=2026-1&course=%EB%B3%91%ED%83%9C%EC%83%9D%EB%A6%AC%ED%95%99%201 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63037 - "GET /timetable/entries HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63037 - "GET /concepts?user_id=%EC%A0%95%EC%9C%A0%EC%A7%84&semester=2026-1&course=%EB%B3%91%ED%83%9C%EC%83%9D%EB%A6%AC%ED%95%99%201&unit=%EB%A7%8C%EC%84%B1%EA%B8%B0%EA%B4%80%EC%A7%80%EC%97%BC%2C%20%ED%8F%90%EA%B8%B0%EC%A2%85%2C%20%EA%B8%B0%EA%B4%80%EC%A7%80%ED%99%95%EC%9E%A5%EC%A6%9D%2C%20%EC%A7%84%ED%8F%90%EC%A6%9D%2C%20%ED%8F%90%EB%B6%80%EC%A2%85%2C%20%ED%8F%90%EC%83%89%EC%A0%84%2C%20%EB%AC%B4%EA%B8%B0%ED%8F%90%2C%20%ED%9D%89%EB%A7%89%EC%82%BC%EC%B6%9C%2C%20%EA%B8%B0%ED%9D%89 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63037 - "GET /timetable/entries HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63046 - "GET /library?user_id=%EC%A0%95%EC%9C%A0%EC%A7%84 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63047 - "POST /reindex-concepts HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63054 - "GET /library?user_id=%EC%A0%95%EC%9C%A0%EC%A7%84 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63056 - "POST /reindex-concepts HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63054 - "GET /timetable/entries HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63065 - "GET /units?user_id=%EC%A0%95%EC%9C%A0%EC%A7%84&semester=2026-1&course=%EA%B0%84%ED%98%B8%ED%86%B5%EA%B3%84%EC%84%B8%EB%AF%B8%EB%82%98 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63067 - "GET /library?user_id=%EC%A0%95%EC%9C%A0%EC%A7%84 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63070 - "POST /reindex-concepts HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63075 - "POST /reindex-concepts HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63078 - "POST /reindex-concepts HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63083 - "POST /reindex-concepts HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63090 - "GET /library?user_id=%EC%A0%95%EC%9C%A0%EC%A7%84 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63091 - "GET /library?user_id=%EC%A0%95%EC%9C%A0%EC%A7%84 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63096 - "GET /library?user_id=%EC%A0%95%EC%9C%A0%EC%A7%84 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63096 - "GET /timetable/entries HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63109 - "GET /units?user_id=%EC%A0%95%EC%9C%A0%EC%A7%84&semester=2026-1&course=%EA%B0%84%ED%98%B8%ED%86%B5%EA%B3%84%EC%84%B8%EB%AF%B8%EB%82%98 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63109 - "GET /timetable/entries HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63109 - "GET /concepts?user_id=%EC%A0%95%EC%9C%A0%EC%A7%84&semester=2026-1&course=%EA%B0%84%ED%98%B8%ED%86%B5%EA%B3%84%EC%84%B8%EB%AF%B8%EB%82%98&unit=R%20%ED%94%84%EB%A1%9C%EA%B7%B8%EB%9E%A8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63109 - "GET /timetable/entries HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63110 - "GET /library?user_id=%EC%A0%95%EC%9C%A0%EC%A7%84 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63110 - "GET /timetable/entries HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63110 - "GET /units?user_id=%EC%A0%95%EC%9C%A0%EC%A7%84&semester=2026-1&course=%EA%B0%84%ED%98%B8%ED%86%B5%EA%B3%84%EC%84%B8%EB%AF%B8%EB%82%98 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63110 - "GET /timetable/entries HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63110 - "GET /concepts?user_id=%EC%A0%95%EC%9C%A0%EC%A7%84&semester=2026-1&course=%EA%B0%84%ED%98%B8%ED%86%B5%EA%B3%84%EC%84%B8%EB%AF%B8%EB%82%98&unit=%EA%B5%B0%EC%A7%91%20%EB%B6%84%EC%84%9D HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63110 - "GET /timetable/entries HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63112 - "GET /units?user_id=%EC%A0%95%EC%9C%A0%EC%A7%84&semester=2026-1&course=%EA%B0%84%ED%98%B8%ED%86%B5%EA%B3%84%ED%95%99 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63112 - "GET /timetable/entries HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63118 - "GET /concepts?user_id=%EC%A0%95%EC%9C%A0%EC%A7%84&semester=2026-1&course=%EA%B0%84%ED%98%B8%ED%86%B5%EA%B3%84%ED%95%99&unit=%EA%B8%B0%EC%88%A0%ED%86%B5%EA%B3%84 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63118 - "GET /timetable/entries HTTP/1.1" 200 OK
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [67226]

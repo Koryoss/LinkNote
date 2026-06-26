@@ -1,0 +1,1229 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LinkNote · Knowledge Gallery</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif; background: #fbfcfe; color: #1f2937; }
+  .topbar {
+    position: sticky; top: 0; z-index: 30; display: flex; align-items: center; gap: 14px;
+    padding: 12px 24px; background: rgba(255,255,255,0.92); backdrop-filter: blur(6px);
+    border-bottom: 1px solid #eef1f6;
+  }
+  .topbar .brand { font-size: 1.35rem; font-weight: 700; white-space: nowrap; }
+  .topbar input { border: 1px solid #d8dee9; border-radius: 8px; padding: 7px 10px; font-size: 0.85rem; width: 120px; }
+  .topbar button { border: 1px solid #2563eb; background: #2563eb; color: #fff; border-radius: 8px; padding: 7px 14px; font-size: 0.85rem; cursor: pointer; }
+  .status { font-size: 0.76rem; display: flex; align-items: center; gap: 6px; margin-left: auto; }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: #cbd5e1; }
+  .dot.on { background: #16a34a; } .dot.off { background: #ef4444; }
+
+  .hero { margin: 18px 24px 0; padding: 22px 26px; border: 1px solid #e3eafc; border-radius: 16px;
+    background: linear-gradient(135deg, #eef4ff 0%, #f7f9ff 60%, #fff 100%); }
+  .hero h1 { font-size: 1.5rem; color: #1e293b; }
+  .hero p { font-size: 0.92rem; color: #64748b; margin-top: 6px; }
+
+  .layout { display: grid; grid-template-columns: 360px 1fr; gap: 20px; margin: 20px 24px 0; }
+  .sidebar { position: sticky; top: 20px; align-self: start; background: #fff; border: 1px solid #e8ebf2; border-radius: 18px; padding: 20px; box-shadow: 0 16px 36px rgba(15,23,42,0.08); min-height: 520px; }
+  .sidebar .panel { margin-bottom: 22px; }
+  .sidebar .panel-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 14px; font-size: 0.95rem; font-weight: 700; color: #1f2937; }
+  .sidebar .panel-header button { border: none; background: #2563eb; color: #fff; border-radius: 12px; padding: 8px 12px; cursor: pointer; font-size: 0.84rem; }
+  .sidebar .timetable-item { margin-bottom: 14px; }
+  .sidebar .timetable-item strong { display: block; margin-bottom: 6px; color: #0f172a; }
+  .sidebar .timetable-item div { font-size: 0.86rem; color: #475569; line-height: 1.5; }
+  .sidebar .confirm-line { display: flex; justify-content: space-between; margin-bottom: 10px; font-size: 0.88rem; }
+  .sidebar .confirm-line span:first-child { color: #64748b; }
+  .sidebar .confirm-line span:last-child { font-weight: 700; color: #1f2937; }
+  .sidebar button.refresh { width: 100%; }
+  .content { display: flex; flex-direction: column; gap: 10px; margin-top: 8px; }
+
+  .crumbs { margin: 0 0 12px; font-size: 0.82rem; color: #64748b; display: flex; align-items: center; gap: 8px; }
+  .crumbs a { color: #2563eb; cursor: pointer; text-decoration: none; }
+  .crumbs .crumb { display:inline-flex; align-items:center; padding:7px 14px; border-radius:9px; font-size:0.85rem; font-weight:600; text-decoration:none; }
+  .crumbs .crumb.link { background:#2563eb; color:#fff; cursor:pointer; border:1px solid #2563eb; }
+  .crumbs .crumb.link:hover { background:#1d4ed8; }
+  .crumbs .crumb.plain { background:#fff; color:#1f2937; border:1px solid #d8dee9; }
+  .crumbs .crumb-sep { color:#cbd5e1; }
+  .crumbs .crumb.has-menu { cursor:pointer; }
+  .crumbs .crumb.has-menu::after { content:'▾'; color:#94a3b8; margin-left:6px; font-size:0.75rem; }
+  .crumb-menu { position:fixed; z-index:80; background:#fff; border:1px solid #e5e7eb; border-radius:12px;
+    box-shadow:0 14px 36px rgba(15,23,42,0.18); padding:6px; min-width:150px; }
+  .crumb-menu-item { padding:9px 12px; border-radius:8px; font-size:0.88rem; color:#1f2937; cursor:pointer; white-space:nowrap; }
+  .crumb-menu-item:hover { background:#f1f5ff; }
+  .crumb-menu-item.on { font-weight:700; color:#2563eb; }
+  .banner { margin: 0 0 6px; padding: 10px 14px; border-radius: 10px; font-size: 0.8rem;
+    background: #fff7ed; border: 1px solid #fed7aa; color: #9a3412; display: none; }
+
+  .section-title { margin: 22px 24px 6px; font-size: 0.95rem; font-weight: 700; }
+  .muted { color: #94a3b8; font-weight: 500; font-size: 0.8rem; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 18px; padding: 8px 24px 32px; }
+  .card { background: #fff; border: 1px solid #e8ebf2; border-radius: 16px; padding: 20px; cursor: pointer;
+    min-height: 116px; box-shadow: 0 2px 10px rgba(15,23,42,0.05);
+    transition: transform .16s, box-shadow .16s, border-color .16s; display: flex; flex-direction: column; justify-content: space-between; }
+  .card:hover { transform: translateY(-4px); box-shadow: 0 12px 26px rgba(15,23,42,0.12); border-color: #c7d6ff; }
+  .card .ctag { font-size: 0.7rem; font-weight: 700; color: #2563eb; letter-spacing: .03em; }
+  .card .ctitle { font-size: 1.08rem; font-weight: 700; margin-top: 8px; color: #1e293b; word-break: keep-all; }
+  .card .cmeta { font-size: 0.76rem; color: #9ca3af; margin-top: 14px; }
+  .empty { margin: 10px 24px 30px; padding: 26px; border: 1px dashed #d8dee9; border-radius: 14px; color: #6b7280; font-size: 0.86rem; background:#fff; }
+
+  #canvas { position: relative; height: 560px; margin: 8px 16px 30px; border: 1px solid #eef1f6; border-radius: 16px; background:#fff; overflow: hidden; }
+  #canvas svg { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+  .line { stroke: #cbd5e1; stroke-width: 2; opacity: 0.4; }
+  .line.active { stroke: #2563eb; opacity: 0.95; stroke-width: 2.5; }
+  .node { position: absolute; transform: translate(-50%,-50%); background: #fff; border: 1px solid #e5e7eb;
+    border-radius: 14px; padding: 12px 16px; cursor: grab; box-shadow: 0 2px 10px rgba(15,23,42,0.06);
+    transition: opacity .2s, box-shadow .18s, border-color .18s; white-space: nowrap;
+    animation: pop .4s cubic-bezier(.2,.7,.3,1) both; }
+  .node:hover { box-shadow: 0 8px 22px rgba(15,23,42,0.14); }
+  .node.dragging { cursor: grabbing; box-shadow: 0 14px 32px rgba(15,23,42,0.20); transition: none; z-index: 5; }
+  .node .nm { font-weight: 700; } .node .pg { font-size: 0.72rem; color: #9ca3af; margin-top: 3px; }
+  .node.core { border-color:#c7d6ff; background:linear-gradient(135deg,#f3f7ff,#fff); } .node.core .nm { color:#1e3a8a; }
+  .node.dim { opacity: 0.22; } .node.active { border-color:#2563eb; box-shadow:0 8px 26px rgba(37,99,235,0.22); }
+  .w5 .nm{font-size:1.18rem;} .w4 .nm{font-size:1.02rem;} .w3 .nm{font-size:0.92rem;} .w2 .nm{font-size:0.82rem;}
+  .badge-demo { display:inline-block; font-size:0.7rem; color:#9a3412; background:#fff7ed; border:1px solid #fed7aa; border-radius:999px; padding:2px 9px; margin-left:8px; }
+
+  /* 등장 애니메이션 */
+  @keyframes rise { from { opacity:0; transform: translateY(14px); } to { opacity:1; transform: translateY(0); } }
+  @keyframes pop  { from { opacity:0; transform: translate(-50%,-50%) scale(.82); } to { opacity:1; transform: translate(-50%,-50%) scale(1); } }
+  .card { opacity: 0; animation: rise .42s ease both; }
+  .grid .card:nth-child(1){animation-delay:.00s} .grid .card:nth-child(2){animation-delay:.05s}
+  .grid .card:nth-child(3){animation-delay:.10s} .grid .card:nth-child(4){animation-delay:.15s}
+  .grid .card:nth-child(5){animation-delay:.20s} .grid .card:nth-child(6){animation-delay:.25s}
+  .grid .card:nth-child(7){animation-delay:.30s} .grid .card:nth-child(8){animation-delay:.35s}
+  .grid .card:nth-child(n+9){animation-delay:.40s}
+
+  /* 호버 툴팁 */
+  #tip { position: fixed; z-index: 60; pointer-events: none; opacity: 0; transform: translateY(4px);
+    transition: opacity .14s, transform .14s; background: #111827; color: #fff; font-size: 0.78rem;
+    padding: 8px 11px; border-radius: 9px; box-shadow: 0 8px 22px rgba(0,0,0,0.25); max-width: 240px; line-height: 1.45; }
+  #tip.on { opacity: 1; transform: translateY(0); }
+  #tip .t-nm { font-weight: 700; } #tip .t-meta { color: #cbd5e1; margin-top: 2px; }
+
+  /* 시간표를 보조로: 기본은 갤러리 전면, 토글 시 사이드바 표시 */
+  .topbar button.ghost { background:#fff; color:#2563eb; }
+  .layout.collapsed { grid-template-columns: 1fr; }
+  .layout.collapsed .sidebar { display:none; }
+
+  /* 미술관 액자 벽 */
+  .wall { display:flex; flex-direction:column; gap:14px; padding:20px 0 8px; width:100%; }
+  .shelf-row { }
+  .shelf-items { display:flex; justify-content:center; align-items:flex-end; flex-wrap:wrap; gap:20px 22px; padding:0 24px; }
+  .shelf-board { height:14px; margin:6px 30px 0; border-radius:0 0 5px 5px;
+    background:linear-gradient(180deg,#e4d6ba 0%, #d2bd96 60%, #c0a87e 100%);
+    box-shadow:0 14px 20px -12px rgba(70,48,12,.5), inset 0 -2px 3px rgba(0,0,0,.10); }
+  /* 책장 선반은 전체화면(넓은 창)에서만 표시, 창 줄이면 숨김 */
+  @media (max-width: 1199px){ .shelf-board { display:none; } }
+  .wall-shelf { height:0; border-bottom:3px solid #ece7df; margin:0 26px 34px;
+    box-shadow:0 14px 22px -16px rgba(0,0,0,.35); }
+  .home-main { display:flex; gap:22px; align-items:flex-start; flex-wrap:wrap; }
+  .course-sidebox { width:320px; min-width:280px; background:#fff; border:1px solid #e8ebf2; border-radius:18px; padding:18px; box-shadow:0 14px 32px rgba(15,23,42,0.08); }
+  .course-sidebox .section-title { margin:0 0 12px; font-size:0.95rem; }
+  .course-sidebox .course-list { display:flex; flex-direction:column; gap:10px; }
+  .course-sidebox .course-item { padding:10px 12px; border:1px solid #e5e7eb; border-radius:12px; cursor:pointer; transition:background .16s, border-color .16s; }
+  .course-sidebox .course-item:hover { background:#f8fbff; border-color:#cfe3ff; }
+  .course-sidebox .course-item.active { background:#eff6ff; border-color:#93c5fd; }
+  .course-sidebox .course-item span { display:block; font-weight:700; color:#1f2937; }
+  .course-sidebox .course-item small { color:#64748b; margin-top:4px; }
+  .art-frame { cursor:pointer; background:#ffffff; padding:12px 12px 10px;
+    border:1px solid #e7e0d4; border-radius:4px;
+    box-shadow:0 12px 24px -12px rgba(0,0,0,.4), inset 0 0 0 6px #fff;
+    transition:transform .16s, box-shadow .16s, border-color .16s; animation:rise .42s ease both; }
+  .art-frame.active { border-color:#2563eb; box-shadow:0 20px 34px -14px rgba(37,99,235,.25), inset 0 0 0 6px #fff; }
+  .art-frame:hover { transform:translateY(-6px);
+    box-shadow:0 22px 38px -14px rgba(0,0,0,.45), inset 0 0 0 6px #fff; }
+  .art-canvas { border-radius:2px; box-shadow: inset 0 0 0 1px rgba(0,0,0,.06); }
+  .art-mat { background:#faf7f1; padding:10px; border-radius:4px; box-shadow: inset 0 0 0 4px #fff; }
+  .art-label { text-align:center; margin-top:10px; }
+  .art-title { font-weight:700; color:#1f2937; font-size:0.88rem; line-height:1.25; word-break:keep-all; overflow-wrap:anywhere; max-width:160px;
+    display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; }
+  .art-sub { font-size:0.72rem; color:#9b8e79; margin-top:3px; }
+  .sz-l .art-canvas{ width:168px; height:126px; } .sz-m .art-canvas{ width:138px; height:104px; }
+  .sz-s .art-canvas{ width:112px; height:84px; }
+
+  /* 시간표 추가 폼 */
+  .tt-add { margin-top:14px; border-top:1px solid #eef1f6; padding-top:12px; }
+  .tt-add summary { cursor:pointer; font-size:0.86rem; font-weight:700; color:#2563eb; }
+  .tt-form { display:flex; flex-direction:column; gap:8px; margin-top:10px; }
+  .tt-form input { border:1px solid #d8dee9; border-radius:8px; padding:7px 9px; font-size:0.82rem; }
+  .tt-form button { border:none; background:#2563eb; color:#fff; border-radius:8px; padding:8px; cursor:pointer; font-size:0.84rem; }
+  .tt-form .tt-del { background:#fff; color:#ef4444; border:1px solid #fecaca; }
+  .tt-status { font-size:0.78rem; color:#16a34a; min-height:1em; }
+  .tt-days { display:flex; flex-wrap:wrap; gap:6px; margin:2px 0; }
+  .tt-days input { display:none; }
+  .tt-days label { width:38px; text-align:center; padding:7px 0; border:1px solid #d8dee9; border-radius:8px;
+    font-size:0.85rem; color:#475569; cursor:pointer; transition:background .12s, color .12s, border-color .12s; }
+  .tt-days label:hover { border-color:#bcd0ff; }
+  .tt-days label:has(input:checked) { background:#2563eb; color:#fff; border-color:#2563eb; font-weight:600; }
+
+  /* 시간표 주간 격자 */
+  .tt-sem { font-weight:700; font-size:0.82rem; margin:12px 0 6px; color:#0f172a; }
+  .tt-grid { width:100%; border-collapse:collapse; table-layout:fixed; font-size:10.5px; }
+  .tt-grid th, .tt-grid td { border:1px solid #e5e7eb; padding:3px; vertical-align:middle;
+    white-space:normal; word-break:break-word; overflow-wrap:anywhere; }
+  .tt-grid td[rowspan] { background:#f7faff; }
+  .tt-grid th { background:#f3f4f6; color:#374151; text-align:center; font-weight:700; }
+  .tt-grid .tt-time { width:30px; color:#6b7280; background:#fafafa; font-size:9px; text-align:center; }
+  .tt-cell { background:#eef6ff; border-radius:5px; padding:4px 5px; margin-bottom:3px; color:#1f2937;
+    line-height:1.25; display:flex; justify-content:space-between; gap:4px; align-items:flex-start; }
+  .tt-cell span { font-weight:600; flex:1; overflow-wrap:anywhere; }
+  .tt-cell i { cursor:pointer; color:#b6c2d4; font-style:normal; font-weight:700; }
+  .tt-cell i:hover { color:#ef4444; }
+  .tt-cell i.edit:hover { color:#2563eb; }
+  .tt-other { margin-top:8px; display:flex; flex-direction:column; gap:4px; }
+
+  /* 시간표 좌측 드로어 */
+  .tt-backdrop { position:fixed; inset:0; background:rgba(15,23,42,0.35); z-index:45; }
+  .tt-backdrop[hidden] { display:none; }
+  .tt-panel { position:fixed; top:0; left:0; height:100vh; width:min(520px,94vw); margin:0;
+    background:#fff; border-right:1px solid #e8ebf2; border-radius:0 18px 18px 0;
+    padding:18px 20px; box-shadow:14px 0 40px rgba(15,23,42,0.18); z-index:50; overflow:auto; }
+  .tt-panel[hidden] { display:none; }
+  .tt-panel-head { position:sticky; top:0; background:#fff; display:flex; align-items:center;
+    justify-content:space-between; gap:12px; margin-bottom:14px; padding-bottom:8px; font-size:0.98rem; }
+  .tt-sem-row { font-size:0.86rem; font-weight:700; color:#0f172a; margin-bottom:10px; display:flex; align-items:center; gap:8px; }
+  .tt-sem-row select { border:1px solid #d8dee9; border-radius:8px; padding:6px 9px; font-size:0.85rem; font-weight:600; }
+  .tt-panel-actions { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+  .refresh-sm { border:1px solid #d8dee9; background:#fff; color:#2563eb; border-radius:8px;
+    padding:6px 12px; cursor:pointer; font-size:0.82rem; }
+  .tt-confirm { display:flex; gap:8px; flex-wrap:wrap; }
+  .tt-confirm .confirm-line { background:#f6f8fc; border-radius:8px; padding:4px 10px; font-size:0.78rem; color:#475569; }
+  .tt-form-row { flex-direction:row !important; flex-wrap:wrap; align-items:center; }
+  .tt-form-row input { width:auto; min-width:130px; flex:0 0 auto; }
+  /* 시간표 버튼: 기존(솔리드) 디자인 */
+  .view-controls button { border:1px solid #2563eb; background:#2563eb; color:#fff;
+    border-radius:8px; padding:8px 14px; font-size:0.85rem; cursor:pointer; }
+  /* 콘텐츠 좌우 여백 (사이드바 제거에 따른 정렬) */
+  .content > .crumbs { margin:14px 24px 0; }
+  .content > .banner { margin:10px 24px 0; }
+  /* 자료추가/질문 모달 */
+  .modal-backdrop { position:fixed; inset:0; background:rgba(15,23,42,0.4); z-index:70; }
+  .modal-backdrop[hidden]{ display:none; }
+  .modal { position:fixed; z-index:75; top:50%; left:50%; transform:translate(-50%,-50%);
+    width:min(440px,92vw); max-height:88vh; overflow:auto; background:#fff; border-radius:16px;
+    box-shadow:0 24px 60px rgba(15,23,42,0.28); padding:18px 20px; }
+  .modal[hidden]{ display:none; }
+  .modal-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; }
+  .modal-tabs { display:flex; gap:6px; }
+  .modal-tab { border:1px solid #d8dee9; background:#fff; color:#475569; border-radius:8px; padding:7px 12px; cursor:pointer; font-size:0.85rem; }
+  .modal-tab.on { background:#2563eb; color:#fff; border-color:#2563eb; }
+  .modal-x { cursor:pointer; color:#9ca3af; font-size:1.3rem; font-weight:700; }
+  .modal-pane label { display:block; font-size:0.8rem; font-weight:600; color:#374151; margin:10px 0 4px; }
+  .modal-pane input, .modal-pane textarea, .modal-pane select { width:100%; border:1px solid #d8dee9; border-radius:8px; padding:8px 10px; font-size:0.88rem; }
+  .modal-pane > button { margin-top:14px; width:100%; border:none; background:#2563eb; color:#fff; border-radius:8px; padding:10px; font-size:0.9rem; cursor:pointer; }
+  .modal-status { font-size:0.8rem; margin-top:10px; min-height:1em; }
+  .ask-a { background:#f8fafc; border:1px solid #eef1f6; border-radius:10px; padding:12px; font-size:0.88rem; line-height:1.55; white-space:pre-wrap; margin-top:12px; }
+  .ask-src { margin-top:8px; font-size:0.76rem; color:#6b7280; display:flex; flex-direction:column; gap:3px; }
+  .iq { margin: 6px 24px 14px; background:#fff; border:1px solid #e8ebf2; border-radius:14px; padding:14px 16px; box-shadow:0 6px 18px rgba(15,23,42,0.05); }
+  .iq-title { font-weight:700; font-size:0.9rem; margin-bottom:10px; }
+  .iq-row { display:flex; gap:8px; flex-wrap:wrap; }
+  .iq-row input { flex:1; min-width:180px; border:1px solid #d8dee9; border-radius:8px; padding:8px 10px; font-size:0.88rem; }
+  .iq-row select { border:1px solid #d8dee9; border-radius:8px; padding:8px 10px; font-size:0.85rem; }
+  .iq-row button { border:none; background:#2563eb; color:#fff; border-radius:8px; padding:8px 16px; cursor:pointer; font-size:0.88rem; }
+  .iq-status { font-size:0.8rem; margin-top:8px; min-height:1em; }
+  .units-head { display:flex; align-items:center; justify-content:space-between; gap:12px; margin:22px 24px 6px; }
+  .units-head .section-title { margin:0; }
+  .addmini { border:1px solid #2563eb; background:#2563eb; color:#fff; border-radius:8px; padding:7px 12px; font-size:0.82rem; cursor:pointer; white-space:nowrap; }
+  /* 로그인 화면 */
+  .user-chip { font-size:0.82rem; font-weight:600; color:#1f2937; }
+  .topbar #logoutBtn { background:#fff; color:#2563eb; border:1px solid #d8dee9; }
+  .auth-overlay { position:fixed; inset:0; z-index:200; background:linear-gradient(135deg,#eef4ff,#f7f9ff 60%,#fff); display:flex; align-items:center; justify-content:center; }
+  .auth-overlay[hidden]{ display:none; }
+  .auth-card { width:min(380px,92vw); background:#fff; border:1px solid #e8ebf2; border-radius:18px; padding:28px 26px; box-shadow:0 24px 60px rgba(15,23,42,0.16); display:flex; flex-direction:column; }
+  .auth-brand { font-size:1.4rem; font-weight:800; color:#1e293b; text-align:center; margin-bottom:16px; }
+  .auth-sub { font-size:0.85rem; color:#64748b; margin:4px 0 18px; }
+  .auth-tabs { display:flex; gap:6px; margin-bottom:14px; }
+  .auth-tab { flex:1; border:1px solid #d8dee9; background:#fff; color:#475569; border-radius:9px; padding:9px; cursor:pointer; font-size:0.88rem; font-weight:600; }
+  .auth-tab.on { background:#2563eb; color:#fff; border-color:#2563eb; }
+  .auth-card input { width:100%; border:1px solid #d8dee9; border-radius:9px; padding:10px 12px; font-size:0.9rem; margin-bottom:10px; }
+  .auth-submit { border:none; background:#2563eb; color:#fff; border-radius:9px; padding:11px; font-size:0.95rem; font-weight:600; cursor:pointer; }
+  .auth-divider { display:flex; align-items:center; gap:10px; color:#9ca3af; font-size:0.78rem; margin:14px 0; }
+  .auth-divider::before, .auth-divider::after { content:""; flex:1; height:1px; background:#e5e7eb; }
+  .auth-google { border:1px solid #d8dee9; background:#fff; color:#1f2937; border-radius:9px; padding:11px; font-size:0.9rem; font-weight:600; cursor:pointer; }
+  .auth-status { font-size:0.82rem; margin-top:12px; min-height:1em; text-align:center; }
+</style>
+  <script src="https://accounts.google.com/gsi/client" async></script>
+</head>
+<body>
+  <div class="topbar">
+    <span class="brand" onclick="loadHome(false)" style="cursor:pointer;">LinkNote</span>
+    <input id="uid" type="hidden" value="">
+    <span id="userChip" class="user-chip"></span>
+    <button id="logoutBtn" onclick="logout()" style="display:none;">로그아웃</button>
+    <button id="backBtn" style="display:none;">뒤로</button>
+    <button onclick="openAdd()">＋ 자료 추가</button>
+    <span class="status"><span class="dot" id="dot"></span><span id="statusText">대기 중</span></span>
+  </div>
+
+  <!-- 시간표: 좌측 드로어 (기본 숨김, 🗓 시간표 버튼으로 토글) -->
+  <div id="ttBackdrop" class="tt-backdrop" hidden onclick="toggleTimetable()"></div>
+  <section id="ttPanel" class="tt-panel" hidden>
+    <div class="tt-panel-head">
+      <strong>시간표</strong>
+      <div class="tt-panel-actions">
+        <span id="confirmContent" class="tt-confirm"></span>
+        <button class="refresh-sm" onclick="toggleTimetable()">닫기</button>
+      </div>
+    </div>
+    <div id="timetableContent">사용자명을 입력하고 불러오면 시간표를 확인할 수 있습니다.</div>
+    <details class="tt-add">
+      <summary>＋ 수업 추가</summary>
+      <div class="tt-form tt-form-row">
+        <input id="tt_sem" placeholder="학기 (예: 2026-1)">
+        <div id="tt_days" class="tt-days">
+          <label><input type="checkbox" value="월">월</label>
+          <label><input type="checkbox" value="화">화</label>
+          <label><input type="checkbox" value="수">수</label>
+          <label><input type="checkbox" value="목">목</label>
+          <label><input type="checkbox" value="금">금</label>
+          <label><input type="checkbox" value="토">토</label>
+          <label><input type="checkbox" value="일">일</label>
+        </div>
+        <input id="tt_time" placeholder="시간 (예: 09:00-10:50)">
+        <input id="tt_course" placeholder="과목명">
+        <input id="tt_memo" placeholder="메모 (선택)">
+        <button id="tt_save" onclick="addTimetableEntry()">저장</button>
+        <button class="tt-del" onclick="clearTimetable()">전체 삭제</button>
+        <div id="tt_status" class="tt-status"></div>
+      </div>
+    </details>
+  </section>
+
+  <div class="content">
+    <div class="banner" id="banner"></div>
+    <div class="crumbs" id="crumbs"></div>
+    <div id="view"></div>
+  </div>
+  <!-- 자료 추가 모달 -->
+  <div id="addBackdrop" class="modal-backdrop" hidden onclick="closeAdd()"></div>
+  <div id="addModal" class="modal" hidden>
+    <div class="modal-head">
+      <strong id="addTitle">자료 추가</strong>
+      <span class="modal-x" onclick="closeAdd()">×</span>
+    </div>
+    <div id="paneUpload" class="modal-pane">
+      <div id="up_full_fields">
+        <label>학기</label><input id="up_sem" placeholder="예: 2026-1">
+        <label>과목</label><input id="up_course" placeholder="예: 병태생리학 1">
+      </div>
+      <label>자료명</label><input id="up_title" placeholder="예: 9장 강의자료">
+      <label>단원 (갤러리 단원 카드가 됩니다)</label><input id="up_unit" placeholder="예: 신부전">
+      <label>PDF 파일</label><input id="up_file" type="file" accept="application/pdf">
+      <button onclick="doUpload()">업로드 &amp; 학습</button>
+      <div id="up_status" class="modal-status"></div>
+    </div>
+  </div>
+  <!-- 로그인 / 회원가입 오버레이 -->
+  <div id="authOverlay" class="auth-overlay" hidden>
+    <div class="auth-card">
+      <div class="auth-brand">📚 LinkNote</div>
+      <div class="auth-tabs">
+        <button id="authTabLogin" class="auth-tab on" onclick="authTab('login')">로그인</button>
+        <button id="authTabReg" class="auth-tab" onclick="authTab('register')">회원가입</button>
+      </div>
+      <input id="au_email" type="email" placeholder="이메일">
+      <input id="au_pw" type="password" placeholder="비밀번호" onkeydown="if(event.key==='Enter')authSubmit()">
+      <div id="au_reg_only" hidden>
+        <input id="au_name" placeholder="표시 이름 (예: 정유진)">
+      </div>
+      <button id="au_submit" class="auth-submit" onclick="authSubmit()">로그인</button>
+      <div class="auth-divider"><span>또는</span></div>
+      <div id="gbtn"></div>
+      <button id="au_google" class="auth-google" onclick="googleLogin()" hidden>Google 계정으로 계속</button>
+      <div id="au_status" class="auth-status"></div>
+    </div>
+  </div>
+  <div id="tip"></div>
+
+<script>
+  // 같은 서버가 화면을 서빙하면 상대경로(웹/데스크톱), 파일로 직접 열면 로컬 서버로 폴백
+  const API = location.protocol.startsWith('http') ? '' : 'http://127.0.0.1:8000';
+  let state = { page: 'home', semester: null, course: null, unit: null };
+
+  const DEMO = {
+    library: { total_chunks: 0, semesters: [
+      { semester: "2026-1", courses: [
+        { course: "병태생리학 1", files: [{filename:"예시.pdf", title:"예시"}] },
+        { course: "인체 구조와 기능 2", files: [{filename:"예시.pdf", title:"예시"}] },
+      ]},
+    ]},
+    units: {
+      "병태생리학 1": [
+        { unit: "관상동맥질환, 울혈성 심부전", file_count: 1, page_count: 12 },
+        { unit: "급성 신부전, 만성 신부전", file_count: 1, page_count: 8 },
+      ],
+      "인체 구조와 기능 2": [ { unit: "신경계", file_count: 1, page_count: 10 } ],
+    },
+    concepts: {
+      "급성 신부전, 만성 신부전": [
+        { name:"신부전", weight:5, page:3, links:["급성신부전","만성신부전","체액조절"] },
+        { name:"급성신부전", weight:4, page:4, links:["신부전"] },
+        { name:"만성신부전", weight:4, page:6, links:["신부전","체액조절"] },
+        { name:"체액조절", weight:2, page:5, links:["신부전","만성신부전"] },
+      ],
+    },
+  };
+
+  function authHeaders(extra){
+    const t = localStorage.getItem('ln_token');
+    const h = Object.assign({}, extra||{});
+    if(t) h['Authorization'] = 'Bearer ' + t;
+    return h;
+  }
+  async function getJSON(path){
+    const r = await fetch(API + path, { method:'GET', headers: authHeaders() });
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    return r.json();
+  }
+  function setStatus(ok){
+    document.getElementById('dot').className = 'dot ' + (ok ? 'on':'off');
+    document.getElementById('statusText').textContent = ok ? 'API 연결됨 (8000)' : 'API 미연결 · 데모 표시';
+    const b = document.getElementById('banner');
+    if(ok){ b.style.display='none'; }
+    else { b.style.display='block';
+      b.textContent='⚠ API 서버(127.0.0.1:8000)에 연결되지 않아 데모 데이터를 보여줍니다. run_api.sh 로 서버를 켜면 실제 데이터로 바뀝니다.'; }
+  }
+  const uid = () => document.getElementById('uid').value.trim() || '정유진';
+  let latestLibrary = null;
+  let latestTimetable = null;
+
+  function updateBackButton(){
+    const backBtn = document.getElementById('backBtn');
+    if(state.page && state.page !== 'home'){
+      backBtn.style.display = 'inline-flex';
+    } else {
+      backBtn.style.display = 'none';
+    }
+  }
+
+  function setAppState(page, extra = {}, replace = false){
+    state = { page, ...extra };
+    const nextState = { page, ...extra };
+    if(replace) history.replaceState(nextState, '', '');
+    else history.pushState(nextState, '', '');
+    updateBackButton();
+    renderConfirmPanel();
+  }
+
+  function restoreAppState(event){
+    const data = event.state;
+    if(!data || data.page === 'home'){
+      loadHome(false);
+      return;
+    }
+    if(data.page === 'course'){
+      state = { page: 'course', semester: data.semester, course: data.course, unit: null };
+      openCourse(data.course, false);
+      return;
+    }
+    if(data.page === 'unit'){
+      state = { page: 'unit', semester: data.semester, course: data.course, unit: data.unit };
+      openUnit(data.unit, false);
+      return;
+    }
+    loadHome(false);
+  }
+
+  async function loadSidebar(){
+    try {
+      const d = await getJSON('/timetable/entries');
+      latestTimetable = Array.isArray(d.entries) ? d.entries : [];
+      setStatus(true);
+    } catch (err) {
+      latestTimetable = [];
+      setStatus(false);
+    }
+    renderTimetableSidebar(latestTimetable);
+    renderConfirmPanel();
+  }
+
+  const TT_WEEKDAYS = ['월','화','수','목','금'];
+  function _ttMin(t){ const m=/(\d{1,2}):(\d{2})/.exec(t||''); return m ? (+m[1]*60 + +m[2]) : null; }
+  function _ttRange(e){ const p=(e.time||'').split('-'); return [_ttMin(p[0]), _ttMin(p[1])]; }
+  function _pad2(n){ return String(n).padStart(2,'0'); }
+
+  function renderTimetableSidebar(entries){
+    const container = document.getElementById('timetableContent');
+    const list = Array.isArray(entries) ? entries : [];
+    if(!list.length){
+      container.innerHTML = '<div class="empty">시간표가 없습니다. 아래 ＋ 수업 추가로 등록하세요.</div>';
+      return;
+    }
+    const withIdx = list.map((e, i) => Object.assign({}, e, { _i: i }));
+    const semesters = [...new Set(withIdx.map(e => e.semester || '학기 미정'))].sort();
+    // 갤러리에서 고른 학기를 기본값으로(없으면 첫 학기)
+    let current = (state.semester && semesters.includes(state.semester)) ? state.semester : semesters[0];
+
+    const opts = semesters.map(s => `<option value="${esc(s)}" ${s===current?'selected':''}>${esc(s)}</option>`).join('');
+    container.innerHTML =
+      `<div class="tt-sem-row">학기 <select id="ttSemSel">${opts}</select></div><div id="ttGridArea"></div>`;
+
+    const drawGrid = (sem) => {
+      const area = document.getElementById('ttGridArea');
+      const items = withIdx.filter(e => (e.semester || '학기 미정') === sem);
+      const weekItems = items.filter(e => TT_WEEKDAYS.includes(e.day) && _ttRange(e)[0]!=null);
+
+      // 시간축: 데이터 범위로 1시간 단위 행 구성(없으면 9~19시)
+      let minH = 9, maxH = 19;
+      if(weekItems.length){
+        const starts = weekItems.map(e => _ttRange(e)[0]);
+        const ends = weekItems.map(e => { const [s,en]=_ttRange(e); return en ?? s+50; });
+        minH = Math.floor(Math.min(...starts)/60);
+        maxH = Math.ceil(Math.max(...ends)/60);
+      }
+
+      const N = maxH - minH;
+      // 요일별로 수업이 차지하는 행을 계산해 rowspan으로 하나의 블록으로 합친다.
+      const planByDay = {};
+      TT_WEEKDAYS.forEach(d => {
+        const plan = new Array(N).fill(null); // null=빈칸, {entries,span}=시작칸, 'skip'=병합으로 가려진 칸
+        weekItems.filter(e => e.day===d)
+          .sort((a,b)=>_ttRange(a)[0]-_ttRange(b)[0])
+          .forEach(e => {
+            const [s,en] = _ttRange(e); const end = en ?? s+50;
+            let a = Math.max(0, Math.floor(s/60)-minH);
+            let b = Math.min(N, Math.ceil(end/60)-minH); if(b<=a) b=a+1;
+            if(plan[a] && plan[a].entries){ plan[a].entries.push(e); plan[a].span=Math.max(plan[a].span, b-a); }
+            else if(plan[a]==='skip'){ let k=a; while(k>0 && plan[k]==='skip') k--; if(plan[k]&&plan[k].entries) plan[k].entries.push(e); }
+            else { plan[a] = {entries:[e], span:b-a}; for(let i=a+1;i<b && i<N;i++){ if(plan[i]==null) plan[i]='skip'; } }
+          });
+        planByDay[d] = plan;
+      });
+
+      let html = '<table class="tt-grid"><thead><tr><th>시간</th>' +
+        TT_WEEKDAYS.map(d => `<th>${d}</th>`).join('') + '</tr></thead><tbody>';
+      for(let r=0; r<N; r++){
+        const h = minH + r;
+        html += `<tr><td class="tt-time">${_pad2(h)}:00-${_pad2(h+1)}:00</td>`;
+        TT_WEEKDAYS.forEach(d => {
+          const p = planByDay[d][r];
+          if(p==='skip') return;            // 병합으로 가려진 칸은 td 생략
+          if(p && p.entries){
+            html += `<td rowspan="${p.span}">` + p.entries.map(e =>
+              `<div class="tt-cell" title="${esc((e.time||'')+' '+(e.memo||''))}"><span>${esc(e.course)}</span><i class="edit" onclick="editTimetable(${e._i})">✎</i><i onclick="deleteTimetable(${e._i})">×</i></div>`
+            ).join('') + '</td>';
+          } else {
+            html += '<td></td>';
+          }
+        });
+        html += '</tr>';
+      }
+      html += '</tbody></table>';
+
+      const others = items.filter(e => !TT_WEEKDAYS.includes(e.day) || _ttRange(e)[0]==null);
+      if(others.length){
+        html += '<div class="tt-other">' + others.map(e =>
+          `<div class="tt-cell"><span>${esc(((e.day||'')+' '+(e.time||'')+' '+e.course).trim())}</span><i onclick="deleteTimetable(${e._i})">×</i></div>`
+        ).join('') + '</div>';
+      }
+      area.innerHTML = html;
+    };
+
+    document.getElementById('ttSemSel').addEventListener('change', (ev)=>drawGrid(ev.target.value));
+    drawGrid(current);
+  }
+
+  function renderConfirmPanel(){
+    const container = document.getElementById('confirmContent');
+    const lines = [];
+    lines.push(`<span>사용자: ${esc(uid())}</span>`);
+    if(state.page === 'home'){
+      if(latestLibrary){
+        const semesterCount = latestLibrary.semesters.length;
+        const courseCount = latestLibrary.semesters.reduce((sum, sem) => sum + (sem.courses || []).length, 0);
+        lines.push(`<span>학습된 학기: ${semesterCount}</span>`);
+        lines.push(`<span>등록된 과목: ${courseCount}</span>`);
+        if(state.course){
+          lines.push(`<span>선택 과목: ${esc(state.course)}</span>`);
+        }
+      } else {
+        lines.push('<span>학습된 자료를 불러오세요.</span>');
+      }
+    } else if(state.page === 'course'){
+      lines.push(`<span>선택 학기: ${esc(state.semester)}</span>`);
+      lines.push(`<span>선택 과목: ${esc(state.course)}</span>`);
+      if(latestLibrary){
+        const course = latestLibrary.semesters.find(s=>s.semester===state.semester)?.courses?.find(c=>c.course===state.course);
+        lines.push(`<span>등록 파일: ${course ? (course.files||[]).length : 0}</span>`);
+      }
+    } else if(state.page === 'unit'){
+      lines.push(`<span>선택 학기: ${esc(state.semester)}</span>`);
+      lines.push(`<span>선택 과목: ${esc(state.course)}</span>`);
+      lines.push(`<span>선택 단원: ${esc(state.unit)}</span>`);
+    }
+    container.innerHTML = lines.map(l => `<div class="confirm-line">${l}</div>`).join('');
+  }
+
+  function ensureInitialHistory() {
+    if (!history.state) {
+      history.replaceState({ page: 'home' }, '', '');
+    }
+    updateBackButton();
+  }
+
+  // 학습된 자료(/library)에 시간표 과목(/timetable)을 합쳐, 자료가 아직 없는 과목도 빈 액자로 보이게 한다.
+  function mergeLibraryTimetable(lib, tt){
+    const out = { total_chunks: (lib && lib.total_chunks) || 0, semesters: [] };
+    const semMap = new Map();
+    (lib && lib.semesters || []).forEach(s => {
+      const courses = (s.courses || []).map(c => ({ course: c.course, files: c.files || [] }));
+      semMap.set(s.semester, courses);
+    });
+    (tt && tt.semesters || []).forEach(s => {
+      if(!semMap.has(s.semester)) semMap.set(s.semester, []);
+      const courses = semMap.get(s.semester);
+      const norm = (x)=> String(x||'').replace(/\s+/g,'').toLowerCase();
+      (s.courses || []).forEach(name => {
+        if(!courses.some(c => norm(c.course) === norm(name))) courses.push({ course: name, files: [] });
+      });
+    });
+    [...semMap.entries()].sort((a,b)=> a[0]<b[0]?-1:1).forEach(([semester, courses]) => {
+      courses.sort((a,b)=> a.course<b.course?-1:1);
+      out.semesters.push({ semester, courses });
+    });
+    return out;
+  }
+  async function loadHome(push=true){
+    state = { page: 'home', semester: null, course: null, unit: null };
+    if(push) setAppState('home', { page: 'home' });
+    latestLibrary = null;
+    let lib;
+    try { lib = await getJSON('/library?user_id='+encodeURIComponent(uid())); setStatus(true); }
+    catch(e){ lib = DEMO.library; setStatus(false); }
+    let tt = { semesters: [] };
+    try { tt = await getJSON('/timetable?user_id='+encodeURIComponent(uid())); } catch(e){}
+    const data = mergeLibraryTimetable(lib, tt);
+    latestLibrary = data;
+    renderHome(data);
+    await loadSidebar();
+    updateBackButton();
+    renderConfirmPanel();
+  }
+
+  document.getElementById('backBtn').addEventListener('click', ()=>history.back());
+  window.addEventListener('popstate', restoreAppState);
+
+  // 시간표: 전체폭 패널 토글
+  function toggleTimetable(){
+    const panel = document.getElementById('ttPanel');
+    const backdrop = document.getElementById('ttBackdrop');
+    const show = panel.hidden;
+    panel.hidden = !show;
+    backdrop.hidden = !show;
+    if(show){ loadSidebar(); }
+  }
+  let ttEditIndex = null;
+  function editTimetable(index){
+    const e = Array.isArray(latestTimetable) ? latestTimetable[index] : null;
+    if(!e) return;
+    document.getElementById('tt_sem').value = e.semester || '';
+    document.querySelectorAll('#tt_days input').forEach(c => { c.checked = (c.value === (e.day||'')); });
+    document.getElementById('tt_time').value = e.time || '';
+    document.getElementById('tt_course').value = e.course || '';
+    document.getElementById('tt_memo').value = e.memo || '';
+    ttEditIndex = index;
+    const det = document.querySelector('.tt-add'); if(det) det.open = true;
+    const save = document.getElementById('tt_save'); if(save) save.textContent = '수정 저장';
+    const status = document.getElementById('tt_status');
+    status.style.color='#2563eb'; status.textContent='수정 중… (저장을 누르세요)';
+    document.getElementById('tt_course').focus();
+  }
+  function _ttResetForm(){
+    ttEditIndex = null;
+    const save = document.getElementById('tt_save'); if(save) save.textContent = '저장';
+    document.querySelectorAll('#tt_days input').forEach(c => c.checked=false); document.getElementById('tt_time').value='';
+    document.getElementById('tt_course').value=''; document.getElementById('tt_memo').value='';
+  }
+  async function addTimetableEntry(){
+    const sem = document.getElementById('tt_sem').value.trim();
+    const time = document.getElementById('tt_time').value.trim();
+    const course = document.getElementById('tt_course').value.trim();
+    const memo = document.getElementById('tt_memo').value.trim();
+    const days = [...document.querySelectorAll('#tt_days input:checked')].map(c=>c.value);
+    const status = document.getElementById('tt_status');
+    if(!sem || !course){ status.style.color='#ef4444'; status.textContent='학기와 과목명은 필수입니다.'; return; }
+    const editing = ttEditIndex != null;
+    try {
+      if(editing){
+        const body = { semester:sem, day: days[0]||'', time, course, memo };
+        const r = await fetch(API+'/timetable/entries?index='+ttEditIndex, {method:'PUT', headers: authHeaders({'Content-Type':'application/json'}), body:JSON.stringify(body)});
+        if(!r.ok) throw new Error('HTTP '+r.status);
+        status.style.color='#16a34a'; status.textContent='수정됨 ✓';
+      } else {
+        const list = days.length ? days : [''];
+        for(const day of list){
+          const body = { semester:sem, day, time, course, memo };
+          const r = await fetch(API+'/timetable/entries', {method:'POST', headers: authHeaders({'Content-Type':'application/json'}), body:JSON.stringify(body)});
+          if(!r.ok) throw new Error('HTTP '+r.status);
+        }
+        status.style.color='#16a34a'; status.textContent = `추가됨 ✓ (${list.filter(Boolean).length||1}일)`;
+      }
+      _ttResetForm();
+      await loadSidebar();
+    } catch(e){ status.style.color='#ef4444'; status.textContent='서버 처리 실패'; }
+  }
+  async function clearTimetable(){
+    if(!confirm('시간표를 전체 삭제할까요?')) return;
+    const status = document.getElementById('tt_status');
+    try {
+      const r = await fetch(API + '/timetable/entries', { method:'DELETE', headers: authHeaders() });
+      if(!r.ok) throw new Error('HTTP '+r.status);
+      status.style.color='#16a34a'; status.textContent='삭제됨';
+      await loadSidebar();
+    } catch(e){ status.style.color='#ef4444'; status.textContent='삭제 실패'; }
+  }
+  async function deleteTimetable(index){
+    try {
+      const r = await fetch(API + '/timetable/entries?index=' + index, { method:'DELETE', headers: authHeaders() });
+      if(!r.ok) throw new Error('HTTP '+r.status);
+      await loadSidebar();
+    } catch(e){ /* 서버 미연결 시 무시 */ }
+  }
+  // 액자 색(과목명 기반 결정적 그라데이션)
+  function hashString(name){
+    let h = 0;
+    for(const ch of String(name)){
+      h = (h * 131 + ch.charCodeAt(0)) % 1000000007;
+    }
+    return h;
+  }
+
+  const PASTELS = [
+    ["#fff3b0","#ffd166"], ["#ffe8cc","#ffc078"], ["#ffd8a8","#ffb677"], ["#ffec99","#ffd43b"],
+    ["#ffc9c9","#ff8787"], ["#ffd6e7","#f78fb3"], ["#ffe0e9","#faa2c1"], ["#eebefa","#da77f2"],
+    ["#e5d4ff","#b197fc"], ["#d4ddff","#91a7ff"], ["#cdeffd","#74c0fc"], ["#c5f6fa","#66d9e8"],
+    ["#c3fae8","#63e6be"], ["#d3f9d8","#8ce99a"], ["#e9fac8","#c0eb75"], ["#f1e4c3","#dcc48e"],
+  ];
+  function artColor(name){
+    const pair = PASTELS[hashString(name) % PASTELS.length];
+    return `linear-gradient(135deg, ${pair[0]}, ${pair[1]})`;
+  }
+
+  function artDoodle(name){
+    const hash = hashString(name);
+    const palettes = [
+      ["#fde68a", "#fbbf24", "#f97316"],
+      ["#a5f3fc", "#38bdf8", "#0ea5e9"],
+      ["#bfdbfe", "#60a5fa", "#2563eb"],
+      ["#d9f99d", "#86efac", "#22c55e"],
+      ["#fbcfe8", "#f9a8d4", "#db2777"],
+      ["#fee2e2", "#fca5a5", "#ef4444"],
+      ["#ddd6fe", "#a78bfa", "#7c3aed"],
+      ["#c7f9e9", "#5eead4", "#14b8a6"],
+      ["#fed7aa", "#fb923c", "#ea580c"],
+      ["#e9d5ff", "#d8b4fe", "#9333ea"],
+      ["#bbf7d0", "#4ade80", "#16a34a"],
+      ["#fecdd3", "#fb7185", "#e11d48"],
+    ];
+    const c = palettes[hash % palettes.length];
+    const ink = "#43403d";            // 크레용 같은 진한 외곽선
+    const lower = String(name).toLowerCase();
+    let motif = "";
+
+    if(lower.includes('화학')){
+      motif = `<g fill="${c[1]}" stroke="${ink}" stroke-width="6" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M86 48 L86 70 L66 112 Q62 126 80 126 L120 126 Q138 126 134 112 L114 70 L114 48 Z"/>
+        <line x1="80" y1="48" x2="120" y2="48"/></g>
+        <circle cx="92" cy="106" r="5" fill="${c[2]}"/><circle cx="108" cy="114" r="4" fill="${c[0]}"/>`;
+    } else if(lower.includes('통계')){
+      motif = `<g stroke="${ink}" stroke-width="5" stroke-linejoin="round">
+        <rect x="62" y="86" width="20" height="38" fill="${c[0]}"/>
+        <rect x="90" y="62" width="20" height="62" fill="${c[1]}"/>
+        <rect x="118" y="98" width="20" height="26" fill="${c[2]}"/>
+        <line x1="52" y1="126" x2="150" y2="126" stroke-linecap="round"/></g>`;
+    } else if(lower.includes('인체') || lower.includes('구조') || lower.includes('기능')){
+      motif = `<g stroke="${ink}" stroke-width="6" stroke-linecap="round" fill="none">
+        <circle cx="100" cy="50" r="16" fill="${c[0]}"/>
+        <line x1="100" y1="66" x2="100" y2="106"/>
+        <path d="M100 78 L78 94 M100 78 L122 94"/>
+        <path d="M100 106 L84 128 M100 106 L116 128"/></g>`;
+    } else if(lower.includes('생물')){
+      motif = `<g stroke="${ink}" stroke-width="5" stroke-linejoin="round">
+        <g fill="${c[0]}"><circle cx="100" cy="44" r="12"/><circle cx="122" cy="56" r="12"/><circle cx="122" cy="80" r="12"/><circle cx="100" cy="92" r="12"/><circle cx="78" cy="80" r="12"/><circle cx="78" cy="56" r="12"/></g>
+        <circle cx="100" cy="68" r="12" fill="${c[2]}"/></g>
+        <path d="M100 92 L100 132" stroke="${ink}" stroke-width="5" fill="none" stroke-linecap="round"/>`;
+    } else if(lower.includes('병태') || lower.includes('생리')){
+      motif = `<path d="M100 126 C42 86 66 46 100 72 C134 46 158 86 100 126 Z" fill="${c[0]}" stroke="${ink}" stroke-width="6" stroke-linejoin="round"/>
+        <path d="M72 92 H90 L98 78 L108 106 L116 92 H132" fill="none" stroke="${ink}" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>`;
+    } else if(lower.includes('간호')){
+      motif = `<path d="M100 126 C42 86 66 46 100 72 C134 46 158 86 100 126 Z" fill="${c[0]}" stroke="${ink}" stroke-width="6" stroke-linejoin="round"/>
+        <g fill="#ffffff"><rect x="92" y="80" width="16" height="38" rx="3"/><rect x="81" y="91" width="38" height="16" rx="3"/></g>`;
+    } else {
+      motif = `<g stroke="${ink}" stroke-width="6" stroke-linejoin="round">
+        <rect x="74" y="86" width="52" height="42" fill="${c[0]}"/>
+        <path d="M68 86 L100 58 L132 86 Z" fill="${c[1]}"/>
+        <rect x="92" y="106" width="16" height="22" fill="${c[2]}"/></g>`;
+    }
+
+    const sun = `<g stroke="${ink}" stroke-width="4" stroke-linecap="round" fill="none">
+        <circle cx="30" cy="28" r="10" fill="${c[0]}"/>
+        <path d="M30 10 V3 M30 53 V46 M12 28 H5 M55 28 H48 M17 15 L12 10 M43 15 L48 10 M17 41 L12 46 M43 41 L48 46"/></g>`;
+    const ground = `<path d="M12 140 q18 -9 36 0 t36 0 t36 0 t36 0" fill="none" stroke="${ink}" stroke-width="4" stroke-linecap="round" opacity="0.6"/>`;
+
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 150">
+      
+      <g>${sun}${motif}${ground}</g></svg>`;
+
+    const base64 = btoa(unescape(encodeURIComponent(svg)));
+    return `url('data:image/svg+xml;base64,${base64}')`;
+  }
+
+  function artStyle(name){
+    return `background: ${artDoodle(name)} center / 82% no-repeat, ${artColor(name)};`;
+  }
+
+  function renderHome(data){
+    setCrumbs([]);
+    const sems = data.semesters || [];
+    const view = document.getElementById('view');
+    if(!sems.length){ view.innerHTML = emptyBox('이 사용자명으로 학습된 자료가 없습니다. 상단 사용자명을 확인하세요.'); return; }
+    let opts = sems.map((s,i)=>`<option value="${i}">${esc(s.semester)}</option>`).join('');
+    inlineAskCourse = null;
+    view.innerHTML = `
+      ${inlineQuestionHTML('전체 자료')}
+      <div class="section-title">📚 과목 갤러리</div>
+      <div class="view-controls" style="padding:0 24px; display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:14px;">
+        <button id="ttHomeBtn" onclick="toggleTimetable()">🗓 시간표</button>
+        <select id="semSel" style="border:1px solid #d8dee9;border-radius:8px;padding:8px 14px;font-size:0.85rem;">${opts}</select>
+      </div>
+      <div class="home-main">
+        <div class="wall" id="courseGrid"></div>
+      </div>`;
+    const sel = document.getElementById('semSel');
+    const sizeClass = (n) => n>=4 ? 'sz-l' : (n>=2 ? 'sz-m' : 'sz-s');
+    const draw = () => {
+      const s = sems[sel.value]; state.semester = s.semester;
+      // 시간표 드로어가 열려 있으면, 고른 학기의 시간표로 갱신
+      const ttPanel = document.getElementById('ttPanel');
+      if(ttPanel && !ttPanel.hidden && Array.isArray(latestTimetable)) renderTimetableSidebar(latestTimetable);
+      const grid = document.getElementById('courseGrid');
+      const courses = s.courses || [];
+      if(!courses.length){ grid.innerHTML = emptyInline('이 학기에 학습된 과목이 없습니다.'); return; }
+      const frameHTML = (c) => {
+        const n = (c.files||[]).length;
+        const activeClass = state.course === c.course ? ' active' : '';
+        return `<div class="art-frame ${sizeClass(n)}${activeClass}" data-course="${esc(c.course)}" onclick='selectCourse(${JSON.stringify(c.course)})'>
+          <div class="art-mat"><div class="art-canvas" style="${artStyle(c.course)}"></div></div>
+          <div class="art-label"><div class="art-title">${esc(c.course)} →</div><div class="art-sub">파일 ${n}</div></div>
+        </div>`;
+      };
+      const PER = 6; let html = '';
+      for(let i=0;i<courses.length;i+=PER){
+        const row = courses.slice(i,i+PER).map(frameHTML).join('');
+        html += `<div class="shelf-row"><div class="shelf-items">${row}</div><div class="shelf-board"></div></div>`;
+      }
+      grid.innerHTML = html;
+    };
+    sel.onchange = draw; draw();
+  }
+
+  function renderCourseSidebox(course, data){
+    const container = document.getElementById('courseSidebox');
+    if(!container) return renderUnits(course, data);
+
+    const units = data.units || [];
+    const rows = units.map(u => {
+      return `<div class="course-item" onclick="openUnit(${JSON.stringify(u.unit)})"><span>${esc(u.unit)}</span><small>파일 ${u.file_count} · 페이지 ${u.page_count}</small></div>`;
+    }).join('') || '<div class="course-side-text">이 과목에 등록된 단원이 없습니다.</div>';
+
+    container.innerHTML = `
+      <div class="section-title">${esc(course)}</div>
+      <div class="course-side-text">이곳에서 단원을 선택하세요.</div>
+      <div class="course-list">${rows}</div>`;
+  }
+
+  function selectCourse(course){
+    const grid = document.getElementById('courseGrid');
+    grid.querySelectorAll('.art-frame').forEach(el => el.classList.toggle('active', el.dataset.course === course));
+    openCourse(course, false);
+  }
+
+  async function openCourse(course, push=true, keepHome=false){
+    const isHome = state.page === 'home';
+    state.course = course;
+    state.unit = null;
+    if(!isHome || !keepHome){
+      state.page = 'course';
+    }
+    if(push && !keepHome) setAppState('course', { semester: state.semester, course });
+    let data;
+    try {
+      data = await getJSON(`/units?user_id=${encodeURIComponent(uid())}&semester=${encodeURIComponent(state.semester)}&course=${encodeURIComponent(course)}`);
+      setStatus(true);
+    } catch(e){ data = { status: (DEMO.units[course]?'ready':'empty'), units: DEMO.units[course]||[] }; setStatus(false); }
+    if(isHome && keepHome){
+      renderCourseSidebox(course, data);
+    } else {
+      renderUnits(course, data);
+    }
+    await loadSidebar();
+    updateBackButton();
+    renderConfirmPanel();
+  }
+  function renderUnits(course, data){
+    setCrumbs([['홈', 'loadHome()'], [state.semester, 'openSemesterMenu(event)', 'menu'], [course, 'openCourseMenu(event)', 'menu']]);
+    const view = document.getElementById('view');
+    const units = data.units || [];
+    if(!units.length || data.status==='empty'){
+      view.innerHTML = `<div class="units-head"><div class="section-title">${esc(course)} · 단원</div><button class="addmini" onclick="openAddForCourse()">＋ 자료 추가</button></div>` +
+        emptyBox('아직 이 과목에 단원이 없습니다. ＋ 자료 추가로 PDF를 올리고 단원명을 적으면 여기에 나타납니다.');
+      return;
+    }
+    view.innerHTML = `<div class="units-head"><div class="section-title">${esc(course)} · 단원</div><button class="addmini" onclick="openAddForCourse()">＋ 자료 추가</button></div>
+      <div class="grid">${units.map((u,i)=>`
+        <div class="card" onclick='openUnit(${JSON.stringify(u.unit)})'>
+          <div><div class="ctag">단원 ${i+1}</div><div class="ctitle">${esc(u.unit)}</div></div>
+          <div class="cmeta">파일 ${u.file_count||0} · 페이지 ${u.page_count||0}</div>
+        </div>`).join('')}</div>`;
+  }
+
+  async function openUnit(unit, push=true){
+    state.page = 'unit';
+    state.unit = unit;
+    if(push) setAppState('unit', { semester: state.semester, course: state.course, unit });
+    let nodes = [], demo = false, notReady = false;
+    try {
+      const d = await getJSON(`/concepts?user_id=${encodeURIComponent(uid())}&semester=${encodeURIComponent(state.semester)}&course=${encodeURIComponent(state.course)}&unit=${encodeURIComponent(unit)}`);
+      setStatus(true);
+      if(d.status==='ready' && (d.concepts||[]).length){ nodes = d.concepts; }
+      else { notReady = true; nodes = DEMO.concepts[unit] || DEMO.concepts["급성 신부전, 만성 신부전"]; demo = true; }
+    } catch(e){ setStatus(false); nodes = DEMO.concepts[unit] || DEMO.concepts["급성 신부전, 만성 신부전"]; demo = true; }
+    renderConcepts(unit, nodes, demo, notReady);
+    await loadSidebar();
+    updateBackButton();
+    renderConfirmPanel();
+  }
+  function renderConcepts(unit, nodes, demo, notReady){
+    setCrumbs([['홈','loadHome()'], [state.semester, 'openSemesterMenu(event)', 'menu'], [state.course, 'openCourseMenu(event)', 'menu'], [unit, 'openUnitMenu(event)', 'menu']]);
+    const view = document.getElementById('view');
+    const note = notReady ? '<span class="badge-demo">개념 추출 전 · 예시</span>' : (demo ? '<span class="badge-demo">데모</span>' : '');
+    inlineAskCourse = state.course;
+    view.innerHTML = `<div class="section-title">${esc(unit)} · 개념 지도 ${note}</div><div id="canvas"><svg id="lines"></svg></div>` + inlineQuestionHTML(state.course);
+    layoutNodes(nodes);
+  }
+  let lastNodes = null;
+  let lastCore = null;
+  function layoutNodes(nodes){
+    lastNodes = nodes;
+    const canvas = document.getElementById('canvas'); if(!canvas) return;
+    const svg = document.getElementById('lines');
+    canvas.querySelectorAll('.node').forEach(n=>n.remove()); svg.innerHTML='';
+    const W = canvas.clientWidth, H = canvas.clientHeight;
+    const core = nodes.reduce((a,b)=> (b.weight||0)>(a.weight||0)?b:a, nodes[0]);
+    const others = nodes.filter(n=>n!==core);
+    const pos = {}; pos[core.name] = { x: W/2, y: H/2 };
+    others.forEach((n,i)=>{
+      const ang = (Math.PI*2*i)/Math.max(others.length,1) - Math.PI/2;
+      pos[n.name] = { x: W/2 + Math.cos(ang)*Math.min(W,820)*0.30, y: H/2 + Math.sin(ang)*H*0.32 };
+    });
+    lastCore = core.name;
+    const names = new Set(nodes.map(n => n.name));
+    const effLinks = (n) => {
+      let L = (n.links||[]).filter(t => names.has(t) && t !== n.name);
+      if(!L.length && n !== core) L = [core.name];   // 링크 없으면 핵심 개념에 연결(허브)
+      return L;
+    };
+    const drawn = new Set();
+    nodes.forEach(n => effLinks(n).forEach(t => {
+      if(!pos[t]) return; const key=[n.name,t].sort().join('|'); if(drawn.has(key))return; drawn.add(key);
+      const a=pos[n.name], b=pos[t];
+      const l=document.createElementNS('http://www.w3.org/2000/svg','line');
+      l.setAttribute('x1',a.x);l.setAttribute('y1',a.y);l.setAttribute('x2',b.x);l.setAttribute('y2',b.y);
+      l.setAttribute('class','line'); l.dataset.a=n.name; l.dataset.b=t; svg.appendChild(l);
+    }));
+    function updateLinesFor(name){
+      svg.querySelectorAll('.line').forEach(l => {
+        if(l.dataset.a===name){ l.setAttribute('x1',pos[name].x); l.setAttribute('y1',pos[name].y); }
+        if(l.dataset.b===name){ l.setAttribute('x2',pos[name].x); l.setAttribute('y2',pos[name].y); }
+      });
+    }
+    nodes.forEach((n,i) => {
+      const w = n.weight||3;
+      const el = document.createElement('div');
+      el.className = `node w${w}` + (n===core?' core':'');
+      el.style.left = pos[n.name].x+'px'; el.style.top = pos[n.name].y+'px';
+      el.style.animationDelay = (i*0.05)+'s';
+      el.innerHTML = `<div class="nm">${esc(n.name)}</div>` + (n.page?`<div class="pg">p.${esc(String(n.page))}</div>`:'');
+
+      // 호버 툴팁
+      el.addEventListener('mouseenter', (e)=>{ if(!dragging) showTip(n, e); });
+      el.addEventListener('mousemove', (e)=>{ if(!dragging) moveTip(e); });
+      el.addEventListener('mouseleave', hideTip);
+
+      // 드래그 (이동 거의 없으면 클릭=선택으로 처리)
+      el.addEventListener('pointerdown', (e)=>{
+        e.preventDefault(); hideTip();
+        const rect = canvas.getBoundingClientRect();
+        let moved = 0; dragging = true; el.classList.add('dragging'); el.setPointerCapture(e.pointerId);
+        const startX = e.clientX, startY = e.clientY;
+        const move = (ev)=>{
+          moved += Math.abs(ev.clientX - startX) + Math.abs(ev.clientY - startY);
+          pos[n.name].x = Math.max(20, Math.min(rect.width-20, ev.clientX - rect.left));
+          pos[n.name].y = Math.max(20, Math.min(rect.height-20, ev.clientY - rect.top));
+          el.style.left = pos[n.name].x+'px'; el.style.top = pos[n.name].y+'px';
+          updateLinesFor(n.name);
+        };
+        const up = (ev)=>{
+          el.classList.remove('dragging'); dragging = false;
+          el.removeEventListener('pointermove', move); el.removeEventListener('pointerup', up);
+          if(moved < 6){ selectNode(n.name, nodes); } // 거의 안 움직였으면 클릭으로 간주
+        };
+        el.addEventListener('pointermove', move); el.addEventListener('pointerup', up);
+      });
+      canvas.appendChild(el);
+    });
+    canvas.onclick = (e)=>{ if(e.target.id!=='canvas' && e.target.tagName!=='svg') return;
+      canvas.querySelectorAll('.node').forEach(x=>x.classList.remove('dim','active'));
+      svg.querySelectorAll('.line').forEach(x=>x.classList.remove('active')); };
+  }
+
+  let dragging = false;
+  function showTip(n, e){
+    const tip = document.getElementById('tip');
+    const links = (n.links||[]).length;
+    tip.innerHTML = `<div class="t-nm">${esc(n.name)}</div>` +
+      `<div class="t-meta">${n.page?('p.'+esc(String(n.page))+' · '):''}연결 개념 ${links}개</div>`;
+    tip.classList.add('on'); moveTip(e);
+  }
+  function moveTip(e){
+    const tip = document.getElementById('tip');
+    tip.style.left = (e.clientX + 14) + 'px';
+    tip.style.top  = (e.clientY + 14) + 'px';
+  }
+  function hideTip(){ document.getElementById('tip').classList.remove('on'); }
+  function selectNode(name, nodes){
+    const node = nodes.find(n=>n.name===name);
+    let nLinks = (node.links||[]).filter(t => nodes.some(x=>x.name===t) && t!==name);
+    if(!nLinks.length && lastCore && name!==lastCore) nLinks = [lastCore];
+    const keep = new Set([name, ...nLinks]);
+    document.querySelectorAll('#canvas .node').forEach(el => {
+      const nm = el.querySelector('.nm').textContent;
+      el.classList.toggle('dim', !keep.has(nm));
+      el.classList.toggle('active', nm===name);
+    });
+    document.querySelectorAll('#lines .line').forEach(l => {
+      l.classList.toggle('active', l.dataset.a===name || l.dataset.b===name);
+    });
+  }
+
+  async function gotoSemester(sem){
+    await loadHome(false);
+    const sel = document.getElementById('semSel');
+    if(sel){
+      const idx = [...sel.options].findIndex(o => o.text === sem);
+      if(idx >= 0){ sel.value = String(idx); sel.dispatchEvent(new Event('change')); }
+    }
+  }
+  function closeCrumbMenu(){ document.querySelectorAll('.crumb-menu').forEach(m=>m.remove()); }
+  function showCrumbMenu(anchorEl, options, current, onPick){
+    closeCrumbMenu();
+    if(!options || !options.length) return;
+    const menu = document.createElement('div');
+    menu.className = 'crumb-menu';
+    menu.innerHTML = options.map(o => `<div class="crumb-menu-item${o===current?' on':''}">${o===current?'✓ ':''}${esc(o)}</div>`).join('');
+    document.body.appendChild(menu);
+    const r = anchorEl.getBoundingClientRect();
+    menu.style.left = r.left + 'px';
+    menu.style.top = (r.bottom + 6) + 'px';
+    [...menu.children].forEach((el, i) => { el.onclick = (e)=>{ e.stopPropagation(); closeCrumbMenu(); onPick(options[i]); }; });
+    setTimeout(()=> document.addEventListener('click', closeCrumbMenu, { once:true }), 0);
+  }
+  function openSemesterMenu(ev){
+    ev.stopPropagation();
+    const sems = (latestLibrary && latestLibrary.semesters || []).map(s => s.semester);
+    showCrumbMenu(ev.currentTarget, sems, state.semester, (sem)=> gotoSemester(sem));
+  }
+  function openCourseMenu(ev){
+    ev.stopPropagation();
+    const semObj = (latestLibrary && latestLibrary.semesters || []).find(s => s.semester === state.semester);
+    const courses = (semObj && semObj.courses || []).map(c => c.course);
+    showCrumbMenu(ev.currentTarget, courses, state.course, (course)=> openCourse(course));
+  }
+  async function openUnitMenu(ev){
+    ev.stopPropagation();
+    const anchor = ev.currentTarget;
+    try {
+      const enc = encodeURIComponent;
+      const d = await getJSON(`/units?user_id=${enc(uid())}&semester=${enc(state.semester)}&course=${enc(state.course)}`);
+      const units = (d.units || []).map(u => u.unit);
+      showCrumbMenu(anchor, units, state.unit, (u)=> openUnit(u));
+    } catch(e){ /* 서버 미연결 시 무시 */ }
+  }
+  function _showAdd(){ document.getElementById('addModal').hidden=false; document.getElementById('addBackdrop').hidden=false; }
+  function openAdd(){
+    document.getElementById('up_full_fields').style.display='';
+    ['up_sem','up_course','up_title','up_unit'].forEach(id=>document.getElementById(id).value='');
+    document.getElementById('up_file').value=''; document.getElementById('up_status').textContent='';
+    document.getElementById('addTitle').textContent='자료 추가';
+    _showAdd();
+  }
+  function openAddForCourse(){
+    document.getElementById('up_full_fields').style.display='none';
+    document.getElementById('up_sem').value = state.semester || '';
+    document.getElementById('up_course').value = state.course || '';
+    ['up_title','up_unit'].forEach(id=>document.getElementById(id).value='');
+    document.getElementById('up_file').value=''; document.getElementById('up_status').textContent='';
+    document.getElementById('addTitle').textContent = (state.course||'') + ' · 자료 추가';
+    _showAdd(); document.getElementById('up_title').focus();
+  }
+  function closeAdd(){ document.getElementById('addModal').hidden=true; document.getElementById('addBackdrop').hidden=true; }
+  let inlineAskCourse = null;
+  function inlineQuestionHTML(scopeLabel){
+    return `<div class="iq">
+      <div class="iq-title">❓ 질문하기 <span class="muted">· ${esc(scopeLabel||'전체 자료')}</span></div>
+      <div class="iq-row">
+        <input id="iq_q" placeholder="예: 신부전을 설명해줘" onkeydown="if(event.key==='Enter')askInline()">
+        <select id="iq_mode"><option value="single">단일 자료</option><option value="connections">여러 자료 연결</option></select>
+        <button onclick="askInline()">질문</button>
+      </div>
+      <div id="iq_status" class="iq-status"></div>
+      <div id="iq_answer"></div>
+    </div>`;
+  }
+  async function askInline(){
+    const q=document.getElementById('iq_q').value.trim();
+    const st=document.getElementById('iq_status'), ans=document.getElementById('iq_answer');
+    if(!q){ st.style.color='#ef4444'; st.textContent='질문을 입력하세요.'; return; }
+    const body={ user_id: uid(), question:q, mode: document.getElementById('iq_mode').value,
+      search_filter: inlineAskCourse ? {semester: state.semester, course: inlineAskCourse} : null };
+    st.style.color='#2563eb'; st.textContent='답변 생성 중…'; ans.innerHTML='';
+    try{
+      const r=await fetch(API+'/ask',{method:'POST',headers: authHeaders({'Content-Type':'application/json'}),body:JSON.stringify(body)});
+      const d=await r.json();
+      if(!r.ok){ st.style.color='#ef4444'; st.textContent=(d.detail||'실패'); return; }
+      st.textContent='';
+      const src=(Array.isArray(d.sources)&&d.sources.length)?'<div class="ask-src">'+[...new Set(d.sources.map(x=>`${x.course} · ${x.title||x.filename} p.${x.page}`))].map(x=>`<div>${esc(x)}</div>`).join('')+'</div>':'';
+      ans.innerHTML=`<div class="ask-a">${esc(d.answer||'')}</div>`+src;
+    }catch(e){ st.style.color='#ef4444'; st.textContent='서버 미연결 — 질문 실패'; }
+  }
+  async function doUpload(){
+    const v=(id)=>document.getElementById(id).value.trim();
+    const file=document.getElementById('up_file').files[0];
+    const st=document.getElementById('up_status');
+    const miss=[]; if(!v('up_sem'))miss.push('학기'); if(!v('up_course'))miss.push('과목'); if(!v('up_title'))miss.push('자료명'); if(!file)miss.push('PDF');
+    if(miss.length){ st.style.color='#ef4444'; st.textContent='비어있음: '+miss.join(', '); return; }
+    const fd=new FormData();
+    fd.append('user_id', uid()); fd.append('semester', v('up_sem')); fd.append('course', v('up_course'));
+    fd.append('title', v('up_title')); fd.append('unit', v('up_unit')); fd.append('file', file);
+    st.style.color='#2563eb'; st.textContent='업로드·학습 중… (임베딩 때문에 시간이 걸려요)';
+    try{
+      const r=await fetch(API+'/ingest',{method:'POST', headers: authHeaders(), body:fd});
+      const d=await r.json();
+      if(!r.ok || d.ok===false){ st.style.color='#ef4444'; st.textContent=(d.detail||d.message||'실패'); return; }
+      st.style.color='#16a34a'; st.textContent=`${d.message} (페이지 ${d.pages||0})`;
+      document.getElementById('up_file').value='';
+      await loadHome(false);
+    }catch(e){ st.style.color='#ef4444'; st.textContent='서버 미연결 — 업로드 실패'; }
+  }
+  // ===== 로그인 / 인증 =====
+  async function authInit(){
+    const token = localStorage.getItem('ln_token');
+    if(token){
+      try {
+        const r = await fetch(API+'/auth/me', { headers:{ Authorization:'Bearer '+token } });
+        if(r.ok){ const d = await r.json(); setSession(d.user); return; }
+      } catch(e){}
+      localStorage.removeItem('ln_token');
+    }
+    showAuth();
+  }
+  function showAuth(){ document.getElementById('authOverlay').hidden = false; initGoogle(); }
+  function setSession(user){
+    document.getElementById('uid').value = user.data_user_id || user.email;
+    document.getElementById('userChip').textContent = user.display_name || user.email;
+    document.getElementById('logoutBtn').style.display = 'inline-block';
+    document.getElementById('authOverlay').hidden = true;
+    ensureInitialHistory();
+    loadHome(false);
+  }
+  function logout(){ localStorage.removeItem('ln_token'); location.reload(); }
+  function authTab(which){
+    document.getElementById('authTabLogin').classList.toggle('on', which==='login');
+    document.getElementById('authTabReg').classList.toggle('on', which==='register');
+    document.getElementById('au_reg_only').hidden = which!=='register';
+    const btn = document.getElementById('au_submit');
+    btn.textContent = which==='register' ? '회원가입' : '로그인';
+    btn.dataset.mode = which;
+  }
+  async function authSubmit(){
+    const mode = document.getElementById('au_submit').dataset.mode || 'login';
+    const email = document.getElementById('au_email').value.trim();
+    const pw = document.getElementById('au_pw').value;
+    const st = document.getElementById('au_status');
+    if(!email || !pw){ st.style.color='#ef4444'; st.textContent='이메일과 비밀번호를 입력하세요.'; return; }
+    st.style.color='#2563eb'; st.textContent='처리 중…';
+    try{
+      let url, body;
+      if(mode==='register'){
+        url = API+'/auth/register';
+        body = { email, password:pw, display_name:document.getElementById('au_name').value.trim(), link_user_id:(document.getElementById('au_link')?document.getElementById('au_link').value.trim():'') };
+      } else {
+        url = API+'/auth/login'; body = { email, password:pw };
+      }
+      const r = await fetch(url, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body) });
+      const d = await r.json();
+      if(!r.ok){ st.style.color='#ef4444'; st.textContent=(d.detail||'실패'); return; }
+      localStorage.setItem('ln_token', d.token);
+      setSession(d.user);
+    }catch(e){ st.style.color='#ef4444'; st.textContent='서버 미연결 — 다시 시도'; }
+  }
+  function googleLogin(){
+    const st = document.getElementById('au_status');
+    st.style.color='#9a3412'; st.textContent='Google 로그인이 아직 설정되지 않았습니다(.env의 GOOGLE_CLIENT_ID 확인).';
+  }
+  let _gisDone = false;
+  async function initGoogle(){
+    if(_gisDone) return;
+    // 데스크톱 앱(Tauri 웹뷰)에서는 Google 로그인이 차단되므로 버튼을 숨긴다
+    if(window.__TAURI__ || window.__TAURI_INTERNALS__){
+      const g=document.getElementById('gbtn'); if(g) g.style.display='none';
+      const b=document.getElementById('au_google'); if(b) b.style.display='none';
+      const d=document.querySelector('.auth-divider'); if(d) d.style.display='none';
+      return;
+    }
+    let cfg = {};
+    try { cfg = await (await fetch(API+'/auth/config')).json(); } catch(e){}
+    if(!cfg.google_client_id){ const b=document.getElementById('au_google'); if(b) b.hidden=false; return; }
+    let tries=0;
+    while(!(window.google && google.accounts && google.accounts.id) && tries<40){ await new Promise(r=>setTimeout(r,100)); tries++; }
+    if(!(window.google && google.accounts && google.accounts.id)){ const b=document.getElementById('au_google'); if(b) b.hidden=false; return; }
+    google.accounts.id.initialize({ client_id: cfg.google_client_id, callback: onGoogleCredential });
+    const el=document.getElementById('gbtn');
+    if(el){ el.innerHTML=''; google.accounts.id.renderButton(el, { theme:'outline', size:'large', width:320, text:'continue_with' }); }
+    _gisDone = true;
+  }
+  async function onGoogleCredential(resp){
+    const st=document.getElementById('au_status'); st.style.color='#2563eb'; st.textContent='Google 로그인 중…';
+    try{
+      const linkEl=document.getElementById('au_link');
+      const link = linkEl ? linkEl.value.trim() : '';
+      const r=await fetch(API+'/auth/google',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({credential:resp.credential, link_user_id:link})});
+      const d=await r.json();
+      if(!r.ok){ st.style.color='#ef4444'; st.textContent=(d.detail||'실패'); return; }
+      localStorage.setItem('ln_token', d.token); setSession(d.user);
+    }catch(e){ st.style.color='#ef4444'; st.textContent='서버 미연결 — 다시 시도'; }
+  }
+  function setCrumbs(items){
+    const el = document.getElementById('crumbs');
+    if(!items.length){ el.innerHTML=''; return; }
+    el.innerHTML = items.map((it,i)=>{
+      let piece;
+      if(it[1] && it[2]==='menu'){
+        piece = `<a class="crumb plain has-menu" onclick='${it[1]}'>${esc(it[0])}</a>`;
+      } else if(it[1]){
+        piece = `<a class="crumb link" onclick='${it[1]}'>${esc(it[0])}</a>`;
+      } else {
+        piece = `<span class="crumb plain">${esc(it[0])}</span>`;
+      }
+      return piece + (i<items.length-1 ? '<span class="crumb-sep">›</span>' : '');
+    }).join('');
+  }
+  function emptyBox(msg){ return `<div class="empty">${esc(msg)}</div>`; }
+  function emptyInline(msg){ return `<div class="empty" style="grid-column:1/-1">${esc(msg)}</div>`; }
+  function esc(s){ return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+  window.addEventListener('resize', ()=>{ if(lastNodes && document.getElementById('canvas')) layoutNodes(lastNodes); });
+
+  authInit();
+</script>
+</body>
+</html>

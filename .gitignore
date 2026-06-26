@@ -1,0 +1,13 @@
+.env
+venv/
+.venv312/
+chroma_db/
+data/
+__pycache__/
+*.pyc
+.DS_Store
+
+# Tauri 데스크톱 빌드 산출물
+desktop/node_modules/
+desktop/src-tauri/target/
+desktop/src-tauri/gen/
