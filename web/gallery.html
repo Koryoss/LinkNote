@@ -1189,6 +1189,7 @@
           unit: trace.unit,
           concept: trace.concept,
           answer_text: trace.answer_text,
+          trace_id: trace.id || "",
         }),
       });
       const d = await r.json().catch(()=>({}));

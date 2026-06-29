@@ -322,6 +322,7 @@ class RecallFeedbackRequest(BaseModel):
     unit: str
     concept: str
     answer_text: str
+    trace_id: Optional[str] = None
 
 
 class RecallFeedbackResponse(BaseModel):
@@ -446,23 +447,31 @@ def _persist_recall_feedback(payload: RecallFeedbackRequest, feedback: RecallFee
     traces = _load_recall_traces()
     feedback_data = _model_to_dict(feedback)
     matched_index: Optional[int] = None
+    trace_id = (payload.trace_id or "").strip()
 
-    for index, item in enumerate(traces):
-        if not isinstance(item, dict):
-            continue
-        if not _trace_matches(
-            item,
-            payload.user_id.strip(),
-            payload.semester.strip(),
-            payload.course.strip(),
-            payload.unit.strip(),
-            payload.concept.strip(),
-        ):
-            continue
-        if str(item.get("answer_text", "")).strip() != payload.answer_text.strip():
-            continue
-        if matched_index is None or str(item.get("created_at", "")) > str(traces[matched_index].get("created_at", "")):
-            matched_index = index
+    if trace_id:
+        for index, item in enumerate(traces):
+            if isinstance(item, dict) and str(item.get("id", "")).strip() == trace_id:
+                matched_index = index
+                break
+
+    if matched_index is None:
+        for index, item in enumerate(traces):
+            if not isinstance(item, dict):
+                continue
+            if not _trace_matches(
+                item,
+                payload.user_id.strip(),
+                payload.semester.strip(),
+                payload.course.strip(),
+                payload.unit.strip(),
+                payload.concept.strip(),
+            ):
+                continue
+            if str(item.get("answer_text", "")).strip() != payload.answer_text.strip():
+                continue
+            if matched_index is None or str(item.get("created_at", "")) > str(traces[matched_index].get("created_at", "")):
+                matched_index = index
 
     if matched_index is None:
         return

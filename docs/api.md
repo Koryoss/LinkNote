@@ -79,6 +79,7 @@ Concept responses may include these recall metadata fields per node/concept:
 - `missing_links_count`: count of missing links from stored AI feedback attached to matching traces.
 - `weak_score`: local rule-based score from 0-100 for internal prioritization. The UI should prefer state labels such as `미설명` or `설명 N회` instead of exposing the raw score.
 - `feedback` and `feedback_created_at`: optional saved AI feedback attached to the trace after `/recall-feedback` is generated.
+- `/recall-feedback` may receive optional `trace_id`; when present, feedback is persisted directly to that recall trace.
 
 ## Auth Endpoints
 
