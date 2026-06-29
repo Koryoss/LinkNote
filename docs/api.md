@@ -63,7 +63,7 @@ Important current-state note:
 
 ## Recall Trace Endpoints
 
-These endpoints are the Phase 1 SCiyl-inspired active recall layer. They intentionally use the existing lightweight `user_id` string and do not create a new auth/user database. They also do not call OpenAI, so they work without `OPENAI_API_KEY`.
+These endpoints intentionally use the existing lightweight `user_id` string and do not create a new auth/user database. Phase 1 trace save/list does not call OpenAI and works without `OPENAI_API_KEY`; `/recall-feedback` is the Phase 2 AI endpoint and returns a clear error when the key is unavailable.
 
 | Method | Path | Purpose |
 | --- | --- | --- |
