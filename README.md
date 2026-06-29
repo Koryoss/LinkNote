@@ -136,3 +136,117 @@ Future concept graph metadata may include:
 - Avoid building a full account system too early.
 - Keep SCiyl-inspired recall work as a planned layer until the knowledge infrastructure is stable.
 - Do not implement recall APIs, database schema changes, or frontend recall controls until a later implementation PR.
+
+## Maintainer Docs
+
+- [API notes](docs/api.md)
+- [Deployment notes](docs/deployment.md)
+- [Repository audit](docs/repository-audit.md)
+
+# LinkNote Development Roadmap
+
+## Current Development Stage
+
+LinkNote is currently focused on building a unified knowledge management system for lecture materials. The project has established the core infrastructure for document ingestion, concept extraction, semantic retrieval, and concept graph visualization.
+
+### Completed Foundations
+
+* PDF upload and document management
+* Automatic chunk generation
+* ChromaDB-based vector indexing
+* Retrieval-Augmented Generation (RAG)
+* Concept extraction from lecture materials
+* Concept graph visualization
+* Cross-course concept linking
+* Gallery-based document browsing
+
+At the current stage, LinkNote is designed primarily for **single-user development and evaluation**.
+
+Although the API already accepts or derives a `user_id` / `data_user_id` value, this currently serves as a lightweight learning-data identifier rather than a complete authentication or multi-user storage system. Full account management hardening, production storage isolation, and user-specific databases are intentionally postponed until the core learning workflow has matured.
+
+---
+
+# Next Development Stage: SCiyl-inspired Active Learning Layer
+
+With the knowledge infrastructure now in place, the next milestone is to transform LinkNote from a passive knowledge repository into an active learning environment.
+
+This stage is inspired by ideas developed in **SCiyl**, where the emphasis is not simply on answering questions, but on externalizing and improving the learner's own thinking.
+
+Rather than introducing a full production account system immediately, this layer will continue to operate using the existing lightweight `user_id` workflow.
+
+---
+
+## Phase 1 — Recall Trace
+
+Introduce active recall for every concept.
+
+Users can:
+
+* Open a concept
+* Explain it in their own words
+* Save their explanation
+* Review previous explanations over time
+
+Each explanation becomes a **Recall Trace**, representing the learner's evolving understanding rather than a correctness score.
+
+Initially, recall traces will be stored using the existing lightweight storage mechanism (JSON/local database), allowing rapid iteration before migrating to a production database.
+
+This phase is planned only. It is not implemented in the current documentation update.
+
+---
+
+## Phase 2 — AI Reflection Feedback
+
+Once recall traces exist, LinkNote will provide reflective AI feedback.
+
+Instead of grading answers as "correct" or "incorrect", the AI will generate:
+
+* strengths of the explanation
+* missing conceptual connections
+* related concepts worth reviewing
+* one follow-up question encouraging deeper reasoning
+
+The objective is to guide thinking rather than evaluate performance.
+
+---
+
+## Phase 3 — Personalized Concept Graph
+
+Recall traces will become part of the concept graph itself.
+
+Each concept node may contain learning metadata such as:
+
+* recall count
+* last recalled date
+* weak concept score
+* missing conceptual links
+
+This enables the concept graph to evolve from a representation of knowledge into a representation of the learner's understanding.
+
+---
+
+## Future Work
+
+After the active learning workflow is stable, LinkNote will gradually introduce:
+
+* Authentication hardening
+* Multi-user storage
+* Cloud synchronization
+* Personalized learning analytics
+* Long-term learning history
+* Collaborative concept sharing
+
+The active learning workflow will be finalized before expanding into a full-scale multi-user platform.
+
+---
+
+## Long-term Vision
+
+The long-term vision of LinkNote is to combine:
+
+* Knowledge Management (LinkNote)
+* Active Recall (SCiyl)
+* Concept Graph Learning
+* Retrieval-Augmented Generation
+
+into a single environment where learners not only organize knowledge, but continuously construct, revisit, and refine their own understanding.

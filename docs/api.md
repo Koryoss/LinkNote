@@ -1,0 +1,93 @@
+# LinkNote API Notes
+
+This document summarizes the current FastAPI surface in `api_server.py`. It is a documentation snapshot, not a contract freeze.
+
+## Runtime
+
+Run locally:
+
+```bash
+uvicorn api_server:app --reload --port 8000
+```
+
+The desktop app starts the same backend through Tauri. Render starts it with:
+
+```bash
+uvicorn api_server:app --host 0.0.0.0 --port $PORT
+```
+
+## Identity Model
+
+Most application endpoints depend on `current_uid`, which reads `Authorization: Bearer <token>` and resolves it through `auth.py`.
+
+`auth.py` stores users in `data/users.json`. Each user has a `data_user_id`, and that value is used as the storage identifier for ChromaDB records and local JSON data.
+
+Important current-state note:
+
+- LinkNote now has lightweight local auth/token support.
+- `data_user_id` still acts as the learning-data identifier.
+- This is not yet a mature multi-user storage system with production-grade account boundaries, migrations, or separate user databases.
+- The SCiyl-inspired recall layer should continue to use this lightweight identifier until the learning workflow is stable.
+
+## Core Endpoints
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| `POST` | `/ask` | Answer a question from indexed source chunks. Supports normal and connection-focused modes. |
+| `POST` | `/ingest` | Upload a PDF, extract text, chunk/index pages, and optionally build concepts for the submitted unit. |
+| `GET` | `/library` | Return the current user's indexed library overview. |
+| `DELETE` | `/library` | Delete indexed chunks matching a search filter for the current user. |
+| `GET` | `/chunks` | Inspect indexed chunks with optional filters and pagination. |
+| `GET` | `/file` | Serve an uploaded PDF file for preview. Uses a query token for iframe access. |
+| `POST` | `/rename-unit` | Rename a unit in ChromaDB metadata and update concept JSON when present. |
+
+## Timetable Endpoints
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| `GET` | `/timetable` | Return courses grouped by semester for the current user. |
+| `GET` | `/timetable/entries` | Return raw timetable entries for the current user. |
+| `POST` | `/timetable/entries` | Add a timetable entry. |
+| `PUT` | `/timetable/entries` | Update a timetable entry by user-local index. |
+| `DELETE` | `/timetable/entries` | Delete one or all timetable entries for the current user. |
+
+## Concept And Graph Endpoints
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| `GET` | `/units` | Return detected units for a semester/course. |
+| `POST` | `/reindex-concepts` | Rebuild concept extraction data into `data/concepts.json`. This may require `OPENAI_API_KEY`. |
+| `GET` | `/concepts` | Return extracted concepts for a semester/course/unit. |
+| `POST` | `/reindex-graph` | Build `data/concept_index.json` and `data/concept_links.json` from extracted concepts. |
+| `GET` | `/concept-graph` | Return concept graph nodes and edges for visualization. |
+
+## Auth Endpoints
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| `POST` | `/auth/register` | Register a lightweight local user. |
+| `POST` | `/auth/login` | Login and receive a token. |
+| `GET` | `/auth/me` | Resolve the current token to a public user object. |
+| `GET` | `/auth/config` | Return public Google client configuration. |
+| `POST` | `/auth/google` | Login/register with a Google ID token. |
+
+## Static UI
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| `GET` | `/` | Serve `web/gallery.html`. |
+| static mount | `/...` | Serve files from `web/`. |
+
+Current `desktop-app` branch files under `web/`:
+
+- `web/gallery.html`
+- `web/app.js`
+
+Some older docs mention `web/index.html`; update those references when the web entry files are finalized.
+
+## SCiyl Boundary
+
+Do not add recall endpoints in this documentation phase.
+
+Future Phase 1 recall work should be introduced in a separate implementation PR and documented here only after it exists.
+
