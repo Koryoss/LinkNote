@@ -77,7 +77,7 @@ Concept responses may include these recall metadata fields per node/concept:
 - `recall_count`: number of saved recall traces for that concept in the same user/semester/course/unit scope.
 - `last_recalled_at`: most recent saved recall timestamp, or `null`.
 - `missing_links_count`: count of missing links from stored AI feedback attached to matching traces.
-- `weak_score`: local rule-based score from 0-100. No answer, stale answer, and many missing links increase the score.
+- `weak_score`: local rule-based score from 0-100 for internal prioritization. The UI should prefer state labels such as `미설명` or `설명 N회` instead of exposing the raw score.
 
 ## Auth Endpoints
 
@@ -105,5 +105,5 @@ Some older docs mention `web/index.html`; update those references when the web e
 
 ## SCiyl Boundary
 
-Phase 1 recall trace storage/query is implemented as a local JSON-backed layer only. Phase 2 adds directional recall feedback through `/recall-feedback`. The graph now includes lightweight local recall metadata (`recall_count`, `last_recalled_at`, `weak_score`) without adding auth/user DB expansion.
+Phase 1 recall trace storage/query is implemented as a local JSON-backed layer only. Phase 2 adds directional recall feedback through `/recall-feedback`. The graph now includes lightweight local recall metadata (`recall_count`, `last_recalled_at`, `weak_score`) without adding auth/user DB expansion. `weak_score` is treated as internal prioritization metadata, while the UI uses learner-friendly state labels.
 

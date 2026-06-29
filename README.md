@@ -222,7 +222,7 @@ Each concept node can contain learning metadata such as:
 * weak concept score
 * missing conceptual links
 
-This lets the concept graph begin representing the learner's understanding while keeping the current local `user_id` structure.
+This lets the concept graph begin representing the learner's understanding while keeping the current local `user_id` structure. The UI should avoid raw score labels and show softer states such as `미설명` or `설명 N회`.
 
 ---
 
