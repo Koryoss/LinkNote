@@ -1,6 +1,7 @@
 import json
 import os
 import uuid
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile, Depends, Header
@@ -29,6 +30,7 @@ DATA_DIR = os.getenv("DATA_DIR", "./data")
 UPLOAD_DIR = os.path.join(DATA_DIR, "uploads")
 TIMETABLE_PATH = os.path.join(DATA_DIR, "timetable.json")
 CONCEPTS_PATH = os.path.join(DATA_DIR, "concepts.json")
+RECALL_TRACES_PATH = os.path.join(DATA_DIR, "recall_traces.json")
 
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 os.makedirs(os.path.dirname(CONCEPTS_PATH), exist_ok=True)
@@ -183,12 +185,52 @@ def _save_timetable(items: List[Dict[str, Any]]) -> None:
         json.dump(items, f, ensure_ascii=False, indent=2)
 
 
+def _load_recall_traces() -> List[Dict[str, Any]]:
+    data = _load_json_file(RECALL_TRACES_PATH)
+    return data if isinstance(data, list) else []
+
+
+def _save_recall_traces(items: List[Dict[str, Any]]) -> None:
+    os.makedirs(os.path.dirname(RECALL_TRACES_PATH), exist_ok=True)
+    with open(RECALL_TRACES_PATH, "w", encoding="utf-8") as f:
+        json.dump(items, f, ensure_ascii=False, indent=2)
+
+
 class TimetableEntry(BaseModel):
     semester: str
     day: str = ""
     time: str = ""
     course: str
     memo: str = ""
+
+
+class RecallTraceCreate(BaseModel):
+    user_id: str
+    semester: str
+    course: str
+    unit: str
+    concept: str
+    answer_text: str
+
+
+class RecallTrace(BaseModel):
+    id: str
+    user_id: str
+    semester: str
+    course: str
+    unit: str
+    concept: str
+    answer_text: str
+    created_at: str
+
+
+class RecallTraceResponse(BaseModel):
+    ok: bool
+    trace: RecallTrace
+
+
+class RecallTraceListResponse(BaseModel):
+    traces: List[RecallTrace]
 
 
 def _build_timetable_response(uid: str) -> TimetableResponse:
@@ -453,6 +495,71 @@ async def concepts(semester: str, course: str, unit: str, data_user_id: str = De
         return {"status": "empty", "concepts": []}
 
     return {"status": "ready", "concepts": concepts}
+
+
+@app.post("/recall-traces", response_model=RecallTraceResponse)
+async def create_recall_trace(payload: RecallTraceCreate) -> RecallTraceResponse:
+    user_id = payload.user_id.strip()
+    semester = payload.semester.strip()
+    course = payload.course.strip()
+    unit = payload.unit.strip()
+    concept = payload.concept.strip()
+    answer_text = payload.answer_text.strip()
+
+    if not all([user_id, semester, course, unit, concept, answer_text]):
+        raise HTTPException(
+            status_code=400,
+            detail="user_id, semester, course, unit, concept, answer_text가 필요합니다.",
+        )
+
+    trace = {
+        "id": uuid.uuid4().hex,
+        "user_id": user_id,
+        "semester": semester,
+        "course": course,
+        "unit": unit,
+        "concept": concept,
+        "answer_text": answer_text,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    traces = _load_recall_traces()
+    traces.append(trace)
+    _save_recall_traces(traces)
+    return RecallTraceResponse(ok=True, trace=RecallTrace(**trace))
+
+
+@app.get("/recall-traces", response_model=RecallTraceListResponse)
+async def recall_traces(
+    user_id: str,
+    semester: str,
+    course: str,
+    unit: str,
+    concept: Optional[str] = None,
+    limit: int = 20,
+) -> RecallTraceListResponse:
+    filters = {
+        "user_id": user_id.strip(),
+        "semester": semester.strip(),
+        "course": course.strip(),
+        "unit": unit.strip(),
+    }
+    if not all(filters.values()):
+        raise HTTPException(status_code=400, detail="user_id, semester, course, unit이 필요합니다.")
+
+    concept_filter = (concept or "").strip()
+    traces = []
+    for item in _load_recall_traces():
+        if not isinstance(item, dict):
+            continue
+        if any(str(item.get(key, "")) != value for key, value in filters.items()):
+            continue
+        if concept_filter and str(item.get("concept", "")) != concept_filter:
+            continue
+        traces.append(item)
+
+    traces.sort(key=lambda item: str(item.get("created_at", "")), reverse=True)
+    safe_limit = max(1, min(limit, 100))
+    return RecallTraceListResponse(traces=[RecallTrace(**item) for item in traces[:safe_limit]])
 
 
 @app.get("/chunks")

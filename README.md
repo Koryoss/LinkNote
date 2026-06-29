@@ -35,7 +35,7 @@ linknote/
 │   ├── concepts.json
 │   ├── concept_index.json
 │   ├── concept_links.json
-│   └── recall_traces.json        # planned
+│   └── recall_traces.json        # local recall trace store
 │
 ├── chroma_db/
 │
@@ -88,12 +88,13 @@ The first version should remain lightweight and use the existing local `user_id`
 
 ### Phase 1: Recall Trace
 
-Planned only. Not implemented yet.
+Initial implementation added in the recall trace PR.
 
 - Store a learner's own explanation for a concept.
 - Suggested fields: `answer_text`, `concept`, `course`, `unit`, `semester`, `user_id`, `created_at`.
 - Start with JSON or another local lightweight store.
 - Do not add AI feedback in this phase.
+- Current implementation uses `POST /recall-traces` and `GET /recall-traces` with the existing lightweight `user_id` string.
 
 ### Phase 2: AI Reflection Feedback
 
@@ -134,8 +135,8 @@ Future concept graph metadata may include:
 - Keep the local-first learning workflow stable.
 - Keep `user_id` lightweight until real authentication is needed.
 - Avoid building a full account system too early.
-- Keep SCiyl-inspired recall work as a planned layer until the knowledge infrastructure is stable.
-- Do not implement recall APIs, database schema changes, or frontend recall controls until a later implementation PR.
+- Keep SCiyl-inspired recall work lightweight and local-first until the knowledge infrastructure is stable.
+- Phase 1 recall trace storage/query is limited to JSON-backed `user_id` records. AI feedback, weak concept graph metadata, and full account-based multi-user storage remain later PRs.
 
 ## Maintainer Docs
 
@@ -191,7 +192,7 @@ Each explanation becomes a **Recall Trace**, representing the learner's evolving
 
 Initially, recall traces will be stored using the existing lightweight storage mechanism (JSON/local database), allowing rapid iteration before migrating to a production database.
 
-This phase is planned only. It is not implemented in the current documentation update.
+This phase now has an initial local implementation for saving and listing recall traces. It intentionally does not add AI feedback, weak concept scoring, or a new auth/user database.
 
 ---
 

@@ -61,6 +61,15 @@ Important current-state note:
 | `POST` | `/reindex-graph` | Build `data/concept_index.json` and `data/concept_links.json` from extracted concepts. |
 | `GET` | `/concept-graph` | Return concept graph nodes and edges for visualization. |
 
+## Recall Trace Endpoints
+
+These endpoints are the Phase 1 SCiyl-inspired active recall layer. They intentionally use the existing lightweight `user_id` string and do not create a new auth/user database. They also do not call OpenAI, so they work without `OPENAI_API_KEY`.
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| `POST` | `/recall-traces` | Store a learner's explanation for a concept in `data/recall_traces.json`. |
+| `GET` | `/recall-traces` | List recent recall traces by `user_id`, `semester`, `course`, and `unit`; optional `concept` and `limit`. |
+
 ## Auth Endpoints
 
 | Method | Path | Purpose |
@@ -87,7 +96,5 @@ Some older docs mention `web/index.html`; update those references when the web e
 
 ## SCiyl Boundary
 
-Do not add recall endpoints in this documentation phase.
-
-Future Phase 1 recall work should be introduced in a separate implementation PR and documented here only after it exists.
+Phase 1 recall trace storage/query is implemented as a local JSON-backed layer only. Do not expand this PR into AI feedback, weak concept graph scoring, or full auth/user database work.
 
