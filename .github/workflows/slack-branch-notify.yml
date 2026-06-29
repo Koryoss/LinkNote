@@ -1,0 +1,59 @@
+name: Slack branch notifications
+
+on:
+  push:
+    branches:
+      - web-ver
+      - desktop-app
+  pull_request:
+    branches:
+      - web-ver
+      - desktop-app
+    types: [opened, reopened, synchronize, closed]
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Select Slack webhook
+        id: target
+        shell: bash
+        run: |
+          branch="$GITHUB_REF_NAME"
+          if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
+            branch="$GITHUB_BASE_REF"
+          fi
+          echo "branch=$branch" >> "$GITHUB_OUTPUT"
+          if [ "$branch" = "web-ver" ]; then
+            echo "webhook=${{ secrets.SLACK_WEB_VER_WEBHOOK_URL }}" >> "$GITHUB_OUTPUT"
+            echo "label=web-ver" >> "$GITHUB_OUTPUT"
+          elif [ "$branch" = "desktop-app" ]; then
+            echo "webhook=${{ secrets.SLACK_DESKTOP_APP_WEBHOOK_URL }}" >> "$GITHUB_OUTPUT"
+            echo "label=desktop-app" >> "$GITHUB_OUTPUT"
+          else
+            echo "webhook=" >> "$GITHUB_OUTPUT"
+            echo "label=$branch" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Send Slack notification
+        if: steps.target.outputs.webhook != ''
+        shell: bash
+        env:
+          WEBHOOK_URL: ${{ steps.target.outputs.webhook }}
+          BRANCH_LABEL: ${{ steps.target.outputs.label }}
+          EVENT_NAME: ${{ github.event_name }}
+          REPO: ${{ github.repository }}
+          ACTOR: ${{ github.actor }}
+          SHA: ${{ github.sha }}
+          SERVER_URL: ${{ github.server_url }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          COMMIT_MESSAGE: ${{ github.event.head_commit.message || github.event.pull_request.title }}
+        run: |
+          short_sha="${SHA:0:7}"
+          compare_url="$SERVER_URL/$REPO/commit/$SHA"
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            compare_url="${{ github.event.pull_request.html_url }}"
+          fi
+          text="[$BRANCH_LABEL] $REPO $EVENT_NAME by $ACTOR: $COMMIT_MESSAGE <$compare_url|$short_sha>"
+          payload=$(SLACK_TEXT="$text" python3 -c 'import json, os; print(json.dumps({"text": os.environ["SLACK_TEXT"]}))')
+          curl -sS -X POST -H 'Content-Type: application/json' --data "$payload" "$WEBHOOK_URL"
