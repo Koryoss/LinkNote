@@ -5,6 +5,8 @@ from typing import Any, Dict, List, Optional
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile, Depends, Header
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+import unicodedata
 from pydantic import BaseModel
 
 from pdf_loader import extract_pdf_text
@@ -15,6 +17,7 @@ from rag import (
     build_concepts_for_unit,
     build_concept_embeddings,
     build_cross_links,
+    rename_unit,
     delete_chunks_by_filter,
     get_chunks,
     get_filter_label,
@@ -271,6 +274,17 @@ async def ingest(
         unit=unit.strip(),
     )
 
+    # 업로드 시 해당 단원 개념 자동 추출(개념 지도용). 실패해도 업로드는 성공 처리.
+    if unit.strip():
+        try:
+            cs = build_concepts_for_unit(data_user_id, semester.strip(), course.strip(), unit.strip())
+            if cs:
+                cdata = _load_json_file(CONCEPTS_PATH)
+                cdata.setdefault(data_user_id, {}).setdefault(semester.strip(), {}).setdefault(course.strip(), {})[unit.strip()] = cs
+                _save_json_file(CONCEPTS_PATH, cdata)
+        except Exception:
+            pass
+
     return IngestResponse(ok=True, filename=filename, pages=len(pages), message="학습 완료")
 
 
@@ -464,6 +478,48 @@ async def chunks(
     )
 
 
+def _uid_from_token(token: str) -> str:
+    uid = _auth.verify_token((token or "").replace("Bearer ", "").strip())
+    if not uid:
+        raise HTTPException(status_code=401, detail="로그인이 필요합니다.")
+    user = _auth.get_user_by_id(uid)
+    if not user:
+        raise HTTPException(status_code=401, detail="사용자를 찾을 수 없습니다.")
+    return user.get("data_user_id") or user["email"]
+
+
+@app.get("/file")
+async def serve_file(filename: str, token: str = ""):
+    """업로드된 원본 PDF 자체를 반환 (iframe 미리보기용). 토큰은 쿼리로 받음."""
+    _uid_from_token(token)
+    want = unicodedata.normalize("NFC", os.path.basename(filename))
+    for fn in os.listdir(UPLOAD_DIR):
+        base = unicodedata.normalize("NFC", fn)
+        if base == want or base.endswith("_" + want):
+            return FileResponse(os.path.join(UPLOAD_DIR, fn), media_type="application/pdf")
+    raise HTTPException(status_code=404, detail="파일을 찾을 수 없습니다.")
+
+
+@app.post("/rename-unit")
+async def rename_unit_ep(payload: dict, data_user_id: str = Depends(current_uid)) -> Dict[str, Any]:
+    sem = (payload.get("semester") or "").strip()
+    course = (payload.get("course") or "").strip()
+    old = (payload.get("old_unit") or "").strip()
+    new = (payload.get("new_unit") or "").strip()
+    if not (sem and course and old and new):
+        raise HTTPException(status_code=400, detail="semester, course, old_unit, new_unit 가 필요합니다.")
+    n = rename_unit(data_user_id, sem, course, old, new)
+    cdata = _load_json_file(CONCEPTS_PATH)
+    try:
+        units = cdata[data_user_id][sem][course]
+        if old in units:
+            units[new] = units.pop(old)
+            _save_json_file(CONCEPTS_PATH, cdata)
+    except Exception:
+        pass
+    return {"ok": True, "updated_chunks": n}
+
+
 @app.post("/reindex-graph")
 async def reindex_graph(payload: dict, data_user_id: str = Depends(current_uid)) -> Dict[str, Any]:
     """개념 임베딩 및 과목 간 연결 생성"""
@@ -498,8 +554,8 @@ async def reindex_graph(payload: dict, data_user_id: str = Depends(current_uid))
         # 2단계: cross-link 생성
         cross_edges = build_cross_links(
             user_id=user_id,
-            threshold=0.78,
-            top_k=3
+            threshold=0.45,
+            top_k=5
         )
         
         return {

@@ -32,7 +32,7 @@ def _get_client():
     return _client
 
 
-def generate_answer(prompt: str):
+def generate_answer(prompt: str, max_tokens: int = 800):
     response = _get_client().chat.completions.create(
         model=CHAT_MODEL,
         messages=[
@@ -50,7 +50,7 @@ def generate_answer(prompt: str):
             }
         ],
         temperature=0.2,
-        max_tokens=800
+        max_tokens=max_tokens
     )
 
     return response.choices[0].message.content
