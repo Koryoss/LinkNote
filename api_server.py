@@ -302,6 +302,8 @@ class RecallTrace(BaseModel):
     concept: str
     answer_text: str
     created_at: str
+    feedback: Optional[Dict[str, Any]] = None
+    feedback_created_at: Optional[str] = None
 
 
 class RecallTraceResponse(BaseModel):

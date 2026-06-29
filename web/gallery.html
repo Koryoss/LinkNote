@@ -1146,7 +1146,15 @@
       return;
     }
     const visibleTraces = recallHistoryExpanded ? traces : traces.slice(0, 5);
-    const rows = visibleTraces.map((t, i) => `<div class="recall-item"><small>${esc(formatRecallDate(t.created_at))}</small>${esc(t.answer_text)}<div class="recall-item-actions"><button onclick="requestRecallFeedback(${i})">AI 피드백</button><span id="feedbackStatus${i}" class="recall-status"></span></div><div id="feedbackBox${i}" class="feedback-box" hidden></div></div>`).join("");
+    const rows = visibleTraces.map((t, i) => {
+      const originalIndex = traces.indexOf(t);
+      const feedback = t.feedback && typeof t.feedback === "object" ? t.feedback : null;
+      const feedbackStamp = t.feedback_created_at ? `<small>AI 피드백 · ${esc(formatRecallDate(t.feedback_created_at))}</small>` : "";
+      const feedbackBox = feedback
+        ? `<div id="feedbackBox${originalIndex}" class="feedback-box">${feedbackStamp}${renderFeedback(feedback)}</div>`
+        : `<div id="feedbackBox${originalIndex}" class="feedback-box" hidden></div>`;
+      return `<div class="recall-item"><small>${esc(formatRecallDate(t.created_at))}</small>${esc(t.answer_text)}<div class="recall-item-actions"><button onclick="requestRecallFeedback(${originalIndex})">${feedback ? "AI 피드백 다시 생성" : "AI 피드백"}</button><span id="feedbackStatus${originalIndex}" class="recall-status"></span></div>${feedbackBox}</div>`;
+    }).join("");
     const more = !recallHistoryExpanded && traces.length > 5
       ? `<button class="recall-history-toggle" onclick="toggleRecallHistory()">누적 기록 ${traces.length}개 보기</button>`
       : "";
@@ -1185,7 +1193,9 @@
       });
       const d = await r.json().catch(()=>({}));
       if(!r.ok){ status.textContent = d.detail || "피드백 실패"; return; }
-      box.innerHTML = renderFeedback(d);
+      trace.feedback = d;
+      trace.feedback_created_at = new Date().toISOString();
+      box.innerHTML = `<small>AI 피드백 · ${esc(formatRecallDate(trace.feedback_created_at))}</small>` + renderFeedback(d);
       box.hidden = false;
       status.textContent = "";
     } catch(e){
