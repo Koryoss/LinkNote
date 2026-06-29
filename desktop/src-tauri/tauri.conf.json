@@ -13,9 +13,9 @@
         "title": "LinkNote",
         "url": "http://127.0.0.1:8000",
         "width": 1280,
-        "height": 840,
+        "height": 900,
         "minWidth": 900,
-        "minHeight": 600,
+        "minHeight": 680,
         "resizable": true
       }
     ],
