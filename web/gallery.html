@@ -72,8 +72,8 @@
   .unit-cols { display:flex; gap:14px; margin:8px 16px 30px; align-items:flex-start; }
   .unit-main { flex:1; min-width:0; }
   .unit-main .iq { margin:0; }
-  .doc-panel { flex:0 0 400px; max-height:calc(100vh - 140px); overflow:auto; border:1px solid #eef1f6; border-radius:14px; background:#fff; }
-  .unit-cols.doc-collapsed .doc-panel { flex-basis:210px; max-height:44px; overflow:hidden; }
+  .doc-panel { flex:0 0 400px; height:calc(100vh - 170px); min-height:520px; overflow:hidden; border:1px solid #eef1f6; border-radius:14px; background:#fff; display:flex; flex-direction:column; }
+  .unit-cols.doc-collapsed .doc-panel { flex-basis:210px; height:44px; min-height:44px; overflow:hidden; }
   .unit-cols.doc-collapsed .doc-panel .doc-frame { display:none; }
   .unit-cols.doc-collapsed .doc-panel select { display:none; }
   .unit-cols.doc-collapsed .unit-main { width:100%; }
@@ -83,7 +83,7 @@
   .doc-file { font-weight:700; color:#1e293b; margin:10px 0 4px; font-size:0.82rem; }
   .doc-pg { color:#2563eb; font-weight:600; font-size:0.74rem; margin:8px 0 2px; }
   .doc-tx { white-space:pre-wrap; margin-bottom:6px; }
-  @media (max-width:900px){ .unit-cols{flex-direction:column;} .doc-panel{flex:1 1 auto; width:100%; max-height:300px;} }
+  @media (max-width:900px){ .unit-cols{flex-direction:column;} .doc-panel{flex:1 1 auto; width:100%; height:min(62vh,520px); min-height:320px;} }
   .line { stroke: #cbd5e1; stroke-width: 2; opacity: 0.4; }
   .line.active { stroke: #2563eb; opacity: 0.95; stroke-width: 2.5; }
   .node { position: absolute; transform: translate(-50%,-50%); background: #fff; border: 1px solid #e5e7eb;
@@ -98,7 +98,7 @@
   .line.group-line { stroke:#c7d2fe; stroke-dasharray:4 4; }
   .view-controls select, .view-controls button { height:38px; box-sizing:border-box; line-height:1.2; }
   .iq-row input, .iq-row select, .iq-row button { height:38px; box-sizing:border-box; }
-  .doc-frame { width:100%; height:calc(100vh - 205px); min-height:620px; border:0; display:block; background:#f8fafc; }
+  .doc-frame { width:100%; flex:1 1 auto; min-height:0; border:0; display:block; background:#f8fafc; }
   .doc-head { display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
   .doc-head select { max-width:150px; border:1px solid #d8dee9; border-radius:6px; padding:3px 6px; font-size:0.72rem; }
   .mini-btn { border:1px solid #d8dee9; background:#fff; color:#475569; border-radius:6px; padding:3px 8px; font-size:0.72rem; cursor:pointer; margin-left:8px; font-weight:600; }
