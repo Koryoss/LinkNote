@@ -294,6 +294,11 @@
   .recall-list { margin-top:12px; display:flex; flex-direction:column; gap:8px; }
   .recall-item { border:1px solid #eef1f6; background:#f8fafc; border-radius:10px; padding:9px 10px; font-size:0.82rem; line-height:1.5; color:#334155; }
   .recall-item small { display:block; margin-bottom:4px; color:#94a3b8; font-size:0.72rem; }
+  .recall-item-actions { margin-top:8px; display:flex; align-items:center; gap:8px; }
+  .recall-item-actions button { border:1px solid #c8d6f1; background:#fff; color:#2563eb; border-radius:7px; padding:5px 9px; font-size:0.76rem; cursor:pointer; font-weight:700; }
+  .feedback-box { margin-top:8px; padding:9px 10px; border-radius:9px; border:1px solid #dbeafe; background:#f8fbff; color:#334155; }
+  .feedback-box strong { display:block; margin:6px 0 3px; color:#1e3a8a; font-size:0.78rem; }
+  .feedback-box ul { margin:3px 0 6px 17px; padding:0; }
 </style>
   <script src="https://accounts.google.com/gsi/client" async></script>
 </head>
@@ -1078,14 +1083,60 @@
       const data = await getJSON(`/recall-traces?${recallQuery(concept)}&limit=5`);
       const traces = Array.isArray(data.traces) ? data.traces : [];
       if(!traces.length){
+        latestRecallTraces = [];
         list.innerHTML = `<div class="recall-item">아직 저장된 설명이 없습니다.</div>`;
       } else {
-        list.innerHTML = traces.map(t => `<div class="recall-item"><small>${esc(formatRecallDate(t.created_at))}</small>${esc(t.answer_text)}</div>`).join("");
+        list.innerHTML = traces.map((t, i) => `<div class="recall-item"><small>${esc(formatRecallDate(t.created_at))}</small>${esc(t.answer_text)}<div class="recall-item-actions"><button onclick="requestRecallFeedback(${i})">AI 피드백</button><span id="feedbackStatus${i}" class="recall-status"></span></div><div id="feedbackBox${i}" class="feedback-box" hidden></div></div>`).join("");
+        latestRecallTraces = traces;
       }
       status.textContent = "";
     } catch(e){
+      latestRecallTraces = [];
       status.textContent = "recall 기록을 불러오지 못했습니다.";
       list.innerHTML = "";
+    }
+  }
+
+
+  let latestRecallTraces = [];
+
+  function renderFeedback(data){
+    const list = (items) => Array.isArray(items) && items.length
+      ? `<ul>${items.map(item => `<li>${esc(item)}</li>`).join("")}</ul>`
+      : `<div class="muted">자료에서 뚜렷하게 확인되지 않았습니다.</div>`;
+    return `<strong>좋았던 점</strong>${list(data.good_points)}
+      <strong>더 연결해볼 점</strong>${list(data.missing_links)}
+      <strong>다시 생각해볼 질문</strong><div>${esc(data.followup_question || "")}</div>
+      <strong>다시 볼 자료</strong><div>${esc(data.source_hint || "")}</div>`;
+  }
+
+  async function requestRecallFeedback(index){
+    const trace = latestRecallTraces[index];
+    const status = document.getElementById(`feedbackStatus${index}`);
+    const box = document.getElementById(`feedbackBox${index}`);
+    if(!trace || !status || !box) return;
+    status.textContent = "생성 중...";
+    box.hidden = true;
+    try {
+      const r = await fetch(API + "/recall-feedback", {
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({
+          user_id: trace.user_id,
+          semester: trace.semester,
+          course: trace.course,
+          unit: trace.unit,
+          concept: trace.concept,
+          answer_text: trace.answer_text,
+        }),
+      });
+      const d = await r.json().catch(()=>({}));
+      if(!r.ok){ status.textContent = d.detail || "피드백 실패"; return; }
+      box.innerHTML = renderFeedback(d);
+      box.hidden = false;
+      status.textContent = "";
+    } catch(e){
+      status.textContent = "서버에 연결할 수 없습니다.";
     }
   }
 

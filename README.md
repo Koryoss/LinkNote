@@ -198,7 +198,7 @@ This phase now has an initial local implementation for saving and listing recall
 
 ## Phase 2 — AI Reflection Feedback
 
-Once recall traces exist, LinkNote will provide reflective AI feedback.
+Once recall traces exist, LinkNote provides an initial reflective AI feedback endpoint.
 
 Instead of grading answers as "correct" or "incorrect", the AI will generate:
 
@@ -207,7 +207,7 @@ Instead of grading answers as "correct" or "incorrect", the AI will generate:
 * related concepts worth reviewing
 * one follow-up question encouraging deeper reasoning
 
-The objective is to guide thinking rather than evaluate performance.
+The objective is to guide thinking rather than evaluate performance. The current implementation uses `POST /recall-feedback`, requires `OPENAI_API_KEY`, and keeps recall trace storage/query working when the key is absent.
 
 ---
 

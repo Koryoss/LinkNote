@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import json
 import os
 import uuid
@@ -9,6 +11,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 import unicodedata
 from pydantic import BaseModel
+
+from providers.openai_provider import generate_answer as generate_openai_answer
 
 from pdf_loader import extract_pdf_text
 from rag import (
@@ -31,6 +35,8 @@ UPLOAD_DIR = os.path.join(DATA_DIR, "uploads")
 TIMETABLE_PATH = os.path.join(DATA_DIR, "timetable.json")
 CONCEPTS_PATH = os.path.join(DATA_DIR, "concepts.json")
 RECALL_TRACES_PATH = os.path.join(DATA_DIR, "recall_traces.json")
+PROMPTS_DIR = os.getenv("PROMPTS_DIR", "./prompts")
+RECALL_FEEDBACK_PROMPT_PATH = os.path.join(PROMPTS_DIR, "recall_feedback.md")
 
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 os.makedirs(os.path.dirname(CONCEPTS_PATH), exist_ok=True)
@@ -196,6 +202,80 @@ def _save_recall_traces(items: List[Dict[str, Any]]) -> None:
         json.dump(items, f, ensure_ascii=False, indent=2)
 
 
+def _load_recall_feedback_prompt() -> str:
+    try:
+        with open(RECALL_FEEDBACK_PROMPT_PATH, "r", encoding="utf-8") as f:
+            return f.read().strip()
+    except OSError:
+        return (
+            "You are a SCiyl-inspired active learning feedback layer. "
+            "Return JSON only with good_points, missing_links, followup_question, source_hint."
+        )
+
+
+def _extract_json_object(text: str) -> Dict[str, Any]:
+    if not isinstance(text, str):
+        raise ValueError("response is not text")
+    raw = text.strip()
+    if raw.startswith("```"):
+        raw = raw.strip("`")
+        if raw.lower().startswith("json"):
+            raw = raw[4:].strip()
+    start, end = raw.find("{"), raw.rfind("}")
+    if start != -1 and end > start:
+        raw = raw[start:end + 1]
+    parsed = json.loads(raw)
+    if not isinstance(parsed, dict):
+        raise ValueError("response is not a JSON object")
+    return parsed
+
+
+def _normalize_feedback_payload(payload: Dict[str, Any]) -> RecallFeedbackResponse:
+    def list_of_strings(value: Any) -> List[str]:
+        if isinstance(value, list):
+            return [str(item).strip() for item in value if str(item).strip()][:5]
+        if isinstance(value, str) and value.strip():
+            return [value.strip()]
+        return []
+
+    return RecallFeedbackResponse(
+        good_points=list_of_strings(payload.get("good_points")),
+        missing_links=list_of_strings(payload.get("missing_links")),
+        followup_question=str(payload.get("followup_question") or "").strip(),
+        source_hint=str(payload.get("source_hint") or "").strip(),
+    )
+
+
+def _format_feedback_sources(chunks: List[Dict[str, Any]]) -> str:
+    blocks = []
+    for item in chunks[:8]:
+        label = (
+            f"과목:{item.get('course', '')} · 단원:{item.get('unit', '')} · "
+            f"파일:{item.get('filename', '')} p.{item.get('page', '')}"
+        )
+        blocks.append(f"[{label}]\n{str(item.get('text', ''))[:1200]}")
+    return "\n\n".join(blocks)
+
+
+def _feedback_source_chunks(user_id: str, semester: str, course: str, unit: str, concept: str) -> List[Dict[str, Any]]:
+    data = get_chunks(
+        user_id=user_id,
+        limit=500,
+        offset=0,
+        full=True,
+        search_filter={"semester": semester, "course": course},
+    )
+    items = [item for item in data.get("items", []) if (item.get("unit") or "").strip() == unit]
+    concept_norm = concept.replace(" ", "").lower()
+    direct = [
+        item for item in items
+        if concept_norm and concept_norm in str(item.get("text", "")).replace(" ", "").lower()
+    ]
+    pool = direct or items
+    pool.sort(key=lambda item: (item.get("filename", ""), item.get("page", 0), item.get("chunk_index", 0)))
+    return pool[:8]
+
+
 class TimetableEntry(BaseModel):
     semester: str
     day: str = ""
@@ -231,6 +311,22 @@ class RecallTraceResponse(BaseModel):
 
 class RecallTraceListResponse(BaseModel):
     traces: List[RecallTrace]
+
+
+class RecallFeedbackRequest(BaseModel):
+    user_id: str
+    semester: str
+    course: str
+    unit: str
+    concept: str
+    answer_text: str
+
+
+class RecallFeedbackResponse(BaseModel):
+    good_points: List[str]
+    missing_links: List[str]
+    followup_question: str
+    source_hint: str
 
 
 def _build_timetable_response(uid: str) -> TimetableResponse:
@@ -560,6 +656,63 @@ async def recall_traces(
     traces.sort(key=lambda item: str(item.get("created_at", "")), reverse=True)
     safe_limit = max(1, min(limit, 100))
     return RecallTraceListResponse(traces=[RecallTrace(**item) for item in traces[:safe_limit]])
+
+
+@app.post("/recall-feedback", response_model=RecallFeedbackResponse)
+async def recall_feedback(payload: RecallFeedbackRequest) -> RecallFeedbackResponse:
+    if not os.getenv("OPENAI_API_KEY"):
+        raise HTTPException(
+            status_code=503,
+            detail="OPENAI_API_KEY가 설정되지 않아 recall feedback을 생성할 수 없습니다.",
+        )
+
+    user_id = payload.user_id.strip()
+    semester = payload.semester.strip()
+    course = payload.course.strip()
+    unit = payload.unit.strip()
+    concept = payload.concept.strip()
+    answer_text = payload.answer_text.strip()
+
+    if not all([user_id, semester, course, unit, concept, answer_text]):
+        raise HTTPException(
+            status_code=400,
+            detail="user_id, semester, course, unit, concept, answer_text가 필요합니다.",
+        )
+
+    source_chunks = _feedback_source_chunks(user_id, semester, course, unit, concept)
+    if not source_chunks:
+        raise HTTPException(status_code=400, detail="피드백에 사용할 관련 자료 chunk를 찾지 못했습니다.")
+
+    prompt = f"""{_load_recall_feedback_prompt()}
+
+[학습 컨텍스트]
+- user_id: {user_id}
+- semester: {semester}
+- course: {course}
+- unit: {unit}
+- concept: {concept}
+
+[사용자 설명]
+{answer_text}
+
+[자료 근거]
+{_format_feedback_sources(source_chunks)}
+"""
+
+    try:
+        raw_feedback = generate_openai_answer(prompt, max_tokens=700)
+        feedback = _normalize_feedback_payload(_extract_json_object(raw_feedback))
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"recall feedback 생성에 실패했습니다: {exc}") from exc
+
+    if not feedback.followup_question:
+        feedback.followup_question = "이 개념이 단원 전체 흐름에서 어떤 역할을 하는지 한 문장으로 다시 설명해볼까요?"
+    if not feedback.source_hint:
+        first = source_chunks[0]
+        feedback.source_hint = f"{first.get('course', course)} · {first.get('unit', unit)} · {first.get('filename', '')} p.{first.get('page', '')} 근처를 다시 보세요."
+    return feedback
 
 
 @app.get("/chunks")

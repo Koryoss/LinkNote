@@ -69,6 +69,7 @@ These endpoints are the Phase 1 SCiyl-inspired active recall layer. They intenti
 | --- | --- | --- |
 | `POST` | `/recall-traces` | Store a learner's explanation for a concept in `data/recall_traces.json`. |
 | `GET` | `/recall-traces` | List recent recall traces by `user_id`, `semester`, `course`, and `unit`; optional `concept` and `limit`. |
+| `POST` | `/recall-feedback` | Generate SCiyl-style directional AI feedback for a saved recall answer. Requires `OPENAI_API_KEY`. |
 
 ## Auth Endpoints
 
@@ -96,5 +97,5 @@ Some older docs mention `web/index.html`; update those references when the web e
 
 ## SCiyl Boundary
 
-Phase 1 recall trace storage/query is implemented as a local JSON-backed layer only. Do not expand this PR into AI feedback, weak concept graph scoring, or full auth/user database work.
+Phase 1 recall trace storage/query is implemented as a local JSON-backed layer only. Phase 2 adds directional recall feedback through `/recall-feedback`. Do not expand this into weak concept graph scoring or full auth/user database work.
 
