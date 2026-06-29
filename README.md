@@ -98,22 +98,22 @@ Initial implementation added in the recall trace PR.
 
 ### Phase 2: AI Reflection Feedback
 
-Planned only. Not implemented yet.
+Initial implementation added in the recall feedback PR.
 
-AI feedback should be directional, not a strict grading system. It should identify:
+AI feedback is directional, not a strict grading system. It identifies:
 
 - what was explained well
 - missing or weakly connected concepts
 - questions worth reconsidering
 - source locations worth reviewing
 
-The app should keep working even when `OPENAI_API_KEY` is not available.
+The app keeps recall trace save/list working even when `OPENAI_API_KEY` is not available; `/recall-feedback` returns a clear error when the key is missing.
 
 ### Phase 3: Personalized Concept Graph
 
-Planned only. Not implemented yet.
+Initial lightweight implementation added after recall feedback.
 
-Future concept graph metadata may include:
+Concept graph metadata now includes:
 
 - `recall_count`
 - `last_recalled_at`
@@ -136,7 +136,7 @@ Future concept graph metadata may include:
 - Keep `user_id` lightweight until real authentication is needed.
 - Avoid building a full account system too early.
 - Keep SCiyl-inspired recall work lightweight and local-first until the knowledge infrastructure is stable.
-- Phase 1 recall trace storage/query is limited to JSON-backed `user_id` records. AI feedback, weak concept graph metadata, and full account-based multi-user storage remain later PRs.
+- Recall trace storage/query remains limited to JSON-backed `user_id` records. AI feedback and weak concept graph metadata are local-first extensions; full account-based multi-user storage remains later work.
 
 ## Maintainer Docs
 
@@ -213,16 +213,16 @@ The objective is to guide thinking rather than evaluate performance. The current
 
 ## Phase 3 — Personalized Concept Graph
 
-Recall traces will become part of the concept graph itself.
+Recall traces now lightly inform the concept graph without adding a new account database.
 
-Each concept node may contain learning metadata such as:
+Each concept node can contain learning metadata such as:
 
 * recall count
 * last recalled date
 * weak concept score
 * missing conceptual links
 
-This enables the concept graph to evolve from a representation of knowledge into a representation of the learner's understanding.
+This lets the concept graph begin representing the learner's understanding while keeping the current local `user_id` structure.
 
 ---
 

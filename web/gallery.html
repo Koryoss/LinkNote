@@ -94,6 +94,10 @@
   .node.dragging { cursor: grabbing; box-shadow: 0 14px 32px rgba(15,23,42,0.20); transition: none; z-index: 5; }
   .node .nm { font-weight: 700; } .node .pg { font-size: 0.66rem; color: #9ca3af; margin-top: 2px; }
   .node.core { border-color:#c7d6ff; background:linear-gradient(135deg,#f3f7ff,#fff); } .node.core .nm { color:#1e3a8a; }
+  .node.weak-mid { border-color:#fbbf24; background:#fffdf4; }
+  .node.weak-high { border-color:#f97316; background:#fff7ed; box-shadow:0 0 0 2px #fed7aa; }
+  .node .weak-badge { position:absolute; left:50%; bottom:-18px; transform:translateX(-50%); white-space:nowrap;
+    border:1px solid #fed7aa; background:#fff7ed; color:#9a3412; border-radius:999px; padding:1px 6px; font-size:0.62rem; font-weight:700; }
   .group-hub { position:absolute; transform:translate(-50%,-50%); background:#eef2ff; color:#3730a3; border:1px solid #c7d2fe; border-radius:999px; padding:3px 10px; font-size:0.72rem; font-weight:700; pointer-events:none; z-index:1; white-space:nowrap; }
   .line.group-line { stroke:#c7d2fe; stroke-dasharray:4 4; }
   .view-controls select, .view-controls button { height:38px; box-sizing:border-box; line-height:1.2; }
@@ -1241,10 +1245,13 @@
       const w = n.weight||3;
       const hasMore = (n.links||[]).some(t=>nodes.some(x=>x.name===t) && !drillVisible.has(t));
       const el = document.createElement('div');
-      el.className = `node w${w}` + (n===core?' core':'') + (hasMore?' has-more':'');
+      const weakScore = Number(n.weak_score || 0);
+      const weakClass = weakScore >= 70 ? ' weak-high' : (weakScore >= 40 ? ' weak-mid' : '');
+      const weakBadge = weakScore >= 40 ? `<div class="weak-badge">복습 ${Math.round(weakScore)}</div>` : '';
+      el.className = `node w${w}` + (n===core?' core':'') + (hasMore?' has-more':'') + weakClass;
       el.style.left = pos[n.name].x+'px'; el.style.top = pos[n.name].y+'px';
       el.style.animationDelay = (i*0.05)+'s';
-      el.innerHTML = `<div class="nm">${esc(n.name)}</div>` + (n.page?`<div class="pg">p.${esc(String(n.page))}</div>`:'') + (hasMore?`<div class="more">＋</div>`:'');
+      el.innerHTML = `<div class="nm">${esc(n.name)}</div>` + (n.page?`<div class="pg">p.${esc(String(n.page))}</div>`:'') + weakBadge + (hasMore?`<div class="more">＋</div>`:'');
       el.addEventListener('mouseenter', (e)=>{ if(!dragging) showTip(n, e); });
       el.addEventListener('mousemove', (e)=>{ if(!dragging) moveTip(e); });
       el.addEventListener('mouseleave', hideTip);
@@ -1278,8 +1285,11 @@
   function showTip(n, e){
     const tip = document.getElementById('tip');
     const links = (n.links||[]).length;
+    const recallCount = Number(n.recall_count || 0);
+    const weakScore = Number(n.weak_score || 0);
+    const recallMeta = `복습 ${recallCount}회 · 약점 ${Math.round(weakScore)}`;
     tip.innerHTML = `<div class="t-nm">${esc(n.name)}</div>` +
-      `<div class="t-meta">${n.page?('p.'+esc(String(n.page))+' · '):''}연결 개념 ${links}개</div>`;
+      `<div class="t-meta">${n.page?('p.'+esc(String(n.page))+' · '):''}연결 개념 ${links}개 · ${recallMeta}</div>`;
     tip.classList.add('on'); moveTip(e);
   }
   function moveTip(e){

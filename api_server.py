@@ -329,6 +329,146 @@ class RecallFeedbackResponse(BaseModel):
     source_hint: str
 
 
+
+def _model_to_dict(model: BaseModel) -> Dict[str, Any]:
+    if hasattr(model, "model_dump"):
+        return model.model_dump()
+    return model.dict()
+
+
+def _concept_key(value: Any) -> str:
+    return str(value or "").replace(" ", "").strip().lower()
+
+
+def _parse_iso_datetime(value: Any) -> Optional[datetime]:
+    if not isinstance(value, str) or not value.strip():
+        return None
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed
+
+
+def _trace_matches(item: Dict[str, Any], user_id: str, semester: str, course: str, unit: str, concept: str) -> bool:
+    return (
+        str(item.get("user_id", "")).strip() == user_id
+        and str(item.get("semester", "")).strip() == semester
+        and str(item.get("course", "")).strip() == course
+        and str(item.get("unit", "")).strip() == unit
+        and _concept_key(item.get("concept")) == _concept_key(concept)
+    )
+
+
+def _score_recall_weakness(recall_count: int, last_recalled_at: Optional[str], missing_links_count: int) -> int:
+    if recall_count <= 0:
+        return 90
+
+    score = 15
+    last_dt = _parse_iso_datetime(last_recalled_at)
+    if last_dt is None:
+        score += 35
+    else:
+        age_days = (datetime.now(timezone.utc) - last_dt).days
+        if age_days >= 21:
+            score += 45
+        elif age_days >= 14:
+            score += 35
+        elif age_days >= 7:
+            score += 20
+
+    score += min(40, max(0, missing_links_count) * 15)
+    return max(0, min(100, score))
+
+
+def _recall_metadata_for_scope(user_id: str, semester: str, course: str, unit: str) -> Dict[str, Dict[str, Any]]:
+    metadata: Dict[str, Dict[str, Any]] = {}
+    for item in _load_recall_traces():
+        if not isinstance(item, dict):
+            continue
+        if not _trace_matches(item, user_id, semester, course, unit, item.get("concept", "")):
+            continue
+
+        key = _concept_key(item.get("concept"))
+        if not key:
+            continue
+
+        entry = metadata.setdefault(key, {
+            "recall_count": 0,
+            "last_recalled_at": None,
+            "missing_links_count": 0,
+        })
+        entry["recall_count"] += 1
+
+        created_at = str(item.get("created_at") or "")
+        if created_at and (not entry["last_recalled_at"] or created_at > entry["last_recalled_at"]):
+            entry["last_recalled_at"] = created_at
+
+        feedback = item.get("feedback")
+        missing_links = feedback.get("missing_links") if isinstance(feedback, dict) else []
+        if isinstance(missing_links, list):
+            entry["missing_links_count"] += len([x for x in missing_links if str(x).strip()])
+
+    return metadata
+
+
+def _augment_concepts_with_recall(
+    concepts: List[Dict[str, Any]],
+    user_id: str,
+    semester: str,
+    course: str,
+    unit: str,
+) -> List[Dict[str, Any]]:
+    metadata = _recall_metadata_for_scope(user_id, semester, course, unit)
+    augmented: List[Dict[str, Any]] = []
+
+    for concept in concepts:
+        item = dict(concept)
+        key = _concept_key(item.get("name") or item.get("keyword"))
+        meta = metadata.get(key, {})
+        recall_count = int(meta.get("recall_count") or 0)
+        last_recalled_at = meta.get("last_recalled_at")
+        missing_links_count = int(meta.get("missing_links_count") or 0)
+        item["recall_count"] = recall_count
+        item["last_recalled_at"] = last_recalled_at
+        item["missing_links_count"] = missing_links_count
+        item["weak_score"] = _score_recall_weakness(recall_count, last_recalled_at, missing_links_count)
+        augmented.append(item)
+
+    return augmented
+
+
+def _persist_recall_feedback(payload: RecallFeedbackRequest, feedback: RecallFeedbackResponse) -> None:
+    traces = _load_recall_traces()
+    feedback_data = _model_to_dict(feedback)
+    matched_index: Optional[int] = None
+
+    for index, item in enumerate(traces):
+        if not isinstance(item, dict):
+            continue
+        if not _trace_matches(
+            item,
+            payload.user_id.strip(),
+            payload.semester.strip(),
+            payload.course.strip(),
+            payload.unit.strip(),
+            payload.concept.strip(),
+        ):
+            continue
+        if str(item.get("answer_text", "")).strip() != payload.answer_text.strip():
+            continue
+        if matched_index is None or str(item.get("created_at", "")) > str(traces[matched_index].get("created_at", "")):
+            matched_index = index
+
+    if matched_index is None:
+        return
+
+    traces[matched_index]["feedback"] = feedback_data
+    traces[matched_index]["feedback_created_at"] = datetime.now(timezone.utc).isoformat()
+    _save_recall_traces(traces)
+
 def _build_timetable_response(uid: str) -> TimetableResponse:
     timetable = [e for e in _load_timetable() if e.get("user_id") == uid]
     grouped: Dict[str, set] = {}
@@ -590,7 +730,7 @@ async def concepts(semester: str, course: str, unit: str, data_user_id: str = De
     if not concepts:
         return {"status": "empty", "concepts": []}
 
-    return {"status": "ready", "concepts": concepts}
+    return {"status": "ready", "concepts": _augment_concepts_with_recall(concepts, data_user_id, semester, course, unit)}
 
 
 @app.post("/recall-traces", response_model=RecallTraceResponse)
@@ -712,6 +852,8 @@ async def recall_feedback(payload: RecallFeedbackRequest) -> RecallFeedbackRespo
     if not feedback.source_hint:
         first = source_chunks[0]
         feedback.source_hint = f"{first.get('course', course)} · {first.get('unit', unit)} · {first.get('filename', '')} p.{first.get('page', '')} 근처를 다시 보세요."
+
+    _persist_recall_feedback(payload, feedback)
     return feedback
 
 
@@ -862,6 +1004,7 @@ async def concept_graph(semester: Optional[str] = None, data_user_id: str = Depe
                 "keyword": e["keyword"],
                 "course": e["course"],
                 "unit": e["unit"],
+                "semester": e.get("semester", ""),
                 "weight": e["weight"],
             }
             for e in embeddings_index if e.get("user_id") == user_id
@@ -869,8 +1012,28 @@ async def concept_graph(semester: Optional[str] = None, data_user_id: str = Depe
         
         # semester 필터링 (선택적)
         if semester and semester.strip():
-            user_nodes = [n for n in user_nodes if n.get("unit") == semester]
+            user_nodes = [n for n in user_nodes if n.get("semester") == semester.strip()]
         
+        graph_meta: Dict[str, Dict[str, Any]] = {}
+        for node in user_nodes:
+            node_semester = str(node.get("semester") or semester or "")
+            meta = _recall_metadata_for_scope(user_id, node_semester, str(node.get("course") or ""), str(node.get("unit") or ""))
+            graph_meta.update({
+                (node_semester, str(node.get("course") or ""), str(node.get("unit") or ""), key): value
+                for key, value in meta.items()
+            })
+
+        for node in user_nodes:
+            node_semester = str(node.get("semester") or semester or "")
+            meta = graph_meta.get((node_semester, str(node.get("course") or ""), str(node.get("unit") or ""), _concept_key(node.get("name") or node.get("keyword"))), {})
+            recall_count = int(meta.get("recall_count") or 0)
+            last_recalled_at = meta.get("last_recalled_at")
+            missing_links_count = int(meta.get("missing_links_count") or 0)
+            node["recall_count"] = recall_count
+            node["last_recalled_at"] = last_recalled_at
+            node["missing_links_count"] = missing_links_count
+            node["weak_score"] = _score_recall_weakness(recall_count, last_recalled_at, missing_links_count)
+
         # cross-link 노드 ID 검증
         node_ids = set(n["id"] for n in user_nodes)
         edges = [

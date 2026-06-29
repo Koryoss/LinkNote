@@ -59,7 +59,7 @@ Important current-state note:
 | `POST` | `/reindex-concepts` | Rebuild concept extraction data into `data/concepts.json`. This may require `OPENAI_API_KEY`. |
 | `GET` | `/concepts` | Return extracted concepts for a semester/course/unit. |
 | `POST` | `/reindex-graph` | Build `data/concept_index.json` and `data/concept_links.json` from extracted concepts. |
-| `GET` | `/concept-graph` | Return concept graph nodes and edges for visualization. |
+| `GET` | `/concept-graph` | Return concept graph nodes and edges for visualization, including lightweight recall metadata. |
 
 ## Recall Trace Endpoints
 
@@ -70,6 +70,14 @@ These endpoints are the Phase 1 SCiyl-inspired active recall layer. They intenti
 | `POST` | `/recall-traces` | Store a learner's explanation for a concept in `data/recall_traces.json`. |
 | `GET` | `/recall-traces` | List recent recall traces by `user_id`, `semester`, `course`, and `unit`; optional `concept` and `limit`. |
 | `POST` | `/recall-feedback` | Generate SCiyl-style directional AI feedback for a saved recall answer. Requires `OPENAI_API_KEY`. |
+
+
+Concept responses may include these recall metadata fields per node/concept:
+
+- `recall_count`: number of saved recall traces for that concept in the same user/semester/course/unit scope.
+- `last_recalled_at`: most recent saved recall timestamp, or `null`.
+- `missing_links_count`: count of missing links from stored AI feedback attached to matching traces.
+- `weak_score`: local rule-based score from 0-100. No answer, stale answer, and many missing links increase the score.
 
 ## Auth Endpoints
 
@@ -97,5 +105,5 @@ Some older docs mention `web/index.html`; update those references when the web e
 
 ## SCiyl Boundary
 
-Phase 1 recall trace storage/query is implemented as a local JSON-backed layer only. Phase 2 adds directional recall feedback through `/recall-feedback`. Do not expand this into weak concept graph scoring or full auth/user database work.
+Phase 1 recall trace storage/query is implemented as a local JSON-backed layer only. Phase 2 adds directional recall feedback through `/recall-feedback`. The graph now includes lightweight local recall metadata (`recall_count`, `last_recalled_at`, `weak_score`) without adding auth/user DB expansion.
 
