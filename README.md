@@ -6,6 +6,29 @@ The current project is focused on stabilizing a single-user/local evaluation flo
 
 `user_id` may appear in code or metadata, but it is currently a temporary local identifier. It is not yet a full authentication account, production user database key, or multi-user storage boundary.
 
+
+## User Profile Tracks
+
+LinkNote user accounts include a lightweight `student_track` profile field. Allowed values are:
+
+- `general`: default mode for existing users and ordinary study workflows.
+- `nursing`: additive mode for nursing students who may later use nursing-practice learning tools.
+
+Existing users without `student_track` are treated as `general`. New email/password users can choose 일반 or 간호학과 during signup. Google signup currently defaults to `general`; profile editing can be added later. This field does not change `data_user_id`, ChromaDB ownership, PDF upload, RAG, concept extraction, concept graph, My Page, or explanation feedback behavior.
+
+### Future Nursing Practice Mode
+
+Nursing students may eventually get additional educational tools:
+
+- Clinical Reflection
+- practice situation input
+- nursing reasoning feedback
+- links to prior concepts from uploaded materials
+- exam connection points
+- My Page nursing practice summary
+
+Clinical Reflection must be educational only. Users must not enter patient-identifying information such as patient name, resident number, hospital ID, phone number, exact room number, or other personal identifiers. This feature does not replace clinical judgment, instructor guidance, or hospital policy.
+
 ## Current Project Structure
 
 LinkNote is currently organized as a lightweight local-first learning system.

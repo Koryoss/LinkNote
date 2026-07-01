@@ -18,12 +18,18 @@ DATA_DIR = os.getenv("DATA_DIR", "./data")
 USERS_PATH = os.path.join(DATA_DIR, "users.json")
 _SECRET_PATH = os.path.join(DATA_DIR, ".auth_secret")
 TOKEN_TTL = 60 * 60 * 24 * 30  # 30일
+ALLOWED_STUDENT_TRACKS = {"general", "nursing"}
 
 MAINTAINER_EMAILS = {
     email.strip().lower()
     for email in os.getenv("MAINTAINER_EMAILS", "kory124@snu.ac.kr").split(",")
     if email.strip()
 }
+
+
+def _normalize_student_track(value: str = "") -> str:
+    track = (value or "").strip().lower()
+    return track if track in ALLOWED_STUDENT_TRACKS else "general"
 
 
 def _new_data_user_id() -> str:
@@ -130,6 +136,7 @@ def _public(user: dict) -> dict:
         "auth_provider": provider,
         "login_method": provider,
         "data_user_id": user.get("data_user_id", user["email"]),
+        "student_track": _normalize_student_track(user.get("student_track", "general")),
         "created": created,
         "created_at": created,
         "joined_at": created,
@@ -143,7 +150,7 @@ def get_user_by_id(uid: str):
     return None
 
 
-def register_user(email: str, password: str, display_name: str = "", link_user_id: str = ""):
+def register_user(email: str, password: str, display_name: str = "", link_user_id: str = "", student_track: str = ""):
     email = (email or "").strip().lower()
     if not email or not password:
         return None, "이메일과 비밀번호가 필요합니다."
@@ -160,6 +167,7 @@ def register_user(email: str, password: str, display_name: str = "", link_user_i
         "display_name": display_name or email.split("@")[0],
         "google_sub": None,
         "data_user_id": data_user_id,
+        "student_track": _normalize_student_track(student_track),
         "created": int(time.time()),
     }
     users[email] = user
@@ -176,7 +184,7 @@ def authenticate(email: str, password: str):
     return user, None
 
 
-def upsert_google_user(email: str, google_sub: str, display_name: str = "", link_user_id: str = ""):
+def upsert_google_user(email: str, google_sub: str, display_name: str = "", link_user_id: str = "", student_track: str = ""):
     """Google 로그인용 — 이메일로 찾거나 새로 만든다."""
     email = (email or "").strip().lower()
     users = _load_users()
@@ -196,6 +204,7 @@ def upsert_google_user(email: str, google_sub: str, display_name: str = "", link
         "display_name": display_name or email.split("@")[0],
         "google_sub": google_sub,
         "data_user_id": data_user_id,
+        "student_track": _normalize_student_track(student_track),
         "created": int(time.time()),
     }
     users[email] = user

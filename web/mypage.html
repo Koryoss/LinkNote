@@ -86,6 +86,7 @@
         ${row('email', account.email)}
         ${row('display_name', account.display_name)}
         ${row('login method', account.login_method || account.auth_provider)}
+        ${row('student_track', account.student_track || 'general')}
         ${row('account_id', short(account.account_id || account.id))}
         ${row('data_user_id', account.data_user_id)}
         ${row('joined_at', dateText(account.joined_at || account.created_at || account.created))}

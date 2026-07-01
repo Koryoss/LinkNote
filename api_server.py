@@ -1272,6 +1272,7 @@ class RegisterRequest(BaseModel):
     password: str
     display_name: Optional[str] = ""
     link_user_id: Optional[str] = ""
+    student_track: Optional[str] = "general"
 
 
 class LoginRequest(BaseModel):
@@ -1281,7 +1282,13 @@ class LoginRequest(BaseModel):
 
 @app.post("/auth/register")
 async def auth_register(req: RegisterRequest) -> Dict[str, Any]:
-    user, err = _auth.register_user(req.email, req.password, req.display_name or "", req.link_user_id or "")
+    user, err = _auth.register_user(
+        req.email,
+        req.password,
+        req.display_name or "",
+        req.link_user_id or "",
+        req.student_track or "general",
+    )
     if err:
         raise HTTPException(status_code=400, detail=err)
     return {"token": _auth.create_token(user["id"]), "user": _auth.public_user(user)}

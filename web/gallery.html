@@ -281,6 +281,7 @@
   .user-chip { font-size:0.82rem; font-weight:600; color:#1f2937; }
   .topbar #logoutBtn { background:#fff; color:#2563eb; border:1px solid #d8dee9; }
   .topbar .nav-link { display:none; border:1px solid #d8dee9; background:#fff; color:#2563eb; border-radius:8px; padding:7px 12px; font-size:0.84rem; text-decoration:none; font-weight:600; }
+  .topbar .nursing-only { display:none; border-color:#bfdbfe; background:#eff6ff; color:#1d4ed8; }
   .auth-overlay { position:fixed; inset:0; z-index:200; background:linear-gradient(135deg,#eef4ff,#f7f9ff 60%,#fff); display:flex; align-items:center; justify-content:center; }
   .auth-overlay[hidden]{ display:none; }
   .auth-card { width:min(380px,92vw); background:#fff; border:1px solid #e8ebf2; border-radius:18px; padding:28px 26px; box-shadow:0 24px 60px rgba(15,23,42,0.16); display:flex; flex-direction:column; }
@@ -289,7 +290,7 @@
   .auth-tabs { display:flex; gap:6px; margin-bottom:14px; }
   .auth-tab { flex:1; border:1px solid #d8dee9; background:#fff; color:#475569; border-radius:9px; padding:9px; cursor:pointer; font-size:0.88rem; font-weight:600; }
   .auth-tab.on { background:#2563eb; color:#fff; border-color:#2563eb; }
-  .auth-card input { width:100%; border:1px solid #d8dee9; border-radius:9px; padding:10px 12px; font-size:0.9rem; margin-bottom:10px; }
+  .auth-card input, .auth-card select { width:100%; border:1px solid #d8dee9; border-radius:9px; padding:10px 12px; font-size:0.9rem; margin-bottom:10px; background:#fff; }
   .auth-submit { border:none; background:#2563eb; color:#fff; border-radius:9px; padding:11px; font-size:0.95rem; font-weight:600; cursor:pointer; }
   .auth-divider { display:flex; align-items:center; gap:10px; color:#9ca3af; font-size:0.78rem; margin:14px 0; }
   .auth-divider::before, .auth-divider::after { content:""; flex:1; height:1px; background:#e5e7eb; }
@@ -322,6 +323,7 @@
     <input id="uid" type="hidden" value="">
     <span id="userChip" class="user-chip"></span>
     <a id="myPageLink" class="nav-link" href="/mypage.html">My Page</a>
+    <button id="clinicalReflectionBtn" class="nav-link nursing-only" onclick="clinicalReflectionSoon()">실습 회고</button>
     <button id="logoutBtn" onclick="logout()" style="display:none;">로그아웃</button>
     <button id="backBtn" style="display:none;">뒤로</button>
     <button onclick="openAdd()">＋ 자료 추가</button>
@@ -398,6 +400,11 @@
       <input id="au_pw" type="password" placeholder="비밀번호" onkeydown="if(event.key==='Enter')authSubmit()">
       <div id="au_reg_only" hidden>
         <input id="au_name" placeholder="표시 이름 (예: 정유진)">
+        <label class="auth-sub" for="au_track">전공/학습 분야</label>
+        <select id="au_track">
+          <option value="general">일반</option>
+          <option value="nursing">간호학과</option>
+        </select>
       </div>
       <button id="au_submit" class="auth-submit" onclick="authSubmit()">로그인</button>
       <div class="auth-divider"><span>또는</span></div>
@@ -1570,12 +1577,14 @@
     document.getElementById('uid').value = user.data_user_id || user.email;
     document.getElementById('userChip').textContent = user.display_name || user.email;
     document.getElementById('myPageLink').style.display = 'inline-block';
+    document.getElementById('clinicalReflectionBtn').style.display = user.student_track === 'nursing' ? 'inline-block' : 'none';
     document.getElementById('logoutBtn').style.display = 'inline-block';
     document.getElementById('authOverlay').hidden = true;
     ensureInitialHistory();
     loadHome(false);
   }
   function logout(){ localStorage.removeItem('ln_token'); location.reload(); }
+  function clinicalReflectionSoon(){ alert('Clinical Reflection / 실습 회고는 다음 PR에서 추가될 예정입니다.'); }
   function authTab(which){
     document.getElementById('authTabLogin').classList.toggle('on', which==='login');
     document.getElementById('authTabReg').classList.toggle('on', which==='register');
@@ -1595,7 +1604,12 @@
       let url, body;
       if(mode==='register'){
         url = API+'/auth/register';
-        body = { email, password:pw, display_name:document.getElementById('au_name').value.trim() };
+        body = {
+          email,
+          password:pw,
+          display_name:document.getElementById('au_name').value.trim(),
+          student_track:document.getElementById('au_track').value || 'general',
+        };
       } else {
         url = API+'/auth/login'; body = { email, password:pw };
       }
