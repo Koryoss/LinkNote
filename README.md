@@ -43,6 +43,7 @@ Current frontend entry points:
 
 - `web/gallery.html` is the main UI served at `/`.
 - `web/mypage.html` is the read-only My Page.
+- `web/learning-memory.html` is the read-only Learning Memory page for review reuse.
 - `web/app.js` is a legacy experimental frontend and should not be used for authenticated production flow.
 - Protected APIs derive data ownership from `Authorization` token -> `data_user_id`, not from frontend-provided `user_id`.
 
@@ -165,6 +166,14 @@ Concept graph metadata now includes:
 - `weak_score`
 - `missing_links`
 
+### Phase 4: Learning Memory
+
+Learning Memory turns saved `설명해보기` recall traces and feedback into reusable review material for lectures, weekly review, and exam preparation.
+
+The page at `web/learning-memory.html` loads without GPT/OpenAI calls. Current summaries are rule-based from local recall data: recent memories, frequent missing links, weak concepts, and exam review focus.
+
+See [Recall and Learning Memory](docs/recall-learning-memory.md).
+
 ## Existing Documentation
 
 - `API_SERVER_README.md`: FastAPI server run instructions.
@@ -187,6 +196,7 @@ Concept graph metadata now includes:
 
 - [API notes](docs/api.md)
 - [Deployment notes](docs/deployment.md)
+- [Recall and Learning Memory](docs/recall-learning-memory.md)
 - [Repository audit](docs/repository-audit.md)
 
 # LinkNote Development Roadmap

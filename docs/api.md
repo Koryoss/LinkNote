@@ -71,6 +71,8 @@ These endpoints use `Authorization` token -> `current_uid()` -> `data_user_id` f
 | `POST` | `/recall-traces` | Store a learner's explanation for a concept in `data/recall_traces.json`. |
 | `GET` | `/recall-traces` | List recent recall traces for the authenticated user's `data_user_id`, filtered by `semester`, `course`, and `unit`; optional `concept` and `limit`. |
 | `POST` | `/recall-feedback` | Generate SCiyl-style directional AI feedback for a saved recall answer. Requires `OPENAI_API_KEY`. |
+| `GET` | `/learning-memory` | List normalized Learning Memory records for the authenticated user; no GPT call. |
+| `GET` | `/learning-memory/summary` | Return rule-based review summary fields for Learning Memory; no GPT call. |
 
 
 Concept responses may include these recall metadata fields per node/concept:

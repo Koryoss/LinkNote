@@ -6,6 +6,7 @@ import os
 import re
 import hashlib
 import uuid
+from collections import Counter
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
@@ -653,6 +654,149 @@ def _learning_summary_for_user(user_id: str) -> Dict[str, Any]:
         "last_explained_at": last_explained_at,
         "last_studied_at": last_studied_at,
         "recent_explanations": recent_explanations,
+    }
+
+
+def _feedback_object(item: Dict[str, Any]) -> Dict[str, Any]:
+    feedback = item.get("feedback")
+    if isinstance(feedback, dict):
+        return feedback
+    raw = item.get("feedback_text")
+    if isinstance(raw, str) and raw.strip().startswith("{"):
+        try:
+            parsed = json.loads(raw)
+            return parsed if isinstance(parsed, dict) else {}
+        except ValueError:
+            return {}
+    return {}
+
+
+def _learning_list_field(item: Dict[str, Any], key: str) -> List[str]:
+    value = item.get(key)
+    if isinstance(value, list):
+        return [str(x).strip() for x in value if str(x).strip()]
+    feedback = _feedback_object(item)
+    value = feedback.get(key)
+    if isinstance(value, list):
+        return [str(x).strip() for x in value if str(x).strip()]
+    if isinstance(value, str) and value.strip():
+        return [value.strip()]
+    return []
+
+
+def _learning_text_field(item: Dict[str, Any], key: str) -> str:
+    value = str(item.get(key) or "").strip()
+    if value and not (key == "feedback_text" and value.startswith("{")):
+        return value
+    feedback = _feedback_object(item)
+    value = str(feedback.get(key) or "").strip()
+    if value:
+        return value
+    if key == "feedback_text" and feedback:
+        parts = []
+        good = _learning_list_field(item, "good_points")
+        missing = _learning_list_field(item, "missing_links")
+        followup = _learning_text_field(item, "followup_question")
+        if good:
+            parts.append("좋았던 점: " + ", ".join(good))
+        if missing:
+            parts.append("더 연결해볼 점: " + ", ".join(missing))
+        if followup:
+            parts.append("질문: " + followup)
+        return " / ".join(parts)
+    return ""
+
+
+def _learning_memory_item(item: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        "id": str(item.get("id") or ""),
+        "semester": str(item.get("semester") or ""),
+        "course": str(item.get("course") or ""),
+        "unit": str(item.get("unit") or ""),
+        "concept": str(item.get("concept") or ""),
+        "answer_text": str(item.get("answer_text") or ""),
+        "feedback_text": _learning_text_field(item, "feedback_text"),
+        "good_points": _learning_list_field(item, "good_points"),
+        "missing_links": _learning_list_field(item, "missing_links"),
+        "followup_question": _learning_text_field(item, "followup_question"),
+        "improved_summary": _learning_text_field(item, "improved_summary"),
+        "review_hint": _learning_text_field(item, "review_hint"),
+        "created_at": item.get("created_at") or "",
+    }
+
+
+def _learning_memory_items_for_user(
+    user_id: str,
+    course: Optional[str] = None,
+    unit: Optional[str] = None,
+    concept: Optional[str] = None,
+    limit: int = 50,
+) -> List[Dict[str, Any]]:
+    course_filter = (course or "").strip()
+    unit_filter = (unit or "").strip()
+    concept_filter = (concept or "").strip().lower()
+    items = []
+    for item in _load_recall_traces():
+        if not isinstance(item, dict) or item.get("user_id") != user_id:
+            continue
+        memory = _learning_memory_item(item)
+        if course_filter and memory["course"] != course_filter:
+            continue
+        if unit_filter and memory["unit"] != unit_filter:
+            continue
+        if concept_filter:
+            haystack = " ".join([
+                memory["concept"],
+                memory["answer_text"],
+                memory["feedback_text"],
+                memory["improved_summary"],
+                " ".join(memory["missing_links"]),
+            ]).lower()
+            if concept_filter not in haystack:
+                continue
+        items.append(memory)
+    items.sort(key=lambda x: str(x.get("created_at") or ""), reverse=True)
+    return items[:max(1, min(limit, 200))]
+
+
+def _learning_memory_summary_for_user(user_id: str) -> Dict[str, Any]:
+    memories = _learning_memory_items_for_user(user_id, limit=5000)
+    concept_keys = {_concept_key(item.get("concept")) for item in memories if _concept_key(item.get("concept"))}
+    missing_counter: Counter[str] = Counter()
+    weak_counter: Counter[str] = Counter()
+    for item in memories:
+        missing_links = [x for x in item.get("missing_links", []) if str(x).strip()]
+        missing_counter.update(missing_links)
+        if item.get("concept") and missing_links:
+            weak_counter[str(item.get("concept"))] += len(missing_links)
+
+    frequent_missing_links = [
+        {"name": name, "count": count}
+        for name, count in missing_counter.most_common(10)
+    ]
+    weak_concepts = [
+        {"concept": name, "issue_count": count}
+        for name, count in weak_counter.most_common(10)
+    ]
+    recent_memories = memories[:5]
+    if recent_memories:
+        courses = sorted({m.get("course") for m in recent_memories if m.get("course")})
+        weekly_summary = (
+            f"최근 {len(recent_memories)}개의 복습 메모리가 있습니다. "
+            f"{', '.join(courses[:3]) or '여러 과목'} 자료를 다시 보며 missing links와 follow-up question을 확인하세요."
+        )
+    else:
+        weekly_summary = "아직 저장된 Learning Memory가 없습니다. 개념 지도에서 설명해보기를 사용하면 복습 메모리가 쌓입니다."
+    exam_review_focus = [x["name"] for x in frequent_missing_links[:5]] or [x["concept"] for x in weak_concepts[:5]]
+    return {
+        "total_memories": len(memories),
+        "concepts_explained": len(concept_keys),
+        "weak_concepts": weak_concepts,
+        "frequent_missing_links": frequent_missing_links,
+        "recent_memories": recent_memories,
+        "weekly_summary": weekly_summary,
+        "exam_review_focus": exam_review_focus,
+        "last_memory_created_at": str(memories[0].get("created_at") or "") if memories else None,
     }
 
 
@@ -1591,6 +1735,31 @@ async def me_summary(user: Dict[str, Any] = Depends(current_user)) -> Dict[str, 
     }
 
 
+@app.get("/learning-memory")
+async def learning_memory(
+    course: Optional[str] = None,
+    unit: Optional[str] = None,
+    concept: Optional[str] = None,
+    limit: int = 50,
+    data_user_id: str = Depends(current_uid),
+) -> Dict[str, Any]:
+    all_items = _learning_memory_items_for_user(
+        user_id=data_user_id,
+        course=course,
+        unit=unit,
+        concept=concept,
+        limit=5000,
+    )
+    safe_limit = max(1, min(limit, 200))
+    items = all_items[:safe_limit]
+    return {"total": len(all_items), "items": items}
+
+
+@app.get("/learning-memory/summary")
+async def learning_memory_summary(data_user_id: str = Depends(current_uid)) -> Dict[str, Any]:
+    return _learning_memory_summary_for_user(data_user_id)
+
+
 # ============== 계정 / 인증 (Stage C-1) ==============
 from fastapi import Header
 import auth as _auth
@@ -1666,7 +1835,7 @@ async def health() -> Dict[str, Any]:
     return {
         "ok": True,
         "version": app.version,
-        "routes": ["/auth/me", "/me/summary", "/ask/search"],
+        "routes": ["/auth/me", "/me/summary", "/learning-memory", "/learning-memory/summary", "/ask/search"],
     }
 
 

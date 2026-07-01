@@ -76,10 +76,11 @@
   function logout(){ localStorage.removeItem('ln_token'); location.href='/'; }
   function stat(label, value){ return `<div class="stat"><small>${esc(label)}</small><strong>${esc(value)}</strong></div>`; }
   function row(k,v){ return `<div class="k">${esc(k)}</div><div class="v">${esc(v || '-')}</div>`; }
-  function render(summary, me){
+  function render(summary, me, memory){
     const account = summary.account || me.user || {};
     const library = summary.library || {};
     const learning = summary.learning || {};
+    const memorySummary = memory || {};
     const isNursing = (account.student_track || 'general') === 'nursing';
     document.getElementById('userLabel').textContent = account.display_name || account.email || '';
     const recentUploads = (library.recent_uploads || []).map(x => `<div class="item"><strong>${esc(x.title || x.filename)}</strong><small>${esc(x.semester)} · ${esc(x.course)} · ${esc(x.filename)}</small></div>`).join('') || '<div class="item">최근 자료가 없습니다.</div>';
@@ -115,13 +116,19 @@
         ${stat('concepts explained', learning.concepts_explained_count || 0)}
         ${stat('last explained', dateText(learning.last_explained_at))}
       </div><p class="sub" style="margin-top:10px">Last studied: ${esc(dateText(learning.last_studied_at))}</p><div class="list">${recentExplanations}</div></section>
+      <section class="wide"><h2>Learning Memory</h2><div class="stats">
+        ${stat('total memories', memorySummary.total_memories || 0)}
+        ${stat('concepts explained', memorySummary.concepts_explained || 0)}
+        ${stat('weak concepts', (memorySummary.weak_concepts || []).length)}
+        ${stat('last memory', dateText(memorySummary.last_memory_created_at))}
+      </div><p class="sub" style="margin-top:10px">${esc(memorySummary.weekly_summary || '설명해보기를 사용하면 복습 메모리가 쌓입니다.')}</p></section>
       <section class="wide nursing-card ${isNursing ? 'on' : ''}"><h2>Nursing Practice Mode: Clinical Reflection planned</h2>
         <p class="sub">실습 회고 / Clinical Reflection은 Coming soon입니다. 환자 식별 정보 없이 실습 상황과 간호 판단을 학습 자료, 개념 그래프, 시험 포인트와 연결하는 교육용 기능으로 설계됩니다.</p>
       </section>
       <section class="wide"><h2>Actions</h2><div class="actions">
         <a class="btn primary" href="/">My Library / Gallery</a>
         <a class="btn" href="/#concept-graph">Concept Graph</a>
-        <button disabled title="Coming soon">Recall History / Explanation History</button>
+        <a class="btn" href="/learning-memory.html">Learning Memory</a>
         <button onclick="logout()">Logout</button>
       </div></section>`;
   }
@@ -131,7 +138,8 @@
     try {
       const me = await getJSON('/auth/me');
       const summary = await getJSON('/me/summary');
-      render(summary, me);
+      const memory = await getJSON('/learning-memory/summary');
+      render(summary, me, memory);
     } catch(e) {
       app.className='error';
       app.textContent = 'My Page를 불러오지 못했습니다: ' + e.message;
