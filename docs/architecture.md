@@ -42,7 +42,9 @@ My Page and Learning Memory link to `web/concept-graph.html` instead of the gall
 
 The graph destination is read-only. It uses existing `data/concept_index.json`, `data/concept_links.json`, and recall metadata. Viewing the graph does not call GPT, OpenAI embeddings, reindex ChromaDB, or rebuild concept graph data.
 
-The default Concept Graph view caps visible nodes and prioritizes learner-useful node types: Weak, Core, Bridge, Recent, and Recalled. These types are computed in the frontend from existing degree, recall, missing-links, weak-score, and last-recalled metadata.
+The default Concept Graph view caps visible nodes and prioritizes learner-useful node types: Weak, Core, Bridge, Recent, Recalled, and New. `GET /concept-graph/overview` computes the ranking metadata on the backend from existing graph files and Learning Memory metadata, then the frontend renders that read-only result.
+
+Each overview node may include deterministic learning metadata such as `degree`, `weighted_degree`, `connected_count`, `centrality_score`, `bridge_score`, `memory_score`, `review_score`, `priority_score`, `node_types`, `why_shown`, and `recommended_action`. Each overview edge may include `normalized_weight`, `edge_type`, and a human-readable `reason`. These fields are computed without GPT/OpenAI calls and without rebuilding or reindexing stored graph data.
 
 ## PDF Preview Access
 

@@ -61,7 +61,7 @@ Important current-state note:
 | `GET` | `/concepts` | Return extracted concepts for a semester/course/unit. |
 | `POST` | `/reindex-graph` | Build `data/concept_index.json` and `data/concept_links.json` from extracted concepts. |
 | `GET` | `/concept-graph` | Return concept graph nodes and edges for visualization, including lightweight recall metadata. |
-| `GET` | `/concept-graph/overview` | Return a read-only user-level graph overview for `web/concept-graph.html`; no GPT, embedding, reindex, or rebuild. |
+| `GET` | `/concept-graph/overview` | Return a read-only user-level graph overview for `web/concept-graph.html`, including backend-computed ranking fields, node types, reasons, recommended actions, and edge metadata; no GPT, embedding, reindex, or rebuild. |
 
 ## Recall Trace Endpoints
 
@@ -84,6 +84,8 @@ Concept responses may include these recall metadata fields per node/concept:
 - `weak_score`: local rule-based score from 0-100 for internal prioritization. The UI should prefer state labels such as `미설명` or `설명 N회` instead of exposing the raw score.
 - `feedback` and `feedback_created_at`: optional saved AI feedback attached to the trace after `/recall-feedback` is generated.
 - `/recall-feedback` may receive optional `trace_id`; when present, feedback is persisted directly to that recall trace.
+
+Concept Graph overview nodes may additionally include `degree`, `weighted_degree`, `connected_count`, `centrality_score`, `bridge_score`, `memory_score`, `review_score`, `priority_score`, `node_types`, `why_shown`, and `recommended_action`. Overview edges may include `normalized_weight`, `edge_type`, and `reason`. These fields are deterministic read-only metadata derived from existing graph and Learning Memory records.
 
 ## Auth Endpoints
 

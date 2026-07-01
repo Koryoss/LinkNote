@@ -75,6 +75,8 @@
     return d;
   }
   const stat = (label, value) => `<div class="stat"><small>${esc(label)}</small><strong>${esc(value)}</strong></div>`;
+  const TYPE_LABELS = { weak:'Weak', core:'Core', bridge:'Bridge', recent:'Recent', recalled:'Recalled', new:'New', normal:'Normal' };
+  const badgeLabel = value => TYPE_LABELS[value] || value;
   function daysSince(value){
     if(!value) return Infinity;
     const d = new Date(value);
@@ -99,22 +101,25 @@
       const unitSet = new Set(neighborMeta.map(n => `${n.course || ''}::${n.unit || ''}`));
       const courseSet = new Set(neighborMeta.map(n => n.course || ''));
       const weightedDegree = nodeNeighbors.reduce((sum,n)=>sum + Number(n.weight || 0), 0);
-      const isWeak = Number(node.weak_score || 0) >= 50 || Number(node.missing_links_count || 0) > 0;
-      const isCore = degree > 0 && degree >= coreThreshold;
-      const isBridge = degree >= 2 && (unitSet.size >= 2 || courseSet.size >= 2);
-      const isRecalled = Number(node.recall_count || 0) > 0;
-      const isRecent = daysSince(node.last_recalled_at) <= 14;
-      const badges = [
-        isWeak ? 'Weak' : '',
-        isCore ? 'Core' : '',
-        isBridge ? 'Bridge' : '',
-        isRecent ? 'Recent' : '',
-        isRecalled ? 'Recalled' : '',
+      const backendTypes = Array.isArray(node.node_types) ? node.node_types : [];
+      const isWeak = backendTypes.includes('weak') || Number(node.weak_score || 0) >= 50 || Number(node.missing_links_count || 0) > 0;
+      const isCore = backendTypes.includes('core') || (degree > 0 && degree >= coreThreshold);
+      const isBridge = backendTypes.includes('bridge') || (degree >= 2 && (unitSet.size >= 2 || courseSet.size >= 2));
+      const isRecalled = backendTypes.includes('recalled') || Number(node.recall_count || 0) > 0;
+      const isRecent = backendTypes.includes('recent') || daysSince(node.last_recalled_at) <= 14;
+      const nodeTypes = backendTypes.length ? backendTypes : [
+        isWeak ? 'weak' : '',
+        isCore ? 'core' : '',
+        isBridge ? 'bridge' : '',
+        isRecent ? 'recent' : '',
+        isRecalled ? 'recalled' : '',
       ].filter(Boolean);
-      return {...node, degree, weighted_degree:weightedDegree, is_weak:isWeak, is_core:isCore, is_bridge:isBridge, is_recent:isRecent, is_recalled:isRecalled, badges};
+      const badges = nodeTypes.map(badgeLabel);
+      return {...node, degree:node.degree ?? degree, weighted_degree:node.weighted_degree ?? weightedDegree, node_types:nodeTypes, is_weak:isWeak, is_core:isCore, is_bridge:isBridge, is_recent:isRecent, is_recalled:isRecalled, badges};
     });
   }
   function graphPriority(node){
+    if(Number.isFinite(Number(node.priority_score))) return Number(node.priority_score);
     return (node.badges || []).length * 18
       + (node.is_weak ? 24 : 0)
       + (node.is_core ? 18 : 0)
@@ -194,7 +199,8 @@
     const edgeLines = edges.map(edge => {
       const a = pos[edge.source], b = pos[edge.target];
       if(!a || !b) return '';
-      return `<line class="edge" x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}"></line>`;
+      const width = 1 + Math.min(1.2, Number(edge.normalized_weight || edge.weight || 0) / 100);
+      return `<line class="edge" x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke-width="${width}"><title>${esc(edge.reason || '')}</title></line>`;
     }).join('');
     const nodeEls = nodes.map(node => {
       const p = pos[node.id] || {x:width/2,y:height/2};
@@ -210,6 +216,7 @@
   function showDetails(node){
     if(!node) return;
     const badges = (node.badges || []).length ? `<div class="badges">${node.badges.map(b=>`<span class="badge">${esc(b)}</span>`).join('')}</div>` : '<div class="sub">분류 badge가 아직 없습니다.</div>';
+    const why = Array.isArray(node.why_shown) && node.why_shown.length ? `<ul>${node.why_shown.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>` : '-';
     document.getElementById('details').innerHTML = `<dl>
       <dt>Concept</dt><dd>${esc(node.label || '')}</dd>
       <dt>Type</dt><dd>${badges}</dd>
@@ -217,8 +224,11 @@
       <dt>Recall Count</dt><dd>${esc(node.recall_count || 0)}</dd>
       <dt>Missing Links</dt><dd>${esc(node.missing_links_count || 0)}</dd>
       <dt>Weak Score</dt><dd>${esc(node.weak_score || 0)}</dd>
+      <dt>Priority Score</dt><dd>${esc(node.priority_score || 0)}</dd>
       <dt>Degree</dt><dd>${esc(node.degree || 0)}</dd>
       <dt>Last Recalled</dt><dd>${esc(node.last_recalled_at || '-')}</dd>
+      <dt>Why Shown</dt><dd>${why}</dd>
+      <dt>Recommended Action</dt><dd>${esc(node.recommended_action || '관련 자료를 빠른 검색으로 다시 확인해보세요.')}</dd>
     </dl>`;
   }
   async function loadGraph(){

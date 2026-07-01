@@ -1195,6 +1195,75 @@ def _public_clinical_reflection(item: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+def _clamp_score(value: float) -> int:
+    return int(max(0, min(100, round(value))))
+
+
+def _age_days(value: Optional[str]) -> Optional[int]:
+    parsed = _parse_iso_datetime(value)
+    if parsed is None:
+        return None
+    return max(0, (datetime.now(timezone.utc) - parsed).days)
+
+
+def _ranking_info() -> Dict[str, Any]:
+    return {
+        "algorithm_version": "concept_graph_ranking_v1",
+        "description": "Saved graph metadata, recall traces, missing links, and graph centrality are combined into priority scores.",
+        "score_components": ["review_score", "centrality_score", "bridge_score", "memory_score"],
+    }
+
+
+def _empty_graph_overview() -> Dict[str, Any]:
+    return {
+        "nodes": [],
+        "edges": [],
+        "stats": {
+            "node_count": 0,
+            "edge_count": 0,
+            "weak_concept_count": 0,
+            "recalled_concept_count": 0,
+            "bridge_concept_count": 0,
+            "core_concept_count": 0,
+            "new_concept_count": 0,
+        },
+        "ranking_info": _ranking_info(),
+    }
+
+
+def _missing_link_keys_for_user(user_id: str) -> Dict[tuple[str, str, str, str], set[str]]:
+    out: Dict[tuple[str, str, str, str], set[str]] = {}
+    for item in _load_recall_traces():
+        if not isinstance(item, dict) or item.get("user_id") != user_id:
+            continue
+        key = (
+            str(item.get("semester") or ""),
+            str(item.get("course") or ""),
+            str(item.get("unit") or ""),
+            _concept_key(item.get("concept")),
+        )
+        missing = _learning_list_field(item, "missing_links")
+        if missing:
+            out.setdefault(key, set()).update({_concept_key(value) for value in missing if _concept_key(value)})
+    return out
+
+
+def _edge_type_and_reason(source: Dict[str, Any], target: Dict[str, Any], weight: float, learning_memory_link: bool) -> tuple[str, str]:
+    if learning_memory_link:
+        return "learning_memory_link", "설명해보기 피드백에서 연결이 필요한 개념으로 나타났습니다."
+    if source.get("course") != target.get("course"):
+        return "cross_course_bridge", "서로 다른 과목의 개념을 연결합니다."
+    if source.get("unit") != target.get("unit"):
+        return "cross_unit_bridge", "같은 과목의 다른 단원을 연결합니다."
+    if source.get("course") == target.get("course") and source.get("unit") == target.get("unit"):
+        return "same_unit", "같은 단원에서 함께 등장한 개념입니다."
+    if source.get("course") == target.get("course"):
+        return "same_course", "같은 과목 안에서 연결된 개념입니다."
+    if weight > 0:
+        return "semantic_similarity", "개념 임베딩/의미 유사도 기반 연결입니다."
+    return "unknown", "저장된 개념 그래프에서 발견된 연결입니다."
+
+
 def _normalize_search_filter(search_filter: Optional[Any]) -> Dict[str, str]:
     if not search_filter:
         return {}
@@ -2111,13 +2180,13 @@ async def concept_graph_overview(
 ) -> Dict[str, Any]:
     """Read-only user-level concept graph view. Uses existing graph files only."""
     if not os.path.exists(CONCEPT_INDEX_PATH) or not os.path.exists(CONCEPT_LINKS_PATH):
-        return {"nodes": [], "edges": [], "stats": {"node_count": 0, "edge_count": 0, "weak_concept_count": 0}}
+        return _empty_graph_overview()
 
     index_data = _safe_list_json(CONCEPT_INDEX_PATH)
     links_data = _load_json_file(CONCEPT_LINKS_PATH)
     course_filter = (course or "").strip()
     unit_filter = (unit or "").strip()
-    nodes: List[Dict[str, Any]] = []
+    base_nodes: List[Dict[str, Any]] = []
 
     for item in index_data:
         if not isinstance(item, dict) or item.get("user_id") != data_user_id:
@@ -2134,9 +2203,7 @@ async def concept_graph_overview(
         recall_count = int(meta.get("recall_count") or 0)
         missing_links_count = int(meta.get("missing_links_count") or 0)
         weak_score = _score_recall_weakness(recall_count, meta.get("last_recalled_at"), missing_links_count)
-        if weak_only and weak_score < 50:
-            continue
-        nodes.append({
+        base_nodes.append({
             "id": str(item.get("id") or ""),
             "label": label,
             "name": label,
@@ -2150,8 +2217,9 @@ async def concept_graph_overview(
             "last_recalled_at": meta.get("last_recalled_at"),
         })
 
-    node_ids = {node["id"] for node in nodes if node.get("id")}
-    edges = []
+    node_ids = {node["id"] for node in base_nodes if node.get("id")}
+    node_map = {node["id"]: node for node in base_nodes if node.get("id")}
+    raw_edges = []
     if isinstance(links_data, dict):
         for edge in links_data.get("edges", []):
             if not isinstance(edge, dict):
@@ -2159,21 +2227,146 @@ async def concept_graph_overview(
             source = str(edge.get("source") or edge.get("a") or "")
             target = str(edge.get("target") or edge.get("b") or "")
             if source in node_ids and target in node_ids:
-                edges.append({
+                raw_edges.append({
                     "source": source,
                     "target": target,
-                    "weight": edge.get("weight", edge.get("score", 0)),
+                    "weight": float(edge.get("weight", edge.get("score", 1)) or 1),
                 })
 
+    neighbors: Dict[str, List[Dict[str, Any]]] = {node_id: [] for node_id in node_ids}
+    for edge in raw_edges:
+        neighbors.setdefault(edge["source"], []).append({"id": edge["target"], "weight": edge["weight"]})
+        neighbors.setdefault(edge["target"], []).append({"id": edge["source"], "weight": edge["weight"]})
+
+    max_degree = max([len(items) for items in neighbors.values()] or [0]) or 1
+    weighted_by_node = {
+        node_id: sum(float(item.get("weight") or 1) for item in items)
+        for node_id, items in neighbors.items()
+    }
+    max_weighted = max(weighted_by_node.values() or [0]) or 1
+    degree_values = sorted([len(items) for items in neighbors.values()], reverse=True)
+    core_degree_threshold = degree_values[max(0, min(len(degree_values) - 1, int(len(degree_values) * 0.2)))] if degree_values else 0
+    missing_map = _missing_link_keys_for_user(data_user_id)
+
+    enriched_nodes: List[Dict[str, Any]] = []
+    for node in base_nodes:
+        node_neighbors = neighbors.get(node["id"], [])
+        neighbor_nodes = [node_map[item["id"]] for item in node_neighbors if item["id"] in node_map]
+        degree = len(node_neighbors)
+        weighted_degree = weighted_by_node.get(node["id"], 0)
+        course_count = len({item.get("course") for item in neighbor_nodes if item.get("course")})
+        unit_count = len({(item.get("course"), item.get("unit")) for item in neighbor_nodes if item.get("unit")})
+        centrality_score = _clamp_score((degree / max_degree) * 60 + (weighted_degree / max_weighted) * 40)
+        bridge_score = _clamp_score((60 if course_count > 1 else 0) + (30 if unit_count > 1 else 0) + min(10, degree))
+        age = _age_days(node.get("last_recalled_at"))
+        memory_score = _clamp_score(min(70, int(node.get("recall_count") or 0) * 20) + (30 if age is not None and age <= 14 else 15 if age is not None and age <= 60 else 0))
+        review_score = _clamp_score(
+            int(node.get("weak_score") or 0) * 0.65
+            + int(node.get("missing_links_count") or 0) * 15
+            + (20 if int(node.get("recall_count") or 0) == 0 else 0)
+            + (15 if age is None or age > 30 else 0)
+        )
+        priority_score = _clamp_score(review_score * 0.40 + centrality_score * 0.25 + bridge_score * 0.20 + memory_score * 0.15)
+
+        node_types = []
+        if int(node.get("weak_score") or 0) >= 50 or int(node.get("missing_links_count") or 0) > 0:
+            node_types.append("weak")
+        if centrality_score >= 70 or (core_degree_threshold and degree >= core_degree_threshold):
+            node_types.append("core")
+        if bridge_score >= 60:
+            node_types.append("bridge")
+        if int(node.get("recall_count") or 0) > 0:
+            node_types.append("recalled")
+        if age is not None and age <= 14:
+            node_types.append("recent")
+        if int(node.get("recall_count") or 0) == 0:
+            node_types.append("new")
+        if not node_types:
+            node_types.append("normal")
+
+        why = []
+        if "weak" in node_types:
+            why.append("복습 우선순위가 높습니다.")
+        if int(node.get("missing_links_count") or 0) > 0:
+            why.append("missing links가 반복되었습니다.")
+        if "core" in node_types:
+            why.append("여러 단원과 연결되는 중심 개념입니다.")
+        if "recent" in node_types:
+            why.append("최근 설명해본 개념입니다.")
+        if "new" in node_types:
+            why.append("아직 설명해본 기록이 없습니다.")
+        if "bridge" in node_types:
+            why.append("다른 과목 또는 단원 개념과 연결되는 bridge concept입니다.")
+
+        if "weak" in node_types and "recalled" in node_types:
+            recommended_action = "Learning Memory의 AI 피드백을 다시 확인하세요."
+        elif "weak" in node_types:
+            recommended_action = "설명해보기로 다시 복습하세요."
+        elif "bridge" in node_types:
+            recommended_action = "연결된 개념들을 함께 비교해보세요."
+        elif "core" in node_types:
+            recommended_action = "이 개념을 중심으로 단원 구조를 정리해보세요."
+        elif "new" in node_types:
+            recommended_action = "처음으로 내 말로 설명해보세요."
+        else:
+            recommended_action = "관련 자료를 빠른 검색으로 다시 확인해보세요."
+
+        enriched_nodes.append({
+            **node,
+            "degree": degree,
+            "weighted_degree": round(weighted_degree, 4),
+            "connected_count": degree,
+            "centrality_score": centrality_score,
+            "bridge_score": bridge_score,
+            "memory_score": memory_score,
+            "review_score": review_score,
+            "priority_score": priority_score,
+            "node_types": node_types,
+            "why_shown": why,
+            "recommended_action": recommended_action,
+        })
+
+    if weak_only:
+        enriched_nodes = [node for node in enriched_nodes if "weak" in node.get("node_types", [])]
+        node_ids = {node["id"] for node in enriched_nodes}
+
+    max_edge_weight = max([float(edge.get("weight") or 0) for edge in raw_edges] or [0]) or 1
+    edge_missing_map = missing_map
+    edges = []
+    for edge in raw_edges:
+        if edge["source"] not in node_ids or edge["target"] not in node_ids:
+            continue
+        source = node_map[edge["source"]]
+        target = node_map[edge["target"]]
+        source_key = (source.get("semester", ""), source.get("course", ""), source.get("unit", ""), _concept_key(source.get("label")))
+        target_key = (target.get("semester", ""), target.get("course", ""), target.get("unit", ""), _concept_key(target.get("label")))
+        learning_memory_link = (
+            _concept_key(target.get("label")) in edge_missing_map.get(source_key, set())
+            or _concept_key(source.get("label")) in edge_missing_map.get(target_key, set())
+        )
+        edge_type, reason = _edge_type_and_reason(source, target, float(edge.get("weight") or 0), learning_memory_link)
+        edges.append({
+            "source": edge["source"],
+            "target": edge["target"],
+            "weight": round(float(edge.get("weight") or 0), 4),
+            "normalized_weight": _clamp_score((float(edge.get("weight") or 0) / max_edge_weight) * 100),
+            "edge_type": edge_type,
+            "reason": reason,
+        })
+
     return {
-        "nodes": nodes,
+        "nodes": enriched_nodes,
         "edges": edges,
         "stats": {
-            "node_count": len(nodes),
+            "node_count": len(enriched_nodes),
             "edge_count": len(edges),
-            "weak_concept_count": len([node for node in nodes if int(node.get("weak_score") or 0) >= 50]),
-            "recalled_concept_count": len([node for node in nodes if int(node.get("recall_count") or 0) > 0]),
+            "weak_concept_count": len([node for node in enriched_nodes if "weak" in node.get("node_types", [])]),
+            "recalled_concept_count": len([node for node in enriched_nodes if "recalled" in node.get("node_types", [])]),
+            "bridge_concept_count": len([node for node in enriched_nodes if "bridge" in node.get("node_types", [])]),
+            "core_concept_count": len([node for node in enriched_nodes if "core" in node.get("node_types", [])]),
+            "new_concept_count": len([node for node in enriched_nodes if "new" in node.get("node_types", [])]),
         },
+        "ranking_info": _ranking_info(),
     }
 
 
