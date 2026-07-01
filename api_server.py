@@ -28,7 +28,6 @@ from rag import (
     rename_unit,
     delete_chunks_by_filter,
     get_chunks,
-    get_file_metadata,
     get_filter_label,
     get_library_overview,
     get_units,
@@ -726,7 +725,6 @@ async def ingest(
         title=title.strip(),
         user_id=data_user_id,
         unit=unit.strip(),
-        stored_filename=unique_name,
     )
 
     # 업로드 시 해당 단원 개념 자동 추출(개념 지도용). 실패해도 업로드는 성공 처리.
@@ -1086,8 +1084,8 @@ def _safe_preview_filename(filename: str) -> str:
     return normalized
 
 
-def _safe_upload_path(stored_filename: str) -> Optional[str]:
-    base = os.path.basename(stored_filename or "")
+def _safe_upload_path(upload_filename: str) -> Optional[str]:
+    base = os.path.basename(upload_filename or "")
     if not base:
         return None
     upload_root = os.path.realpath(UPLOAD_DIR)
@@ -1097,7 +1095,18 @@ def _safe_upload_path(stored_filename: str) -> Optional[str]:
     return candidate if os.path.isfile(candidate) else None
 
 
-def _legacy_upload_matches(filename: str) -> List[str]:
+def _owned_filenames_for_user(data_user_id: str) -> set[str]:
+    overview = get_library_overview(user_id=data_user_id)
+    owned: set[str] = set()
+    for courses in overview.get("semesters", {}).values():
+        for files in courses.values():
+            for filename in files.keys():
+                if safe_name := unicodedata.normalize("NFC", os.path.basename(filename or "")).strip():
+                    owned.add(safe_name)
+    return owned
+
+
+def _matching_upload_paths(filename: str) -> List[str]:
     matches = []
     want = unicodedata.normalize("NFC", filename)
     for stored in os.listdir(UPLOAD_DIR):
@@ -1108,25 +1117,25 @@ def _legacy_upload_matches(filename: str) -> List[str]:
     return sorted(matches)
 
 
+def _resolve_owned_upload_path(data_user_id: str, requested_filename: str) -> Optional[str]:
+    safe_filename = _safe_preview_filename(requested_filename)
+    if safe_filename not in _owned_filenames_for_user(data_user_id):
+        return None
+
+    matches = _matching_upload_paths(safe_filename)
+    if len(matches) == 1:
+        return matches[0]
+    if len(matches) > 1:
+        logger.warning("Ambiguous upload preview for data_user_id=%s filename=%s", data_user_id, safe_filename)
+    return None
+
+
 @app.get("/file")
 async def serve_file(filename: str, token: str = ""):
     """업로드된 원본 PDF preview. 쿼리 토큰에서 도출한 data_user_id 소유 파일만 반환."""
     data_user_id = _uid_from_token(token)
-    safe_filename = _safe_preview_filename(filename)
-    metadata = get_file_metadata(data_user_id, safe_filename)
-    if not metadata:
-        raise HTTPException(status_code=404, detail="파일을 찾을 수 없습니다.")
-
-    stored_names = sorted({meta.get("stored_filename") for meta in metadata if meta.get("stored_filename")})
-    for stored_name in stored_names:
-        if path := _safe_upload_path(stored_name):
-            return FileResponse(path, media_type="application/pdf")
-
-    legacy_matches = _legacy_upload_matches(safe_filename)
-    if len(legacy_matches) == 1:
-        return FileResponse(legacy_matches[0], media_type="application/pdf")
-    if len(legacy_matches) > 1:
-        logger.warning("Ambiguous legacy upload preview for data_user_id=%s filename=%s", data_user_id, safe_filename)
+    if path := _resolve_owned_upload_path(data_user_id, filename):
+        return FileResponse(path, media_type="application/pdf")
     raise HTTPException(status_code=404, detail="파일을 찾을 수 없습니다.")
 
 

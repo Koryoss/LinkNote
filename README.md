@@ -39,6 +39,13 @@ See [Nursing Clinical Reflection](docs/nursing-clinical-reflection.md).
 
 LinkNote is currently organized as a lightweight local-first learning system.
 
+Current frontend entry points:
+
+- `web/gallery.html` is the main UI served at `/`.
+- `web/mypage.html` is the read-only My Page.
+- `web/app.js` is a legacy experimental frontend and should not be used for authenticated production flow.
+- Protected APIs derive data ownership from `Authorization` token -> `data_user_id`, not from frontend-provided `user_id`.
+
 ```text
 linknote/
 ├── api_server.py

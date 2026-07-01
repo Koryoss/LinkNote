@@ -27,7 +27,6 @@ def add_pdf_pages_to_db(
     title: str,
     user_id: str,
     unit: str = "",
-    stored_filename: str = "",
 ):
     ids, documents, metadatas, embeddings = [], [], [], []
     for page in pages:
@@ -37,13 +36,10 @@ def add_pdf_pages_to_db(
             chunk_id = f"{user_id}-{semester}-{course}-{title}-{filename}-p{page_number}-c{chunk_index}"
             ids.append(chunk_id)
             documents.append(chunk)
-            metadata = {
+            metadatas.append({
                 "user_id": user_id, "semester": semester, "course": course, "title": title,
                 "filename": filename, "page": page_number, "chunk_index": chunk_index, "unit": unit
-            }
-            if stored_filename:
-                metadata["stored_filename"] = stored_filename
-            metadatas.append(metadata)
+            })
             embeddings.append(embed_text(chunk))
     if ids:
         collection.upsert(ids=ids, documents=documents, metadatas=metadatas, embeddings=embeddings)
@@ -274,13 +270,6 @@ def get_chunks(user_id, limit=50, offset=0, search_filter=None, full=False):
     items = [{**meta, "id": id_val, "text": doc if full else doc[:200]} for id_val, meta, doc in zip(results["ids"], results["metadatas"], results["documents"])]
     items.sort(key=lambda x: (x.get("filename", ""), x.get("page", 0), x.get("chunk_index", 0)))
     return {"total": len(items), "limit": limit, "offset": offset, "items": items[offset:offset + limit]}
-
-def get_file_metadata(user_id: str, filename: str):
-    where_filter = _build_where_filter({"filename": filename}, user_id=user_id)
-    if not where_filter:
-        return []
-    results = collection.get(where=where_filter, include=["metadatas"])
-    return [meta or {} for meta in results.get("metadatas", [])]
 
 def _chunk_key(chunk):
     return (chunk.get("filename", ""), chunk.get("page", ""), chunk.get("chunk_index", ""))

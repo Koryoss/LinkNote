@@ -1,4 +1,6 @@
-// Legacy/experimental UI only. The active app is web/gallery.html, served at /.
+// Legacy experimental frontend. Current UI is gallery.html.
+// Do not use for authenticated production flow.
+// The active app is web/gallery.html, served at /.
 // Protected APIs derive ownership from the Authorization token; frontend user_id
 // is deprecated compatibility state and must not decide data access.
 const apiUrl = "http://127.0.0.1:8000";

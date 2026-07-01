@@ -39,3 +39,14 @@ Do not automatically migrate, delete, reset, or reassign legacy data. Use an exp
 - Frontend-provided `user_id` must not override authenticated ownership.
 - `/file` may accept `token` in the query string for iframe preview, but it must verify the requested filename belongs to that token's `data_user_id`.
 - Legacy request fields named `user_id` are compatibility-only unless explicitly marked as response data or stored trace metadata.
+
+## Manual preview test checklist
+
+- Maintainer can preview their own uploaded PDF.
+- New user can preview their own uploaded PDF.
+- New user cannot preview the maintainer's PDF even if the filename is known.
+- Missing token fails with 401.
+- Invalid token fails with 401.
+- `../` path traversal fails.
+- Unknown filename returns 404.
+- Gallery PDF preview still works.
