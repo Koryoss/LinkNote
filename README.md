@@ -46,6 +46,15 @@ Current frontend entry points:
 - `web/app.js` is a legacy experimental frontend and should not be used for authenticated production flow.
 - Protected APIs derive data ownership from `Authorization` token -> `data_user_id`, not from frontend-provided `user_id`.
 
+## Question Modes
+
+The active Gallery UI has two question modes:
+
+- `빠른 검색`: finds related chunks, concepts, and Learning Memory/Recall matches through `POST /ask/search` without generating a GPT answer.
+- `AI 답변`: uses the existing `POST /ask` flow and calls the configured answer-generation provider.
+
+Search-only supports single-document style filters and multi-document search across the current user's owned materials. It uses token-derived `data_user_id`, local keyword/metadata matching, and a per-user `data/search_cache.json` cache.
+
 ```text
 linknote/
 ├── api_server.py

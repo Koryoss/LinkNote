@@ -265,6 +265,14 @@
   .up-x:hover { color:#ef4444; }
   .ask-a { background:#f8fafc; border:1px solid #eef1f6; border-radius:10px; padding:12px; font-size:0.88rem; line-height:1.55; white-space:pre-wrap; margin-top:12px; }
   .ask-src { margin-top:8px; font-size:0.76rem; color:#6b7280; display:flex; flex-direction:column; gap:3px; }
+  .ask-mode-note { font-size:0.74rem; color:#64748b; align-self:center; }
+  .search-result { margin-top:12px; display:grid; gap:10px; }
+  .search-card { background:#f8fafc; border:1px solid #eef1f6; border-radius:10px; padding:11px 12px; font-size:0.84rem; line-height:1.5; }
+  .search-card h4 { font-size:0.86rem; margin-bottom:6px; color:#1e293b; }
+  .search-item { border-top:1px solid #e8ebf2; padding-top:7px; margin-top:7px; }
+  .search-item:first-of-type { border-top:none; padding-top:0; margin-top:0; }
+  .search-meta { display:block; color:#64748b; font-size:0.74rem; margin-bottom:3px; }
+  .cost-label { display:inline-flex; align-items:center; border:1px solid #dbeafe; background:#eff6ff; color:#1d4ed8; border-radius:999px; padding:3px 8px; font-size:0.72rem; font-weight:700; }
   .iq { margin: 6px 24px 14px; background:#fff; border:1px solid #e8ebf2; border-radius:14px; padding:14px 16px; box-shadow:0 6px 18px rgba(15,23,42,0.05); }
   .iq-title { font-weight:700; font-size:0.9rem; margin-bottom:10px; }
   .iq-row { display:flex; gap:8px; flex-wrap:wrap; }
@@ -1444,6 +1452,7 @@
   function closeAdd(){ document.getElementById('addModal').hidden=true; document.getElementById('addBackdrop').hidden=true; }
   let inlineAskCourse = null;
   let inlineCourses = [];
+  let inlineLastSearch = null;
   function iqFill(t){ const el=document.getElementById('iq_q'); if(el){ el.value=t; el.focus(); } }
   function inlineQuestionHTML(scopeLabel){
     const scopeText = inlineAskCourse ? esc(inlineAskCourse) : (scopeLabel || '전체 자료');
@@ -1455,10 +1464,12 @@
       <div class="iq-title">❓ 질문하기 <span class="muted">· ${scopeText}</span></div>
       <div class="iq-row">
         <input id="iq_q" placeholder="예: 단순회귀분석을 설명해줘" onkeydown="if(event.key==='Enter')askInline()">
-        <select id="iq_mode" onchange="iqToggleCourse()"><option value="single">단일 자료</option><option value="connections">여러 자료 연결</option></select>
+        <select id="iq_answer_mode" onchange="iqUpdateModeNote()"><option value="search">빠른 검색</option><option value="ai">AI 답변</option></select>
+        <select id="iq_mode" onchange="iqToggleCourse()"><option value="single">단일 자료 검색</option><option value="connections">여러 자료 검색</option></select>
         ${courseSelect ? `<span id="iq_course_wrap">${courseSelect}</span>` : ''}
         <button onclick="askInline()">질문</button>
       </div>
+      <div id="iq_mode_note" class="ask-mode-note">빠른 검색: GPT 답변 생성 없음</div>
       <div class="iq-ex">예시:
         <a onclick="iqFill('핵심 내용을 요약해줘')">핵심 요약</a> ·
         <a onclick="iqFill('중요한 개념 5개를 뽑아줘')">중요 개념 5개</a> ·
@@ -1470,15 +1481,35 @@
       <div id="iq_answer"></div>
     </div>`;
   }
-  async function askInline(){
+  function iqBuildPayload(){
     const q=document.getElementById('iq_q').value.trim();
-    const st=document.getElementById('iq_status'), ans=document.getElementById('iq_answer');
-    if(!q){ st.style.color='#ef4444'; st.textContent='질문을 입력하세요.'; return; }
     const courseEl = document.getElementById('iq_course');
     const mode = document.getElementById('iq_mode').value;
     const course = (mode==='single') ? (inlineAskCourse || (courseEl ? courseEl.value.trim() : '')) : '';
-    const body={ user_id: uid(), question:q, mode: mode,
-      search_filter: course ? {course: course} : null };
+    return {
+      question: q,
+      ragMode: mode,
+      scope: mode === 'connections' ? 'multi' : 'single',
+      search_filter: course ? {course: course} : null
+    };
+  }
+  function iqUpdateModeNote(){
+    const el=document.getElementById('iq_answer_mode'), note=document.getElementById('iq_mode_note');
+    if(!el||!note) return;
+    note.textContent = el.value === 'ai' ? 'AI 답변: GPT 호출 · API 비용이 발생할 수 있습니다.' : '빠른 검색: GPT 답변 생성 없음';
+  }
+  async function askInline(forceAI=false){
+    const st=document.getElementById('iq_status');
+    const modeEl=document.getElementById('iq_answer_mode');
+    const payload=iqBuildPayload();
+    if(!payload.question){ st.style.color='#ef4444'; st.textContent='질문을 입력하세요.'; return; }
+    if(forceAI || (modeEl && modeEl.value === 'ai')) return askInlineAI(payload);
+    return askInlineSearch(payload);
+  }
+  async function askInlineAI(payload){
+    const st=document.getElementById('iq_status'), ans=document.getElementById('iq_answer');
+    const body={ question:payload.question, mode: payload.ragMode,
+      search_filter: payload.search_filter };
     st.style.color='#2563eb'; st.textContent='답변 생성 중…'; ans.innerHTML='';
     try{
       const r=await fetch(API+'/ask',{method:'POST',headers: authHeaders({'Content-Type':'application/json'}),body:JSON.stringify(body)});
@@ -1488,10 +1519,42 @@
       ans.innerHTML=`<div class="ask-a">${esc(d.answer||'')}</div>`;
     }catch(e){ st.style.color='#ef4444'; st.textContent='서버 미연결 — 질문 실패'; }
   }
+  async function askInlineSearch(payload){
+    const st=document.getElementById('iq_status'), ans=document.getElementById('iq_answer');
+    inlineLastSearch = payload;
+    st.style.color='#2563eb'; st.textContent='관련 자료 검색 중…'; ans.innerHTML='';
+    try{
+      const r=await fetch(API+'/ask/search',{method:'POST',headers: authHeaders({'Content-Type':'application/json'}),body:JSON.stringify({
+        question: payload.question,
+        scope: payload.scope,
+        search_filter: payload.search_filter,
+        limit: 6
+      })});
+      const d=await r.json();
+      if(!r.ok){ st.style.color='#ef4444'; st.textContent=(d.detail||'실패'); return; }
+      st.textContent='';
+      ans.innerHTML=renderSearchOnly(d);
+    }catch(e){ st.style.color='#ef4444'; st.textContent='서버 미연결 — 빠른 검색 실패'; }
+  }
+  function renderSearchList(items, empty, renderItem){
+    if(!items || !items.length) return `<div class="search-item">${esc(empty)}</div>`;
+    return items.map(renderItem).join('');
+  }
+  function renderSearchOnly(d){
+    const scopeLabel = d.scope === 'single' ? '단일 자료 검색' : '여러 자료 검색';
+    return `<div class="search-result">
+      <div class="ask-a">관련 자료를 찾았어요. AI 답변을 생성할까요?<br><span class="cost-label">${esc(scopeLabel)} · ${d.from_cache ? '캐시 결과' : '새 검색'} · GPT 답변 생성 없음</span></div>
+      <div class="search-card"><h4>관련 개념</h4>${renderSearchList(d.related_concepts, '관련 개념을 찾지 못했습니다.', x=>`<div class="search-item"><strong>${esc(x.concept)}</strong><span class="search-meta">${esc(x.course)} · ${esc(x.unit)}</span>${esc(x.reason||'')}</div>`)}</div>
+      <div class="search-card"><h4>관련 문서 / Chunk</h4>${renderSearchList(d.sources, '관련 chunk를 찾지 못했습니다.', x=>`<div class="search-item"><strong>${esc(x.filename || '파일명 없음')}</strong><span class="search-meta">${esc(x.course)} · ${esc(x.unit)} · p.${esc(x.page || '-')} · score ${esc(x.score || 0)}</span>${esc(x.chunk_preview || '')}</div>`)}</div>
+      <div class="search-card"><h4>Learning Memory / Recall</h4>${renderSearchList(d.learning_memory_matches, '관련 Learning Memory/Recall 기록이 없습니다.', x=>`<div class="search-item"><strong>${esc(x.concept || '개념 미지정')}</strong><span class="search-meta">${esc(x.course)} · ${esc(x.unit)} · ${esc(x.created_at || '')}</span>${esc(x.improved_summary || x.answer_preview || '')}</div>`)}</div>
+      ${d.can_generate_ai_answer ? `<button onclick="askInline(true)">AI 답변 생성</button> <span class="ask-mode-note">API 비용이 발생할 수 있습니다.</span>` : ''}
+    </div>`;
+  }
   function iqToggleCourse(){
     const m=document.getElementById('iq_mode'), w=document.getElementById('iq_course_wrap');
     if(!m||!w) return;
     w.style.display=(m.value==='single')?'':'none';
+    iqUpdateModeNote();
   }
   async function loadUnitDoc(sem, course, unit){
     const sel=document.getElementById('doc_sel'), fr=document.getElementById('doc_frame');

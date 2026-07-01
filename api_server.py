@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
+import hashlib
 import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
@@ -38,6 +40,7 @@ UPLOAD_DIR = os.path.join(DATA_DIR, "uploads")
 TIMETABLE_PATH = os.path.join(DATA_DIR, "timetable.json")
 CONCEPTS_PATH = os.path.join(DATA_DIR, "concepts.json")
 RECALL_TRACES_PATH = os.path.join(DATA_DIR, "recall_traces.json")
+SEARCH_CACHE_PATH = os.path.join(DATA_DIR, "search_cache.json")
 CONCEPT_INDEX_PATH = os.path.join(DATA_DIR, "concept_index.json")
 CONCEPT_LINKS_PATH = os.path.join(DATA_DIR, "concept_links.json")
 MAINTAINER_EMAIL = "kory124@snu.ac.kr"
@@ -87,6 +90,7 @@ def current_uid(authorization: Optional[str] = Header(None)) -> str:
 class SearchFilter(BaseModel):
     semester: Optional[str] = None
     course: Optional[str] = None
+    unit: Optional[str] = None
     filename: Optional[str] = None
 
 
@@ -102,6 +106,13 @@ class AskResponse(BaseModel):
     answer: str
     sources: List[Dict[str, Any]]
     scope_label: str
+
+
+class AskSearchRequest(BaseModel):
+    question: str
+    search_filter: Optional[SearchFilter] = None
+    scope: Optional[str] = "auto"
+    limit: Optional[int] = 5
 
 
 class IngestResponse(BaseModel):
@@ -644,6 +655,253 @@ def _learning_summary_for_user(user_id: str) -> Dict[str, Any]:
         "recent_explanations": recent_explanations,
     }
 
+
+def _normalize_search_filter(search_filter: Optional[Any]) -> Dict[str, str]:
+    if not search_filter:
+        return {}
+    raw = _model_to_dict(search_filter) if isinstance(search_filter, BaseModel) else dict(search_filter)
+    return {
+        key: str(value).strip()
+        for key, value in raw.items()
+        if key in {"semester", "course", "unit", "filename"} and str(value or "").strip()
+    }
+
+
+def _filter_for_chroma(search_filter: Dict[str, str], scope: str) -> Dict[str, str]:
+    if scope == "multi":
+        return {}
+    return {
+        key: value
+        for key, value in search_filter.items()
+        if key in {"semester", "course", "filename"}
+    }
+
+
+def _tokens(text: str) -> List[str]:
+    return [
+        token.lower()
+        for token in re.findall(r"[0-9A-Za-z가-힣]+", text or "")
+        if len(token.strip()) >= 2
+    ]
+
+
+def _text_score(text: str, tokens: List[str]) -> float:
+    if not tokens:
+        return 0.0
+    haystack = str(text or "").lower()
+    score = 0.0
+    for token in tokens:
+        if token in haystack:
+            score += 1.0
+        score += min(haystack.count(token), 3) * 0.2
+    return round(score, 4)
+
+
+def _search_cache_key(user_id: str, question: str, search_filter: Dict[str, str], scope: str) -> str:
+    payload = {
+        "user_id": user_id,
+        "question": " ".join((question or "").lower().split()),
+        "search_filter": search_filter,
+        "scope": scope,
+    }
+    raw = json.dumps(payload, ensure_ascii=False, sort_keys=True)
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
+def _load_search_cache() -> Dict[str, Any]:
+    data = _load_json_file(SEARCH_CACHE_PATH)
+    return data if isinstance(data, dict) else {}
+
+
+def _save_search_cache(cache: Dict[str, Any]) -> None:
+    os.makedirs(os.path.dirname(SEARCH_CACHE_PATH), exist_ok=True)
+    with open(SEARCH_CACHE_PATH, "w", encoding="utf-8") as f:
+        json.dump(cache, f, ensure_ascii=False, indent=2)
+
+
+def _is_sensitive_search(question: str) -> bool:
+    sensitive_terms = ["환자", "등록번호", "주민등록번호", "병실", "전화번호", "hospital id", "patient id"]
+    lowered = (question or "").lower()
+    return any(term in lowered for term in sensitive_terms)
+
+
+def _iter_user_concepts_with_context(user_id: str) -> List[Dict[str, Any]]:
+    data = _load_json_file(CONCEPTS_PATH)
+    user_data = data.get(user_id, {}) if isinstance(data, dict) else {}
+    out: List[Dict[str, Any]] = []
+    if not isinstance(user_data, dict):
+        return out
+    for semester, semester_data in user_data.items():
+        if not isinstance(semester_data, dict):
+            continue
+        for course, course_data in semester_data.items():
+            if not isinstance(course_data, dict):
+                continue
+            for unit, unit_concepts in course_data.items():
+                if not isinstance(unit_concepts, list):
+                    continue
+                for concept in unit_concepts:
+                    if not isinstance(concept, dict):
+                        continue
+                    out.append({
+                        **concept,
+                        "semester": semester,
+                        "course": course,
+                        "unit": unit,
+                    })
+    return out
+
+
+def _matches_filter_context(item: Dict[str, Any], search_filter: Dict[str, str], scope: str) -> bool:
+    if scope == "multi":
+        return True
+    for key, value in search_filter.items():
+        if key in {"semester", "course", "unit", "filename"} and value:
+            if str(item.get(key) or "") != value:
+                return False
+    return True
+
+
+def _search_related_concepts(user_id: str, tokens: List[str], search_filter: Dict[str, str], scope: str, limit: int) -> List[Dict[str, Any]]:
+    concepts = []
+    for item in _iter_user_concepts_with_context(user_id):
+        if not _matches_filter_context(item, search_filter, scope):
+            continue
+        concept = str(item.get("name") or item.get("keyword") or item.get("concept") or "").strip()
+        text = " ".join(str(item.get(k, "")) for k in ["name", "keyword", "definition", "description", "summary"])
+        score = _text_score(text, tokens)
+        if score <= 0 and concept and any(token in concept.lower() for token in tokens):
+            score = 1.0
+        if score <= 0:
+            continue
+        concepts.append({
+            "concept": concept,
+            "course": item.get("course", ""),
+            "unit": item.get("unit", ""),
+            "reason": "질문 키워드가 개념명 또는 설명과 일치합니다.",
+            "_score": score,
+        })
+    concepts.sort(key=lambda item: item["_score"], reverse=True)
+    return [{k: v for k, v in item.items() if k != "_score"} for item in concepts[:limit]]
+
+
+def _search_sources(user_id: str, tokens: List[str], search_filter: Dict[str, str], scope: str, limit: int) -> List[Dict[str, Any]]:
+    chroma_filter = _filter_for_chroma(search_filter, scope)
+    data = get_chunks(user_id=user_id, limit=5000, offset=0, search_filter=chroma_filter, full=True)
+    scored: List[Dict[str, Any]] = []
+    for item in data.get("items", []):
+        if not _matches_filter_context(item, search_filter, scope):
+            continue
+        text = " ".join(str(item.get(k, "")) for k in ["semester", "course", "unit", "title", "filename", "text"])
+        score = _text_score(text, tokens)
+        if score <= 0 and tokens:
+            continue
+        scored.append({
+            "semester": item.get("semester", ""),
+            "course": item.get("course", ""),
+            "unit": item.get("unit", ""),
+            "filename": item.get("filename", ""),
+            "page": item.get("page"),
+            "chunk_index": item.get("chunk_index"),
+            "chunk_preview": str(item.get("text", ""))[:420],
+            "score": score,
+            "_sort": score,
+        })
+    scored.sort(key=lambda item: (-item["_sort"], str(item.get("course", "")), str(item.get("filename", "")), int(item.get("page") or 0)))
+    return [{k: v for k, v in item.items() if k != "_sort"} for item in scored[:limit]]
+
+
+def _memory_list_field(item: Dict[str, Any], key: str) -> List[str]:
+    value = item.get(key)
+    if isinstance(value, list):
+        return [str(x).strip() for x in value if str(x).strip()]
+    feedback = item.get("feedback")
+    if isinstance(feedback, dict):
+        inner = feedback.get(key)
+        if isinstance(inner, list):
+            return [str(x).strip() for x in inner if str(x).strip()]
+    return []
+
+
+def _memory_text_field(item: Dict[str, Any], key: str) -> str:
+    value = str(item.get(key) or "").strip()
+    if value:
+        return value
+    feedback = item.get("feedback")
+    if isinstance(feedback, dict):
+        return str(feedback.get(key) or "").strip()
+    return ""
+
+
+def _search_learning_memory(user_id: str, tokens: List[str], search_filter: Dict[str, str], scope: str, limit: int) -> List[Dict[str, Any]]:
+    matches: List[Dict[str, Any]] = []
+    for item in _load_recall_traces():
+        if not isinstance(item, dict) or item.get("user_id") != user_id:
+            continue
+        if not _matches_filter_context(item, search_filter, scope):
+            continue
+        text = " ".join([
+            str(item.get("concept", "")),
+            str(item.get("answer_text", "")),
+            str(item.get("feedback_text", "")),
+            _memory_text_field(item, "improved_summary"),
+            " ".join(_memory_list_field(item, "missing_links")),
+        ])
+        score = _text_score(text, tokens)
+        if score <= 0 and tokens:
+            continue
+        matches.append({
+            "concept": item.get("concept", ""),
+            "course": item.get("course", ""),
+            "unit": item.get("unit", ""),
+            "answer_preview": str(item.get("answer_text", ""))[:220],
+            "improved_summary": _memory_text_field(item, "improved_summary"),
+            "created_at": item.get("created_at", ""),
+            "_score": score,
+        })
+    matches.sort(key=lambda item: (-item["_score"], str(item.get("created_at", ""))))
+    return [{k: v for k, v in item.items() if k != "_score"} for item in matches[:limit]]
+
+
+def _build_search_only_response(user_id: str, request: AskSearchRequest) -> Dict[str, Any]:
+    question = request.question.strip()
+    requested_scope = (request.scope or "auto").strip().lower()
+    search_filter = _normalize_search_filter(request.search_filter)
+    scope = "single" if requested_scope == "single" or (requested_scope == "auto" and search_filter) else "multi"
+    if requested_scope == "multi":
+        scope = "multi"
+    limit = max(1, min(int(request.limit or 5), 12))
+    cache_key = _search_cache_key(user_id, question, search_filter, scope)
+    can_cache = not _is_sensitive_search(question)
+    if can_cache:
+        cached = _load_search_cache().get(cache_key)
+        if isinstance(cached, dict) and cached.get("user_id") == user_id:
+            result = dict(cached.get("result") or {})
+            result["from_cache"] = True
+            return result
+
+    tokens = _tokens(question)
+    result = {
+        "question": question,
+        "mode": "search_only",
+        "scope": scope,
+        "from_cache": False,
+        "related_concepts": _search_related_concepts(user_id, tokens, search_filter, scope, limit),
+        "sources": _search_sources(user_id, tokens, search_filter, scope, limit),
+        "learning_memory_matches": _search_learning_memory(user_id, tokens, search_filter, scope, limit),
+        "can_generate_ai_answer": True,
+    }
+    if can_cache:
+        cache = _load_search_cache()
+        cache[cache_key] = {
+            "user_id": user_id,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "result": result,
+        }
+        _save_search_cache(cache)
+    return result
+
+
 def _build_timetable_response(uid: str) -> TimetableResponse:
     timetable = [e for e in _load_timetable() if e.get("user_id") == uid]
     grouped: Dict[str, set] = {}
@@ -663,6 +921,13 @@ def _build_timetable_response(uid: str) -> TimetableResponse:
     ]
 
     return TimetableResponse(semesters=semesters)
+
+
+@app.post("/ask/search")
+async def ask_search(request: AskSearchRequest, data_user_id: str = Depends(current_uid)) -> Dict[str, Any]:
+    if not request.question.strip():
+        raise HTTPException(status_code=400, detail="question이 필요합니다.")
+    return _build_search_only_response(data_user_id, request)
 
 
 @app.post("/ask", response_model=AskResponse)
@@ -1401,7 +1666,7 @@ async def health() -> Dict[str, Any]:
     return {
         "ok": True,
         "version": app.version,
-        "routes": ["/auth/me", "/me/summary"],
+        "routes": ["/auth/me", "/me/summary", "/ask/search"],
     }
 
 
