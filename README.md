@@ -170,6 +170,8 @@ Concept graph metadata now includes:
 
 The graph can be opened directly from My Page or Learning Memory through `web/concept-graph.html`. The graph page reads existing graph metadata only and does not call GPT/OpenAI or rebuild graph data.
 
+Clicking a Concept Graph node opens a learning action panel. From a selected concept, learners can focus the graph around that concept, open Learning Memory, run a search-only related-material lookup, return to Gallery with course/unit context, or open the future `설명해보기` flow with concept context. The quick search action uses `POST /ask/search` and does not generate a GPT answer.
+
 ### Phase 4: Learning Memory
 
 Learning Memory turns saved `설명해보기` recall traces and feedback into reusable review material for lectures, weekly review, and exam preparation.

@@ -46,6 +46,20 @@ The default Concept Graph view caps visible nodes and prioritizes learner-useful
 
 Each overview node may include deterministic learning metadata such as `degree`, `weighted_degree`, `connected_count`, `centrality_score`, `bridge_score`, `memory_score`, `review_score`, `priority_score`, `node_types`, `why_shown`, and `recommended_action`. Each overview edge may include `normalized_weight`, `edge_type`, and a human-readable `reason`. These fields are computed without GPT/OpenAI calls and without rebuilding or reindexing stored graph data.
 
+### Concept Graph Learning Actions
+
+Clicking a Concept Graph node opens a learning action panel rather than only a metadata detail view. The panel is intended to help the learner decide what to do next from the selected concept:
+
+- focus the graph around that concept with Connection Map
+- open Learning Memory with `concept`, `course`, and `unit` query parameters
+- run related-material quick search through `POST /ask/search`
+- return to Gallery with course/unit context
+- open the future `설명해보기` flow with concept/course/unit query parameters
+
+The quick search action is search-only. It calls `/ask/search`, shows related concepts, chunks, and Learning Memory matches, and does not call `/ask`, GPT, OpenAI chat/completions, graph generation, ChromaDB reindexing, or concept graph rebuilds. Concept Graph page load still only reads existing graph metadata.
+
+Selected nodes are highlighted locally in the SVG. Connected edges and neighboring nodes are emphasized using already loaded visible graph data; unrelated visible edges are de-emphasized.
+
 ### Concept Graph Progressive Disclosure
 
 The Concept Graph page does not show the full graph first. The default mode is `Review Map`, a small learning map focused on what the learner should review now. It prioritizes `review_score`, `weak_score`, missing links, recall history, and not-yet-explained concepts, with core/bridge metadata used as tie-breakers.
