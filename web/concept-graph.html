@@ -62,6 +62,7 @@
   const token = () => localStorage.getItem('ln_token') || '';
   const headers = () => token() ? { Authorization:'Bearer ' + token() } : {};
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const DEFAULT_NODE_LIMIT = 25;
   async function getJSON(path){
     const r = await fetch(API + path, { headers: headers() });
     const d = await r.json().catch(()=>({}));
@@ -69,6 +70,19 @@
     return d;
   }
   const stat = (label, value) => `<div class="stat"><small>${esc(label)}</small><strong>${esc(value)}</strong></div>`;
+  function graphPriority(node){
+    return Number(node.weak_score || 0) * 0.45
+      + Number(node.missing_links_count || 0) * 12
+      + (Number(node.recall_count || 0) === 0 ? 20 : 0)
+      + Number(node.weight || 0) * 2;
+  }
+  function visibleGraph(nodes, edges){
+    const sorted = [...nodes].sort((a,b)=>graphPriority(b)-graphPriority(a));
+    const visibleNodes = sorted.slice(0, DEFAULT_NODE_LIMIT);
+    const ids = new Set(visibleNodes.map(node => node.id));
+    const visibleEdges = edges.filter(edge => ids.has(edge.source) && ids.has(edge.target));
+    return { nodes: visibleNodes, edges: visibleEdges };
+  }
   function filtersHTML(){
     return `<div class="filters">
       <label>Course<input id="course" placeholder="과목"></label>
@@ -95,6 +109,7 @@
   function renderGraph(data){
     const nodes = Array.isArray(data.nodes) ? data.nodes : [];
     const edges = Array.isArray(data.edges) ? data.edges : [];
+    const visible = visibleGraph(nodes, edges);
     const stats = data.stats || {};
     const app = document.getElementById('app');
     app.className = 'grid';
@@ -104,11 +119,11 @@
         ${stat('total links', stats.edge_count || 0)}
         ${stat('weak concepts', stats.weak_concept_count || 0)}
         ${stat('recalled concepts', stats.recalled_concept_count || 0)}
-      </div>${filtersHTML()}</section>
-      <section><h2>Graph</h2><div id="graphWrap" class="graph-wrap">${nodes.length ? '<svg id="graphSvg"></svg>' : '<div class="empty">아직 표시할 Concept Graph가 없습니다. 자료를 업로드하고 개념 추출을 먼저 진행해 주세요.</div>'}</div></section>
+      </div><p class="sub">기본 화면은 복습 우선순위가 높은 노드 ${visible.nodes.length}개 / 전체 ${nodes.length}개를 표시합니다.</p>${filtersHTML()}</section>
+      <section><h2>Graph</h2><div id="graphWrap" class="graph-wrap">${visible.nodes.length ? '<svg id="graphSvg"></svg>' : '<div class="empty">아직 표시할 Concept Graph가 없습니다. 자료를 업로드하고 개념 추출을 먼저 진행해 주세요.</div>'}</div></section>
       <section><h2>Details</h2><div id="details" class="detail">노드를 클릭하면 상세 정보가 표시됩니다.</div></section>`;
     restoreFilters();
-    if(nodes.length) draw(nodes, edges);
+    if(visible.nodes.length) draw(visible.nodes, visible.edges);
   }
   function restoreFilters(){
     const params = window._graphFilters || {};
