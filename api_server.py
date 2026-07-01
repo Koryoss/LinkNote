@@ -1396,6 +1396,15 @@ async def auth_config() -> Dict[str, Any]:
     return {"google_client_id": GOOGLE_CLIENT_ID}
 
 
+@app.get("/health")
+async def health() -> Dict[str, Any]:
+    return {
+        "ok": True,
+        "version": app.version,
+        "routes": ["/auth/me", "/me/summary"],
+    }
+
+
 def _verify_google_idtoken(credential: str) -> Dict[str, Any]:
     url = "https://oauth2.googleapis.com/tokeninfo?id_token=" + _urlparse.quote(credential)
     with _urlreq.urlopen(url, timeout=10) as resp:

@@ -55,7 +55,8 @@
     <div id="app" class="empty">불러오는 중...</div>
   </main>
 <script>
-  const API = location.protocol.startsWith('http') ? '' : 'http://127.0.0.1:8000';
+  const configuredApi = window.LINKNOTE_API_BASE || localStorage.getItem('ln_api_base') || '';
+  const API = (configuredApi || (location.protocol.startsWith('http') ? '' : 'http://127.0.0.1:8000')).replace(/\/$/, '');
   const token = () => localStorage.getItem('ln_token') || '';
   const headers = () => token() ? { Authorization:'Bearer ' + token() } : {};
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -69,7 +70,7 @@
   async function getJSON(path){
     const r = await fetch(API + path, { headers: headers() });
     const d = await r.json().catch(()=>({}));
-    if(!r.ok) throw new Error(d.detail || 'HTTP ' + r.status);
+    if(!r.ok) throw new Error(`${path} returned ${r.status} ${d.detail || r.statusText}`);
     return d;
   }
   function logout(){ localStorage.removeItem('ln_token'); location.href='/'; }
