@@ -42,6 +42,8 @@ My Page and Learning Memory link to `web/concept-graph.html` instead of the gall
 
 The graph destination is read-only. It uses existing `data/concept_index.json`, `data/concept_links.json`, and recall metadata. Viewing the graph does not call GPT, OpenAI embeddings, reindex ChromaDB, or rebuild concept graph data.
 
+The default Concept Graph view caps visible nodes and prioritizes learner-useful node types: Weak, Core, Bridge, Recent, and Recalled. These types are computed in the frontend from existing degree, recall, missing-links, weak-score, and last-recalled metadata.
+
 ## PDF Preview Access
 
 `GET /file` accepts a query token because PDF iframe previews cannot attach custom request headers.
