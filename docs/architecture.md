@@ -18,6 +18,10 @@ Authorization token -> current_user/current_uid() -> data_user_id
 
 Frontend-provided `user_id` must not control protected data access. Any remaining `user_id` request fields are compatibility-only unless a route explicitly documents them as response/stored metadata.
 
+The active Gallery UI should not send `user_id` in protected API query strings, JSON bodies, or upload forms. Upload, question, recall, library, timetable, concept, and chunk requests should rely on the `Authorization` header. Hidden or displayed user labels in the frontend are presentation/legacy compatibility only and are not authority for data access.
+
+New protected features should not introduce frontend-provided `user_id` request fields. If a backend model keeps a `user_id` property for compatibility, it should be optional/deprecated and overwritten or ignored in favor of `current_uid()`.
+
 ## Question Modes
 
 The gallery question UI separates search from generated answers:

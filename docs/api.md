@@ -64,12 +64,12 @@ Important current-state note:
 
 ## Recall Trace Endpoints
 
-These endpoints intentionally use the existing lightweight `user_id` string and do not create a new auth/user database. Phase 1 trace save/list does not call OpenAI and works without `OPENAI_API_KEY`; `/recall-feedback` is the Phase 2 AI endpoint and returns a clear error when the key is unavailable.
+These endpoints use `Authorization` token -> `current_uid()` -> `data_user_id` for protected ownership. Legacy request/response fields named `user_id` are compatibility/storage metadata only and must not be supplied by the frontend to control access. Phase 1 trace save/list does not call OpenAI and works without `OPENAI_API_KEY`; `/recall-feedback` is the Phase 2 AI endpoint and returns a clear error when the key is unavailable.
 
 | Method | Path | Purpose |
 | --- | --- | --- |
 | `POST` | `/recall-traces` | Store a learner's explanation for a concept in `data/recall_traces.json`. |
-| `GET` | `/recall-traces` | List recent recall traces by `user_id`, `semester`, `course`, and `unit`; optional `concept` and `limit`. |
+| `GET` | `/recall-traces` | List recent recall traces for the authenticated user's `data_user_id`, filtered by `semester`, `course`, and `unit`; optional `concept` and `limit`. |
 | `POST` | `/recall-feedback` | Generate SCiyl-style directional AI feedback for a saved recall answer. Requires `OPENAI_API_KEY`. |
 
 
