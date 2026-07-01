@@ -1,12 +1,12 @@
 # Nursing Clinical Reflection
 
-This document describes a future nursing-practice learning mode for LinkNote users whose `student_track` is `nursing`.
+This document describes the first nursing-practice learning mode for LinkNote users whose `student_track` is `nursing`.
 
-Clinical Reflection is planned as an educational add-on. It must not change existing LinkNote features such as PDF upload, RAG question answering, concept extraction, concept graph, My Page, recall traces, or explanation feedback.
+Clinical Reflection is an educational add-on. It does not change existing LinkNote features such as PDF upload, RAG question answering, concept extraction, concept graph, My Page, recall traces, or explanation feedback.
 
 ## Purpose
 
-Nursing Clinical Reflection will help nursing students connect clinical practice experiences with previously learned concepts from their uploaded materials.
+Nursing Clinical Reflection helps nursing students connect de-identified clinical practice experiences with previously learned concepts from their uploaded materials.
 
 The goal is not to produce diagnosis, prognosis, treatment plans, medical orders, or clinical decision directives. The goal is to help a learner reflect on their reasoning and connect a practice situation back to study materials, concept graphs, and exam-relevant points.
 
@@ -25,36 +25,39 @@ Clinical Reflection:
 - connects symptoms, assessment data, nursing judgment, pathophysiology, pharmacology, nursing process, and exam points
 - links the reflection back to uploaded PDFs, RAG chunks, and concept graph data
 
-## Intended User Flow
+## Implemented User Flow
 
 1. Student enters a clinical practice situation.
-2. Student writes their own nursing reasoning or judgment.
-3. System retrieves related concepts/chunks from uploaded materials.
-4. System suggests linked concepts.
-5. System provides educational feedback.
-6. Reflection is saved as learning history.
-7. My Page summarizes clinical reflection activity.
+2. Student writes a learning goal or reasoning focus.
+3. System runs a rule-based identifier safety screen.
+4. System retrieves related concepts, chunks, and Learning Memory records from the current user's materials.
+5. Student explicitly submits the reflection, then GPT generates educational feedback.
+6. Reflection is saved as learning history only after feedback succeeds.
+7. My Page links nursing users to Clinical Reflection and shows recent saved reflection count.
 
-## Proposed Data Model
+## Data Model
 
 ```json
 {
   "id": "...",
   "user_id": "<server-derived data_user_id>",
-  "date": "...",
-  "course": "성인간호학 실습",
-  "clinical_area": "...",
-  "patient_context": "...",
-  "student_reasoning": "...",
-  "linked_concepts": [],
+  "student_track": "nursing",
+  "situation_text": "...",
+  "learning_goal": "...",
+  "selected_course": "성인간호학 실습",
+  "selected_unit": "...",
+  "related_concepts": [],
   "related_sources": [],
   "feedback": {
-    "good_points": [],
-    "missed_connections": [],
-    "clinical_cues_to_check": [],
-    "exam_connections": [],
-    "followup_question": ""
+    "knowledge_connections": [],
+    "nursing_process_links": [],
+    "missed_assessment_cues": [],
+    "safe_next_questions": [],
+    "review_focus": [],
+    "source_hints": [],
+    "educational_summary": ""
   },
+  "safety_flags": [],
   "created_at": "..."
 }
 ```
@@ -65,37 +68,46 @@ Ownership rule:
 - Future APIs must always use `Authorization` token -> `current_user` / `current_uid()` -> `data_user_id`.
 - General users must not receive access to nursing-only reflection records unless their profile is explicitly changed to `student_track = "nursing"`.
 
-## Future API Plan
+## API
 
-These endpoints are design targets only. They are not implemented yet.
+Implemented endpoints:
 
-- `POST /clinical-reflections`
+- `POST /clinical-reflection`
 - `GET /clinical-reflections`
-- `POST /clinical-reflections/feedback`
 
-The future API should reuse existing LinkNote ownership rules and should not accept frontend-provided `user_id` as an authority for protected data access.
+Both endpoints require a logged-in nursing user. They reuse existing LinkNote ownership rules and do not accept frontend-provided `user_id` as an authority for protected data access.
+
+`POST /clinical-reflection` calls GPT only after:
+
+1. authentication passes
+2. `student_track == "nursing"`
+3. `situation_text` is non-empty
+4. the identifier safety screen passes
+5. related current-user sources are retrieved
+
+`GET /clinical-reflections` reads saved records only and does not call GPT.
 
 ## Feedback Format
 
-Future feedback should include:
+Feedback includes:
 
-1. 잘 연결한 점
-2. 놓친 개념
-3. 확인해야 할 임상 단서
-4. 시험 연결 포인트
-5. 다시 생각해볼 질문
+1. `knowledge_connections`
+2. `nursing_process_links`
+3. `missed_assessment_cues`
+4. `safe_next_questions`
+5. `review_focus`
+6. `source_hints`
+7. `educational_summary`
 
-## My Page Future Summary
+## My Page Summary
 
-Future My Page nursing fields may include:
+My Page shows a nursing-only Clinical Reflection card with:
 
-- `clinical_reflection_count`
-- `last_clinical_reflection_at`
-- `frequently_linked_concepts`
-- `weak_clinical_concepts`
-- `recent_clinical_reflections`
+- saved reflection count from recent records
+- latest reflection date
+- link to `web/clinical-reflection.html`
 
-These fields should be added only when the reflection storage/API layer exists.
+Future versions may add deeper summaries such as frequently linked concepts and weak clinical concepts.
 
 ## Safety / Privacy Notice
 
@@ -113,16 +125,14 @@ This feature is for learning reflection only. It does not replace clinical judgm
 
 The system should provide educational feedback, not medical orders or clinical decision directives.
 
-## Current PR Boundary
+## Current Boundary
 
-This PR intentionally does not add:
+The first implementation intentionally does not add:
 
-- `POST /clinical-reflections`
-- `GET /clinical-reflections`
-- `POST /clinical-reflections/feedback`
-- AI clinical feedback generation
-- patient data storage
-- a full Clinical Reflection page
 - clinical decision support behavior
+- diagnosis, prognosis, treatment, prescription, or clinical order generation
+- patient-identifiable data collection
+- automatic GPT calls on page load
+- access for non-nursing users
 
-The current UI only exposes a nursing-only placeholder entry point for future work.
+The UI exposes a nursing-only Clinical Reflection page. Page load and history viewing do not call GPT; feedback generation calls GPT only when the student submits a reflection.

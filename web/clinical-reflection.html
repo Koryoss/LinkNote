@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LinkNote · Clinical Reflection</title>
+<style>
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { font-family:-apple-system,"Apple SD Gothic Neo","Malgun Gothic",sans-serif; background:#fbfcfe; color:#1f2937; }
+  .topbar { position:sticky; top:0; z-index:20; display:flex; align-items:center; gap:10px; padding:12px 24px; background:rgba(255,255,255,.94); backdrop-filter:blur(6px); border-bottom:1px solid #eef1f6; }
+  .brand { font-size:1.18rem; font-weight:800; color:#1e293b; text-decoration:none; }
+  .spacer { flex:1; }
+  .btn, button { border:1px solid #d8dee9; background:#fff; color:#2563eb; border-radius:8px; padding:8px 12px; font-size:.84rem; font-weight:700; text-decoration:none; cursor:pointer; }
+  .btn.primary, button.primary { background:#2563eb; border-color:#2563eb; color:#fff; }
+  main { width:min(1120px, calc(100vw - 32px)); margin:24px auto 44px; }
+  h1 { font-size:1.55rem; color:#0f172a; }
+  h2 { font-size:1rem; margin-bottom:12px; color:#1e293b; }
+  h3 { font-size:.96rem; margin-bottom:6px; color:#0f172a; }
+  .sub { margin-top:6px; color:#64748b; font-size:.9rem; line-height:1.55; }
+  .grid { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:16px; margin-top:18px; }
+  section { background:#fff; border:1px solid #e8ebf2; border-radius:14px; padding:18px; box-shadow:0 8px 24px rgba(15,23,42,.06); }
+  section.wide { grid-column:1/-1; }
+  .notice { border:1px solid #fde68a; background:#fffbeb; color:#92400e; border-radius:12px; padding:12px 13px; font-size:.87rem; line-height:1.6; }
+  .cost { border-color:#dbeafe; background:#eff6ff; color:#1e40af; margin-top:10px; }
+  label { display:block; color:#64748b; font-size:.78rem; font-weight:800; margin-top:10px; }
+  textarea, input { width:100%; border:1px solid #d8dee9; border-radius:10px; padding:10px 12px; font-size:.9rem; line-height:1.5; margin-top:5px; background:#fff; }
+  textarea { min-height:132px; resize:vertical; }
+  .form-grid { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:10px; }
+  .actions { display:flex; flex-wrap:wrap; gap:8px; margin-top:12px; align-items:center; }
+  .status { color:#64748b; font-size:.84rem; }
+  .error { border:1px solid #fecaca; color:#b91c1c; background:#fff7f7; border-radius:12px; padding:14px; margin-top:14px; }
+  .item { border:1px solid #eef1f6; border-radius:12px; padding:12px 13px; background:#f8fafc; font-size:.86rem; line-height:1.55; margin-top:10px; }
+  .item small { display:block; color:#94a3b8; margin-bottom:7px; }
+  ul { margin:8px 0 0 18px; line-height:1.55; }
+  .chips { display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; }
+  .chip { border:1px solid #bfdbfe; background:#eff6ff; color:#1d4ed8; border-radius:999px; padding:3px 8px; font-size:.74rem; font-weight:700; }
+  @media (max-width:760px){ .grid,.form-grid{grid-template-columns:1fr;} }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <a class="brand" href="/">LinkNote</a>
+    <span class="spacer"></span>
+    <a class="btn" href="/">Gallery</a>
+    <a class="btn" href="/mypage.html">My Page</a>
+  </div>
+  <main>
+    <h1>실습 회고 · Clinical Reflection</h1>
+    <p class="sub">비식별 실습 상황을 내 업로드 자료와 개념에 연결해 교육용 피드백을 생성합니다.</p>
+    <div id="app" class="grid">
+      <section class="wide"><div class="notice">불러오는 중...</div></section>
+    </div>
+  </main>
+<script>
+  const configuredApi = window.LINKNOTE_API_BASE || localStorage.getItem('ln_api_base') || '';
+  const API = (configuredApi || (location.protocol.startsWith('http') ? '' : 'http://127.0.0.1:8000')).replace(/\/$/, '');
+  const token = () => localStorage.getItem('ln_token') || '';
+  const headers = () => token() ? { Authorization:'Bearer ' + token() } : {};
+  const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const dateText = (v) => {
+    if(!v) return '-';
+    const d = new Date(v);
+    return Number.isNaN(d.getTime()) ? String(v) : d.toLocaleString('ko-KR');
+  };
+  async function getJSON(path){
+    const r = await fetch(API + path, { headers: headers() });
+    const d = await r.json().catch(()=>({}));
+    if(!r.ok) throw new Error(`${path} returned ${r.status} ${d.detail || r.statusText}`);
+    return d;
+  }
+  async function postJSON(path, body){
+    const r = await fetch(API + path, {
+      method:'POST',
+      headers:{ ...headers(), 'Content-Type':'application/json' },
+      body:JSON.stringify(body || {})
+    });
+    const d = await r.json().catch(()=>({}));
+    if(!r.ok) throw new Error(`${path} returned ${r.status} ${d.detail || r.statusText}`);
+    return d;
+  }
+  const list = (items) => Array.isArray(items) && items.length
+    ? `<ul>${items.map(item => `<li>${esc(item)}</li>`).join('')}</ul>`
+    : '<p class="sub">표시할 항목이 없습니다.</p>';
+  const chips = (items) => Array.isArray(items) && items.length
+    ? `<div class="chips">${items.map(item => `<span class="chip">${esc(item.concept || item.filename || item.course || item)}</span>`).join('')}</div>`
+    : '<p class="sub">연결된 항목이 없습니다.</p>';
+  function feedbackHTML(feedback){
+    const f = feedback || {};
+    return `<div class="item">
+      <h3>교육용 피드백</h3>
+      <p>${esc(f.educational_summary || '')}</p>
+      <p class="sub">Knowledge Connections</p>${list(f.knowledge_connections || [])}
+      <p class="sub">Nursing Process Links</p>${list(f.nursing_process_links || [])}
+      <p class="sub">Missed Assessment Cues</p>${list(f.missed_assessment_cues || [])}
+      <p class="sub">Safe Next Questions</p>${list(f.safe_next_questions || [])}
+      <p class="sub">Review Focus</p>${list(f.review_focus || [])}
+      <p class="sub">Source Hints</p>${list(f.source_hints || [])}
+    </div>`;
+  }
+  function reflectionCard(item){
+    return `<div class="item">
+      <small>${esc(dateText(item.created_at))} · ${esc(item.selected_course || '과목 미선택')} · ${esc(item.selected_unit || '단원 미선택')}</small>
+      <h3>${esc(item.learning_goal || '학습 목표 미입력')}</h3>
+      <p>${esc(item.situation_text || '')}</p>
+      ${feedbackHTML(item.feedback)}
+      <p class="sub">Related Concepts</p>${chips(item.related_concepts || [])}
+      <p class="sub">Related Sources</p>${chips(item.related_sources || [])}
+    </div>`;
+  }
+  function renderPage(reflections){
+    const app = document.getElementById('app');
+    const items = Array.isArray(reflections?.items) ? reflections.items : [];
+    app.className = 'grid';
+    app.innerHTML = `
+      <section class="wide">
+        <h2>Safety Notice</h2>
+        <div class="notice">환자 이름, 등록번호, 병실, 주민번호, 전화번호 등 식별 정보를 입력하지 마세요. 이 기능은 교육용 회고이며 임상 판단을 대신하지 않습니다.</div>
+        <div class="notice cost">AI 피드백 생성 시 GPT 호출이 발생합니다. 제출 버튼을 누르기 전에는 GPT를 호출하지 않습니다.</div>
+      </section>
+      <section class="wide">
+        <h2>Reflection Input</h2>
+        <label>실습 상황<textarea id="situation" placeholder="식별 정보를 제거하고 실습에서 헷갈렸던 상황을 적어주세요."></textarea></label>
+        <label>오늘 연결하고 싶은 학습 목표<input id="goal" placeholder="예: ABGA와 산소요법을 병태생리와 연결하기"></label>
+        <div class="form-grid">
+          <label>과목 선택 optional<input id="course" placeholder="예: 성인간호학"></label>
+          <label>단원 선택 optional<input id="unit" placeholder="예: 호흡기"></label>
+        </div>
+        <div class="actions"><button class="primary" onclick="submitReflection()">교육용 피드백 생성</button><span id="status" class="status"></span></div>
+        <div id="result"></div>
+      </section>
+      <section class="wide">
+        <h2>Recent Reflections</h2>
+        <div id="recent">${items.length ? items.map(reflectionCard).join('') : '<div class="item">저장된 실습 회고가 없습니다.</div>'}</div>
+      </section>`;
+  }
+  async function submitReflection(){
+    const status = document.getElementById('status');
+    const result = document.getElementById('result');
+    const body = {
+      situation_text: document.getElementById('situation').value.trim(),
+      learning_goal: document.getElementById('goal').value.trim(),
+      selected_course: document.getElementById('course').value.trim() || null,
+      selected_unit: document.getElementById('unit').value.trim() || null,
+      mode: 'reflection'
+    };
+    status.textContent = '교육용 피드백 생성 중... API 비용이 발생할 수 있습니다.';
+    result.innerHTML = '';
+    try {
+      const saved = await postJSON('/clinical-reflection', body);
+      status.textContent = '저장했습니다.';
+      result.innerHTML = feedbackHTML(saved.feedback);
+      document.getElementById('situation').value = '';
+      await loadReflections();
+    } catch(e) {
+      status.textContent = '';
+      result.innerHTML = `<div class="error">Clinical Reflection을 생성하지 못했습니다: ${esc(e.message)}</div>`;
+    }
+  }
+  async function loadReflections(){
+    const reflections = await getJSON('/clinical-reflections?limit=20');
+    renderPage(reflections);
+  }
+  async function init(){
+    const app = document.getElementById('app');
+    if(!token()) { app.innerHTML = '<section class="wide"><div class="error">로그인이 필요합니다. Gallery에서 먼저 로그인해주세요.</div></section>'; return; }
+    try {
+      const me = await getJSON('/auth/me');
+      const user = me.user || {};
+      if((user.student_track || 'general') !== 'nursing'){
+        app.innerHTML = '<section class="wide"><div class="notice">Clinical Reflection은 간호학과 학습 트랙 사용자에게 제공됩니다.</div><p class="sub">기존 LinkNote 기능은 그대로 사용할 수 있습니다.</p></section>';
+        return;
+      }
+      await loadReflections();
+    } catch(e) {
+      app.innerHTML = `<section class="wide"><div class="error">Clinical Reflection을 불러오지 못했습니다: ${esc(e.message)}</div></section>`;
+    }
+  }
+  init();
+</script>
+</body>
+</html>

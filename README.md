@@ -12,26 +12,26 @@ The current project is focused on stabilizing a single-user/local evaluation flo
 LinkNote user accounts include a lightweight `student_track` profile field. Allowed values are:
 
 - `general`: default mode for existing users and ordinary study workflows.
-- `nursing`: additive mode for nursing students who may later use nursing-practice learning tools.
+- `nursing`: additive mode for nursing students who can use nursing-practice learning tools.
 
 Existing users without `student_track` are treated as `general`. New email/password users can choose 일반 or 간호학과 during signup. Google signup currently defaults to `general`; profile editing can be added later. This field does not change `data_user_id`, ChromaDB ownership, PDF upload, RAG, concept extraction, concept graph, My Page, or explanation feedback behavior.
 
-## Nursing Practice Mode — Planned
+## Nursing Practice Mode
 
-For users with `student_track = "nursing"`, LinkNote plans to add Clinical Reflection, a practice-oriented learning mode that connects clinical situations to previously uploaded study materials and concept graphs.
+For users with `student_track = "nursing"`, LinkNote includes the first Clinical Reflection mode, a practice-oriented learning mode that connects de-identified clinical situations to previously uploaded study materials and concept graphs.
 
-This mode is planned, not fully implemented. It is additive to existing LinkNote behavior and does not change general user workflows.
+This mode is additive to existing LinkNote behavior and does not change general user workflows.
 
-Nursing students may eventually get additional educational tools:
+Nursing students can start using:
 
 - Clinical Reflection
 - practice situation input
-- nursing reasoning feedback
+- nursing reasoning feedback for educational reflection
 - links to prior concepts from uploaded materials
-- exam connection points
-- My Page nursing practice summary
+- review focus and safe follow-up questions
+- My Page nursing practice entry point
 
-Clinical Reflection must be educational only. Users must not enter patient-identifying information such as patient name, resident number, hospital ID, phone number, exact room number, or other personal identifiers. This feature does not replace clinical judgment, instructor guidance, or hospital policy.
+Clinical Reflection is educational only. Users must not enter patient-identifying information such as patient name, resident number, hospital ID, phone number, exact room number, or other personal identifiers. The backend blocks common identifier-like patterns before retrieval or GPT calls. This feature does not replace clinical judgment, instructor guidance, or hospital policy, and it must not generate diagnosis, treatment orders, medication instructions, or clinical decision-making advice.
 
 See [Nursing Clinical Reflection](docs/nursing-clinical-reflection.md).
 
@@ -43,6 +43,7 @@ Current frontend entry points:
 
 - `web/gallery.html` is the main UI served at `/`.
 - `web/mypage.html` is the read-only My Page.
+- `web/clinical-reflection.html` is the nursing-only Clinical Reflection page.
 - `web/learning-memory.html` is the read-only Learning Memory page for review reuse.
 - `web/app.js` is a legacy experimental frontend and should not be used for authenticated production flow.
 - Protected APIs derive data ownership from `Authorization` token -> `data_user_id`, not from frontend-provided `user_id`.

@@ -42,6 +42,7 @@ TIMETABLE_PATH = os.path.join(DATA_DIR, "timetable.json")
 CONCEPTS_PATH = os.path.join(DATA_DIR, "concepts.json")
 RECALL_TRACES_PATH = os.path.join(DATA_DIR, "recall_traces.json")
 LEARNING_MEMORY_SUMMARIES_PATH = os.path.join(DATA_DIR, "learning_memory_summaries.json")
+CLINICAL_REFLECTIONS_PATH = os.path.join(DATA_DIR, "clinical_reflections.json")
 SEARCH_CACHE_PATH = os.path.join(DATA_DIR, "search_cache.json")
 CONCEPT_INDEX_PATH = os.path.join(DATA_DIR, "concept_index.json")
 CONCEPT_LINKS_PATH = os.path.join(DATA_DIR, "concept_links.json")
@@ -240,6 +241,17 @@ def _save_learning_memory_summaries(items: List[Dict[str, Any]]) -> None:
         json.dump(items, f, ensure_ascii=False, indent=2)
 
 
+def _load_clinical_reflections() -> List[Dict[str, Any]]:
+    data = _load_json_file(CLINICAL_REFLECTIONS_PATH)
+    return data if isinstance(data, list) else []
+
+
+def _save_clinical_reflections(items: List[Dict[str, Any]]) -> None:
+    os.makedirs(os.path.dirname(CLINICAL_REFLECTIONS_PATH), exist_ok=True)
+    with open(CLINICAL_REFLECTIONS_PATH, "w", encoding="utf-8") as f:
+        json.dump(items, f, ensure_ascii=False, indent=2)
+
+
 def _load_recall_feedback_prompt() -> str:
     try:
         with open(RECALL_FEEDBACK_PROMPT_PATH, "r", encoding="utf-8") as f:
@@ -394,6 +406,43 @@ class LearningMemoryAiSummaryResponse(BaseModel):
 
 
 class LearningMemoryAiSummariesResponse(BaseModel):
+    items: List[Dict[str, Any]]
+
+
+class ClinicalReflectionRequest(BaseModel):
+    situation_text: str
+    learning_goal: str = ""
+    selected_course: Optional[str] = None
+    selected_unit: Optional[str] = None
+    mode: Optional[str] = "reflection"
+
+
+class ClinicalReflectionFeedback(BaseModel):
+    knowledge_connections: List[str]
+    nursing_process_links: List[str]
+    missed_assessment_cues: List[str]
+    safe_next_questions: List[str]
+    review_focus: List[str]
+    source_hints: List[str]
+    educational_summary: str
+
+
+class ClinicalReflectionResponse(BaseModel):
+    id: str
+    user_id: str
+    student_track: str
+    situation_text: str
+    learning_goal: str
+    selected_course: Optional[str] = None
+    selected_unit: Optional[str] = None
+    related_concepts: List[Dict[str, Any]]
+    related_sources: List[Dict[str, Any]]
+    feedback: ClinicalReflectionFeedback
+    safety_flags: List[str]
+    created_at: str
+
+
+class ClinicalReflectionListResponse(BaseModel):
     items: List[Dict[str, Any]]
 
 
@@ -992,6 +1041,138 @@ def _public_ai_summary_record(item: Dict[str, Any]) -> Dict[str, Any]:
         "weak_concepts": [str(x) for x in item.get("weak_concepts", []) if str(x).strip()] if isinstance(item.get("weak_concepts"), list) else [],
         "suggested_questions": [str(x) for x in item.get("suggested_questions", []) if str(x).strip()] if isinstance(item.get("suggested_questions"), list) else [],
         "source_memory_ids": [str(x) for x in item.get("source_memory_ids", []) if str(x).strip()] if isinstance(item.get("source_memory_ids"), list) else [],
+        "created_at": str(item.get("created_at") or ""),
+    }
+
+
+_CLINICAL_IDENTIFIER_PATTERNS = [
+    ("resident_id", re.compile(r"\b\d{6}[- ]?[1-4]\d{6}\b")),
+    ("phone_number", re.compile(r"\b(?:01[016789]|02|0[3-6][1-5])[- ]?\d{3,4}[- ]?\d{4}\b")),
+    ("registration_number", re.compile(r"(?:등록번호|환자번호|병원번호|hospital\s*id|patient\s*id)\s*[:：]?\s*[A-Za-z0-9-]{4,}", re.I)),
+    ("patient_name_label", re.compile(r"(?:환자명|이름|성명|patient\s*name)\s*[:：]\s*\S+", re.I)),
+    ("room_number", re.compile(r"(?:병실|호실|room)\s*[:：]?\s*\d{2,4}\s*(?:호|번|room)?", re.I)),
+    ("date_of_birth", re.compile(r"(?:생년월일|date\s*of\s*birth|dob)\s*[:：]?\s*\d{2,4}[-./년 ]\d{1,2}[-./월 ]\d{1,2}", re.I)),
+    ("address", re.compile(r"(?:주소|address)\s*[:：]\s*\S+", re.I)),
+]
+
+
+def _clinical_safety_flags(text: str) -> List[str]:
+    flags = []
+    for name, pattern in _CLINICAL_IDENTIFIER_PATTERNS:
+        if pattern.search(text or ""):
+            flags.append(name)
+    return flags
+
+
+def _require_nursing_user(user: Dict[str, Any]) -> str:
+    track = str(_auth.public_user(user).get("student_track") or "general")
+    if track != "nursing":
+        raise HTTPException(status_code=403, detail="Clinical Reflection is available for nursing students.")
+    return track
+
+
+def _clinical_search_filter(payload: ClinicalReflectionRequest) -> Dict[str, str]:
+    search_filter: Dict[str, str] = {}
+    if payload.selected_course and payload.selected_course.strip():
+        search_filter["course"] = payload.selected_course.strip()
+    if payload.selected_unit and payload.selected_unit.strip():
+        search_filter["unit"] = payload.selected_unit.strip()
+    return search_filter
+
+
+def _clinical_related_context(
+    user_id: str,
+    payload: ClinicalReflectionRequest,
+) -> tuple[List[Dict[str, Any]], List[Dict[str, Any]], List[Dict[str, Any]]]:
+    text = " ".join([
+        payload.situation_text,
+        payload.learning_goal or "",
+        payload.selected_course or "",
+        payload.selected_unit or "",
+    ])
+    tokens = _tokens(text)
+    search_filter = _clinical_search_filter(payload)
+    scope = "single" if search_filter else "multi"
+    related_concepts = _search_related_concepts(user_id, tokens, search_filter, scope, limit=8)
+    related_sources = _search_sources(user_id, tokens, search_filter, scope, limit=6)
+    memory_matches = _search_learning_memory(user_id, tokens, search_filter, scope, limit=5)
+    return related_concepts, related_sources, memory_matches
+
+
+def _format_clinical_context(
+    related_concepts: List[Dict[str, Any]],
+    related_sources: List[Dict[str, Any]],
+    memory_matches: List[Dict[str, Any]],
+) -> str:
+    concepts = "\n".join(
+        f"- {item.get('concept', '')} ({item.get('course', '')} · {item.get('unit', '')})"
+        for item in related_concepts
+    ) or "- 관련 개념 없음"
+    sources = "\n".join(
+        (
+            f"- {item.get('course', '')} · {item.get('unit', '')} · "
+            f"{item.get('filename', '')} p.{item.get('page', '')}: "
+            f"{str(item.get('chunk_preview', ''))[:500]}"
+        )
+        for item in related_sources
+    ) or "- 관련 자료 없음"
+    memories = "\n".join(
+        (
+            f"- {item.get('concept', '')} ({item.get('course', '')} · {item.get('unit', '')}): "
+            f"{str(item.get('improved_summary') or item.get('answer_preview') or '')[:350]}"
+        )
+        for item in memory_matches
+    ) or "- 관련 Learning Memory 없음"
+    return f"[Related concepts]\n{concepts}\n\n[Related uploaded sources]\n{sources}\n\n[Related Learning Memory]\n{memories}"
+
+
+def _build_clinical_reflection_prompt(
+    payload: ClinicalReflectionRequest,
+    related_concepts: List[Dict[str, Any]],
+    related_sources: List[Dict[str, Any]],
+    memory_matches: List[Dict[str, Any]],
+) -> str:
+    return f"""You are LinkNote's Nursing Clinical Reflection learning assistant.
+This is educational reflection only. Do not provide medical diagnosis, prognosis, treatment orders, medication instructions, clinical orders, or patient-specific decision-making advice.
+Use cautious language. Encourage the learner to ask a clinical instructor, preceptor, or hospital policy source for patient-specific decisions.
+Use only the de-identified reflection and retrieved study context below.
+Return JSON only with keys: knowledge_connections, nursing_process_links, missed_assessment_cues, safe_next_questions, review_focus, source_hints, educational_summary.
+
+[Student reflection]
+situation_text: {payload.situation_text.strip()}
+learning_goal: {(payload.learning_goal or '').strip()}
+selected_course: {(payload.selected_course or '').strip()}
+selected_unit: {(payload.selected_unit or '').strip()}
+
+{_format_clinical_context(related_concepts, related_sources, memory_matches)}
+"""
+
+
+def _normalize_clinical_feedback(payload: Dict[str, Any]) -> ClinicalReflectionFeedback:
+    return ClinicalReflectionFeedback(
+        knowledge_connections=_list_of_strings_from_payload(payload, "knowledge_connections", 8),
+        nursing_process_links=_list_of_strings_from_payload(payload, "nursing_process_links", 8),
+        missed_assessment_cues=_list_of_strings_from_payload(payload, "missed_assessment_cues", 8),
+        safe_next_questions=_list_of_strings_from_payload(payload, "safe_next_questions", 8),
+        review_focus=_list_of_strings_from_payload(payload, "review_focus", 8),
+        source_hints=_list_of_strings_from_payload(payload, "source_hints", 8),
+        educational_summary=str(payload.get("educational_summary") or "").strip()
+        or "실습 상황을 업로드 자료와 연결해 복습해보세요. 환자별 판단은 담당 지도자와 확인해야 합니다.",
+    )
+
+
+def _public_clinical_reflection(item: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        "id": str(item.get("id") or ""),
+        "student_track": str(item.get("student_track") or "nursing"),
+        "situation_text": str(item.get("situation_text") or ""),
+        "learning_goal": str(item.get("learning_goal") or ""),
+        "selected_course": item.get("selected_course"),
+        "selected_unit": item.get("selected_unit"),
+        "related_concepts": item.get("related_concepts") if isinstance(item.get("related_concepts"), list) else [],
+        "related_sources": item.get("related_sources") if isinstance(item.get("related_sources"), list) else [],
+        "feedback": item.get("feedback") if isinstance(item.get("feedback"), dict) else {},
+        "safety_flags": item.get("safety_flags") if isinstance(item.get("safety_flags"), list) else [],
         "created_at": str(item.get("created_at") or ""),
     }
 
@@ -2016,6 +2197,83 @@ async def learning_memory_ai_summaries(
     return LearningMemoryAiSummariesResponse(items=items[:safe_limit])
 
 
+@app.post("/clinical-reflection", response_model=ClinicalReflectionResponse)
+async def clinical_reflection(
+    payload: ClinicalReflectionRequest,
+    user: Dict[str, Any] = Depends(current_user),
+) -> ClinicalReflectionResponse:
+    student_track = _require_nursing_user(user)
+    data_user_id = user.get("data_user_id") or user["email"]
+    situation_text = payload.situation_text.strip()
+    if not situation_text:
+        raise HTTPException(status_code=400, detail="실습 상황을 입력해주세요.")
+
+    safety_flags = _clinical_safety_flags(situation_text)
+    if safety_flags:
+        raise HTTPException(
+            status_code=400,
+            detail="환자 식별 정보가 포함될 수 있습니다. 이름, 등록번호, 병실, 주민번호, 전화번호 등은 제거하고 다시 입력해 주세요.",
+        )
+
+    if not os.getenv("OPENAI_API_KEY"):
+        raise HTTPException(status_code=503, detail="Clinical Reflection AI feedback is not configured.")
+
+    related_concepts, related_sources, memory_matches = _clinical_related_context(data_user_id, payload)
+    prompt = _build_clinical_reflection_prompt(payload, related_concepts, related_sources, memory_matches)
+    try:
+        raw_feedback = generate_openai_answer(prompt, max_tokens=900)
+        feedback = _normalize_clinical_feedback(_extract_json_object(raw_feedback))
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Clinical Reflection feedback 생성에 실패했습니다: {exc}") from exc
+
+    created_at = datetime.now(timezone.utc).isoformat()
+    record = {
+        "id": uuid.uuid4().hex,
+        "user_id": data_user_id,
+        "student_track": student_track,
+        "situation_text": situation_text,
+        "learning_goal": (payload.learning_goal or "").strip(),
+        "selected_course": (payload.selected_course or "").strip() or None,
+        "selected_unit": (payload.selected_unit or "").strip() or None,
+        "related_concepts": related_concepts,
+        "related_sources": related_sources,
+        "feedback": _model_to_dict(feedback),
+        "safety_flags": [],
+        "created_at": created_at,
+    }
+    reflections = _load_clinical_reflections()
+    reflections.append(record)
+    _save_clinical_reflections(reflections)
+    return ClinicalReflectionResponse(**record)
+
+
+@app.get("/clinical-reflections", response_model=ClinicalReflectionListResponse)
+async def clinical_reflections(
+    limit: int = 20,
+    course: Optional[str] = None,
+    unit: Optional[str] = None,
+    user: Dict[str, Any] = Depends(current_user),
+) -> ClinicalReflectionListResponse:
+    _require_nursing_user(user)
+    data_user_id = user.get("data_user_id") or user["email"]
+    course_filter = (course or "").strip()
+    unit_filter = (unit or "").strip()
+    safe_limit = max(1, min(limit, 100))
+    items = []
+    for item in _load_clinical_reflections():
+        if not isinstance(item, dict) or item.get("user_id") != data_user_id:
+            continue
+        if course_filter and str(item.get("selected_course") or "") != course_filter:
+            continue
+        if unit_filter and str(item.get("selected_unit") or "") != unit_filter:
+            continue
+        items.append(_public_clinical_reflection(item))
+    items.sort(key=lambda x: str(x.get("created_at") or ""), reverse=True)
+    return ClinicalReflectionListResponse(items=items[:safe_limit])
+
+
 # ============== 계정 / 인증 (Stage C-1) ==============
 from fastapi import Header
 import auth as _auth
@@ -2098,6 +2356,8 @@ async def health() -> Dict[str, Any]:
             "/learning-memory/summary",
             "/learning-memory/ai-summary",
             "/learning-memory/ai-summaries",
+            "/clinical-reflection",
+            "/clinical-reflections",
             "/ask/search",
         ],
     }
