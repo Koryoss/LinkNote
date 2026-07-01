@@ -1181,7 +1181,7 @@
     try {
       const r = await fetch(API + "/recall-feedback", {
         method:"POST",
-        headers:{"Content-Type":"application/json"},
+        headers: authHeaders({"Content-Type":"application/json"}),
         body:JSON.stringify({
           user_id: trace.user_id,
           semester: trace.semester,
@@ -1221,7 +1221,7 @@
     try {
       const r = await fetch(API + "/recall-traces", {
         method:"POST",
-        headers:{"Content-Type":"application/json"},
+        headers: authHeaders({"Content-Type":"application/json"}),
         body:JSON.stringify(body),
       });
       const d = await r.json().catch(()=>({}));
@@ -1592,7 +1592,7 @@
       let url, body;
       if(mode==='register'){
         url = API+'/auth/register';
-        body = { email, password:pw, display_name:document.getElementById('au_name').value.trim(), link_user_id:(document.getElementById('au_link')?document.getElementById('au_link').value.trim():'') };
+        body = { email, password:pw, display_name:document.getElementById('au_name').value.trim() };
       } else {
         url = API+'/auth/login'; body = { email, password:pw };
       }
@@ -1631,9 +1631,7 @@
   async function onGoogleCredential(resp){
     const st=document.getElementById('au_status'); st.style.color='#2563eb'; st.textContent='Google 로그인 중…';
     try{
-      const linkEl=document.getElementById('au_link');
-      const link = linkEl ? linkEl.value.trim() : '';
-      const r=await fetch(API+'/auth/google',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({credential:resp.credential, link_user_id:link})});
+      const r=await fetch(API+'/auth/google',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({credential:resp.credential})});
       const d=await r.json();
       if(!r.ok){ st.style.color='#ef4444'; st.textContent=(d.detail||'실패'); return; }
       localStorage.setItem('ln_token', d.token); setSession(d.user);

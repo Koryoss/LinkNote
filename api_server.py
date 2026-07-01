@@ -79,7 +79,7 @@ class SearchFilter(BaseModel):
 
 
 class AskRequest(BaseModel):
-    user_id: str
+    user_id: Optional[str] = None
     question: str
     mode: Optional[str] = "single"
     search_filter: Optional[SearchFilter] = None
@@ -128,7 +128,7 @@ class TimetableResponse(BaseModel):
 
 
 class DeleteLibraryPayload(BaseModel):
-    user_id: str
+    user_id: Optional[str] = None
     search_filter: Optional[SearchFilter] = None
 
 
@@ -285,7 +285,7 @@ class TimetableEntry(BaseModel):
 
 
 class RecallTraceCreate(BaseModel):
-    user_id: str
+    user_id: Optional[str] = None
     semester: str
     course: str
     unit: str
@@ -316,7 +316,7 @@ class RecallTraceListResponse(BaseModel):
 
 
 class RecallFeedbackRequest(BaseModel):
-    user_id: str
+    user_id: Optional[str] = None
     semester: str
     course: str
     unit: str
@@ -745,8 +745,11 @@ async def concepts(semester: str, course: str, unit: str, data_user_id: str = De
 
 
 @app.post("/recall-traces", response_model=RecallTraceResponse)
-async def create_recall_trace(payload: RecallTraceCreate) -> RecallTraceResponse:
-    user_id = payload.user_id.strip()
+async def create_recall_trace(
+    payload: RecallTraceCreate,
+    data_user_id: str = Depends(current_uid),
+) -> RecallTraceResponse:
+    user_id = data_user_id
     semester = payload.semester.strip()
     course = payload.course.strip()
     unit = payload.unit.strip()
@@ -777,15 +780,15 @@ async def create_recall_trace(payload: RecallTraceCreate) -> RecallTraceResponse
 
 @app.get("/recall-traces", response_model=RecallTraceListResponse)
 async def recall_traces(
-    user_id: str,
     semester: str,
     course: str,
     unit: str,
     concept: Optional[str] = None,
     limit: int = 20,
+    data_user_id: str = Depends(current_uid),
 ) -> RecallTraceListResponse:
     filters = {
-        "user_id": user_id.strip(),
+        "user_id": data_user_id,
         "semester": semester.strip(),
         "course": course.strip(),
         "unit": unit.strip(),
@@ -810,14 +813,17 @@ async def recall_traces(
 
 
 @app.post("/recall-feedback", response_model=RecallFeedbackResponse)
-async def recall_feedback(payload: RecallFeedbackRequest) -> RecallFeedbackResponse:
+async def recall_feedback(
+    payload: RecallFeedbackRequest,
+    data_user_id: str = Depends(current_uid),
+) -> RecallFeedbackResponse:
     if not os.getenv("OPENAI_API_KEY"):
         raise HTTPException(
             status_code=503,
             detail="OPENAI_API_KEY가 설정되지 않아 recall feedback을 생성할 수 없습니다.",
         )
 
-    user_id = payload.user_id.strip()
+    user_id = data_user_id
     semester = payload.semester.strip()
     course = payload.course.strip()
     unit = payload.unit.strip()
@@ -864,7 +870,8 @@ async def recall_feedback(payload: RecallFeedbackRequest) -> RecallFeedbackRespo
         first = source_chunks[0]
         feedback.source_hint = f"{first.get('course', course)} · {first.get('unit', unit)} · {first.get('filename', '')} p.{first.get('page', '')} 근처를 다시 보세요."
 
-    _persist_recall_feedback(payload, feedback)
+    payload_for_persist = payload.copy(update={"user_id": data_user_id})
+    _persist_recall_feedback(payload_for_persist, feedback)
     return feedback
 
 
@@ -1146,7 +1153,10 @@ async def auth_google(req: GoogleRequest) -> Dict[str, Any]:
     email = info.get("email")
     if not email or str(info.get("email_verified", "")).lower() not in ("true", "1"):
         raise HTTPException(status_code=401, detail="이메일을 확인할 수 없습니다.")
-    user = _auth.upsert_google_user(email, info.get("sub", ""), info.get("name", ""), req.link_user_id or "")
+    try:
+        user = _auth.upsert_google_user(email, info.get("sub", ""), info.get("name", ""), req.link_user_id or "")
+    except ValueError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
     return {"token": _auth.create_token(user["id"]), "user": _auth.public_user(user)}
 
 

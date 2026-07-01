@@ -3,7 +3,7 @@
 - 토큰: HMAC-SHA256 서명 (JWT 유사, 의존성 없음)
 - 사용자 저장: data/users.json
 각 사용자는 data_user_id 를 가지며, 이 값이 ChromaDB/자료의 user_id 로 쓰인다.
-(기존 '정유진' 자료를 연결하려면 가입 시 link_user_id='정유진' 으로 준다.)
+기존 자료 네임스페이스 연결(link_user_id)은 maintainer/admin 마이그레이션 용도로만 허용한다.
 """
 import base64
 import hashlib
@@ -18,6 +18,25 @@ DATA_DIR = os.getenv("DATA_DIR", "./data")
 USERS_PATH = os.path.join(DATA_DIR, "users.json")
 _SECRET_PATH = os.path.join(DATA_DIR, ".auth_secret")
 TOKEN_TTL = 60 * 60 * 24 * 30  # 30일
+
+MAINTAINER_EMAILS = {
+    email.strip().lower()
+    for email in os.getenv("MAINTAINER_EMAILS", "kory124@snu.ac.kr").split(",")
+    if email.strip()
+}
+
+
+def _new_data_user_id() -> str:
+    return uuid.uuid4().hex
+
+
+def _resolve_data_user_id(email: str, link_user_id: str = "") -> tuple[str, str | None]:
+    legacy_id = (link_user_id or "").strip()
+    if legacy_id:
+        if email not in MAINTAINER_EMAILS:
+            return "", "link_user_id는 관리자 마이그레이션 용도로만 사용할 수 있습니다."
+        return legacy_id, None
+    return _new_data_user_id(), None
 
 
 def _get_secret() -> bytes:
@@ -123,13 +142,16 @@ def register_user(email: str, password: str, display_name: str = "", link_user_i
     users = _load_users()
     if email in users:
         return None, "이미 가입된 이메일입니다."
+    data_user_id, err = _resolve_data_user_id(email, link_user_id)
+    if err:
+        return None, err
     user = {
         "id": uuid.uuid4().hex,
         "email": email,
         "password_hash": hash_password(password),
         "display_name": display_name or email.split("@")[0],
         "google_sub": None,
-        "data_user_id": (link_user_id.strip() or email),
+        "data_user_id": data_user_id,
         "created": int(time.time()),
     }
     users[email] = user
@@ -156,13 +178,16 @@ def upsert_google_user(email: str, google_sub: str, display_name: str = "", link
             user["google_sub"] = google_sub
             _save_users(users)
         return user
+    data_user_id, err = _resolve_data_user_id(email, link_user_id)
+    if err:
+        raise ValueError(err)
     user = {
         "id": uuid.uuid4().hex,
         "email": email,
         "password_hash": "",
         "display_name": display_name or email.split("@")[0],
         "google_sub": google_sub,
-        "data_user_id": (link_user_id.strip() or email),
+        "data_user_id": data_user_id,
         "created": int(time.time()),
     }
     users[email] = user
