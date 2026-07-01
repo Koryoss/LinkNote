@@ -33,7 +33,8 @@ Important current-state note:
 
 | Method | Path | Purpose |
 | --- | --- | --- |
-| `POST` | `/ask` | Answer a question from indexed source chunks. Supports normal and connection-focused modes. |
+| `POST` | `/ask/search` | Search related chunks, concepts, and Learning Memory records without generating a GPT answer. Uses token-derived `data_user_id`. |
+| `POST` | `/ask` | Answer a question from indexed source chunks. Supports normal and connection-focused modes and calls the configured answer-generation provider. |
 | `POST` | `/ingest` | Upload a PDF, extract text, chunk/index pages, and optionally build concepts for the submitted unit. |
 | `GET` | `/library` | Return the current user's indexed library overview. |
 | `DELETE` | `/library` | Delete indexed chunks matching a search filter for the current user. |

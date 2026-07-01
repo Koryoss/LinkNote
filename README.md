@@ -114,6 +114,15 @@ LinkNote is the knowledge infrastructure layer:
 - build concept graph data
 - provide web and desktop study surfaces
 
+## Question Modes
+
+The active gallery question UI supports two modes:
+
+- `빠른 검색`: calls `POST /ask/search` and returns related chunks, concepts, and Learning Memory matches without generating a GPT answer.
+- `AI 답변`: calls the existing `POST /ask` flow and uses the configured answer-generation provider.
+
+`/ask/search` uses the authenticated `data_user_id`, never frontend-provided `user_id`, and stores exact local search results in `data/search_cache.json` when the query is not sensitive. The current search-only implementation uses local keyword and metadata matching over owned chunks, concept JSON, and recall/Learning Memory records, so it does not call GPT chat/completion. It supports single-document style filters and multi-document search across the user's owned materials.
+
 SCiyl inspires the active learning layer:
 
 - ask the learner to explain concepts in their own words
