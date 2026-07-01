@@ -118,9 +118,11 @@
       ${item.feedback_created_at ? `<p class="sub">AI 피드백 생성: ${esc(dateText(item.feedback_created_at))}</p>` : ''}`;
   }
   function memoryCard(item, index){
+    const graphUrl = `/concept-graph.html?mode=connection&concept=${encodeURIComponent(item.concept || '')}&course=${encodeURIComponent(item.course || '')}&unit=${encodeURIComponent(item.unit || '')}`;
     return `<div class="memory-card">
       <h3>${esc(item.concept || '개념 미지정')}</h3>
       <div class="memory-meta">${esc(item.course)} · ${esc(item.unit)} · ${esc(dateText(item.created_at))}</div>
+      <div class="actions" style="margin-top:8px"><a class="btn" href="${graphUrl}">이 개념 그래프로 보기</a></div>
       <div class="memory-two-col">
         <section class="memory-pane">
           <h4>내 설명</h4>
@@ -195,7 +197,7 @@
       <section class="wide"><h2>Actions</h2><div class="actions">
         <a class="btn primary" href="/">Back to Gallery</a>
         <a class="btn" href="/mypage.html">My Page</a>
-        <a class="btn" href="/concept-graph.html">Concept Graph 보기</a>
+        <a class="btn" href="/concept-graph.html?mode=review">복습 지도 보기</a>
       </div></section>`;
     restoreFilters();
   }
@@ -206,9 +208,10 @@
     }
   }
   async function loadMemories(){
-    const course = document.getElementById('f_course')?.value.trim() || '';
-    const unit = document.getElementById('f_unit')?.value.trim() || '';
-    const concept = document.getElementById('f_concept')?.value.trim() || '';
+    const saved = window._lmFilters || {};
+    const course = document.getElementById('f_course')?.value.trim() || saved.f_course || '';
+    const unit = document.getElementById('f_unit')?.value.trim() || saved.f_unit || '';
+    const concept = document.getElementById('f_concept')?.value.trim() || saved.f_concept || '';
     window._lmFilters = { f_course:course, f_unit:unit, f_concept:concept };
     const params = new URLSearchParams({ limit:'50' });
     if(course) params.set('course', course);
@@ -262,6 +265,12 @@
   async function init(){
     const app = document.getElementById('app');
     if(!token()) { app.className='error'; app.textContent='로그인이 필요합니다. Gallery에서 먼저 로그인해주세요.'; return; }
+    const params = new URLSearchParams(location.search);
+    window._lmFilters = {
+      f_course: params.get('course') || '',
+      f_unit: params.get('unit') || '',
+      f_concept: params.get('concept') || ''
+    };
     try { await loadMemories(); }
     catch(e){ app.className='error'; app.textContent='Learning Memory를 불러오지 못했습니다: ' + e.message; }
   }

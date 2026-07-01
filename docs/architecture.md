@@ -46,6 +46,12 @@ The default Concept Graph view caps visible nodes and prioritizes learner-useful
 
 Each overview node may include deterministic learning metadata such as `degree`, `weighted_degree`, `connected_count`, `centrality_score`, `bridge_score`, `memory_score`, `review_score`, `priority_score`, `node_types`, `why_shown`, and `recommended_action`. Each overview edge may include `normalized_weight`, `edge_type`, and a human-readable `reason`. These fields are computed without GPT/OpenAI calls and without rebuilding or reindexing stored graph data.
 
+### Concept Graph Progressive Disclosure
+
+The Concept Graph page does not show the full graph first. The default mode is `Review Map`, a small learning map focused on what the learner should review now. It prioritizes `review_score`, `weak_score`, missing links, recall history, and not-yet-explained concepts, with core/bridge metadata used as tie-breakers.
+
+Primary graph modes are Review Map, Core Map, Connection Map, Learning Memory Map, and New Concepts. Full Graph is an advanced action and remains capped so the page stays readable. The purpose is learning navigation, not complete visualization. Viewing or switching graph modes does not call GPT/OpenAI.
+
 ## PDF Preview Access
 
 `GET /file` accepts a query token because PDF iframe previews cannot attach custom request headers.
