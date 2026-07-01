@@ -23,8 +23,19 @@ New email/password or Google users receive a new UUID-like `data_user_id` by def
 
 Protected API routes derive the active namespace from the bearer token via `current_uid()`. Frontend-provided `user_id` is ignored for protected study APIs and remains only for backward-compatible request shapes.
 
+The active browser UI is `web/gallery.html`. `web/app.js` is a legacy/experimental UI and must not be treated as the ownership model; if it is used accidentally, protected calls still need an `Authorization: Bearer <token>` header.
+
+PDF preview through `/file` uses a query token because browsers cannot attach custom headers to an iframe URL. The backend still resolves that token to `data_user_id`, normalizes the requested filename, rejects path traversal, and checks ChromaDB metadata before serving a file from `data/uploads`.
+
 `link_user_id` is restricted to maintainer/admin migration use. General users cannot claim a legacy namespace by sending `link_user_id` during registration or Google login.
 
 ## Migration rule
 
 Do not automatically migrate, delete, reset, or reassign legacy data. Use an explicit migration script or manual mapping when legacy data must be connected to a login account.
+
+## Ownership audit checklist
+
+- Protected APIs must use `Authorization` -> `current_uid()` -> `data_user_id`.
+- Frontend-provided `user_id` must not override authenticated ownership.
+- `/file` may accept `token` in the query string for iframe preview, but it must verify the requested filename belongs to that token's `data_user_id`.
+- Legacy request fields named `user_id` are compatibility-only unless explicitly marked as response data or stored trace metadata.

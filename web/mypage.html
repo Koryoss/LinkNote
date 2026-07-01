@@ -31,6 +31,8 @@
   .item { border:1px solid #eef1f6; border-radius:10px; padding:10px 12px; background:#f8fafc; font-size:.84rem; line-height:1.45; }
   .item small { display:block; color:#94a3b8; margin-top:3px; }
   .badge { display:inline-block; border:1px solid #bfdbfe; background:#eff6ff; color:#1d4ed8; border-radius:999px; padding:3px 9px; font-size:.75rem; font-weight:800; }
+  .nursing-card { display:none; border-color:#bfdbfe; background:#f8fbff; }
+  .nursing-card.on { display:block; }
   .empty, .error { border:1px dashed #d8dee9; border-radius:12px; padding:18px; color:#64748b; background:#fff; }
   .error { border-color:#fecaca; color:#b91c1c; background:#fff7f7; }
   .actions { display:flex; flex-wrap:wrap; gap:8px; }
@@ -77,6 +79,7 @@
     const account = summary.account || me.user || {};
     const library = summary.library || {};
     const learning = summary.learning || {};
+    const isNursing = (account.student_track || 'general') === 'nursing';
     document.getElementById('userLabel').textContent = account.display_name || account.email || '';
     const recentUploads = (library.recent_uploads || []).map(x => `<div class="item"><strong>${esc(x.title || x.filename)}</strong><small>${esc(x.semester)} · ${esc(x.course)} · ${esc(x.filename)}</small></div>`).join('') || '<div class="item">최근 자료가 없습니다.</div>';
     const recentExplanations = (learning.recent_explanations || []).map(x => `<div class="item"><strong>${esc(x.concept)}</strong><div>${esc(x.answer_text || '').slice(0,160)}</div><small>${esc(x.semester)} · ${esc(x.course)} · ${esc(x.unit)} · ${esc(dateText(x.created_at))}</small></div>`).join('') || '<div class="item">저장된 AI 피드백 기록이 없습니다.</div>';
@@ -111,6 +114,9 @@
         ${stat('concepts explained', learning.concepts_explained_count || 0)}
         ${stat('last explained', dateText(learning.last_explained_at))}
       </div><p class="sub" style="margin-top:10px">Last studied: ${esc(dateText(learning.last_studied_at))}</p><div class="list">${recentExplanations}</div></section>
+      <section class="wide nursing-card ${isNursing ? 'on' : ''}"><h2>Nursing Practice Mode: Planned</h2>
+        <p class="sub">실습 회고 / Clinical Reflection은 Coming soon입니다. 환자 식별 정보 없이 실습 상황과 간호 판단을 학습 자료, 개념 그래프, 시험 포인트와 연결하는 교육용 기능으로 설계됩니다.</p>
+      </section>
       <section class="wide"><h2>Actions</h2><div class="actions">
         <a class="btn primary" href="/">My Library / Gallery</a>
         <a class="btn" href="/#concept-graph">Concept Graph</a>

@@ -16,7 +16,11 @@ LinkNote user accounts include a lightweight `student_track` profile field. Allo
 
 Existing users without `student_track` are treated as `general`. New email/password users can choose 일반 or 간호학과 during signup. Google signup currently defaults to `general`; profile editing can be added later. This field does not change `data_user_id`, ChromaDB ownership, PDF upload, RAG, concept extraction, concept graph, My Page, or explanation feedback behavior.
 
-### Future Nursing Practice Mode
+## Nursing Practice Mode — Planned
+
+For users with `student_track = "nursing"`, LinkNote plans to add Clinical Reflection, a practice-oriented learning mode that connects clinical situations to previously uploaded study materials and concept graphs.
+
+This mode is planned, not fully implemented. It is additive to existing LinkNote behavior and does not change general user workflows.
 
 Nursing students may eventually get additional educational tools:
 
@@ -27,7 +31,9 @@ Nursing students may eventually get additional educational tools:
 - exam connection points
 - My Page nursing practice summary
 
-Clinical Reflection must be educational only. Users must not enter patient-identifying information such as patient name, resident number, hospital ID, phone number, exact room number, or other personal identifiers. This feature does not replace clinical judgment, instructor guidance, or hospital policy. See [Nursing Clinical Reflection Plan](docs/nursing-clinical-reflection.md).
+Clinical Reflection must be educational only. Users must not enter patient-identifying information such as patient name, resident number, hospital ID, phone number, exact room number, or other personal identifiers. This feature does not replace clinical judgment, instructor guidance, or hospital policy.
+
+See [Nursing Clinical Reflection](docs/nursing-clinical-reflection.md).
 
 ## Current Project Structure
 

@@ -38,7 +38,7 @@ Important current-state note:
 | `GET` | `/library` | Return the current user's indexed library overview. |
 | `DELETE` | `/library` | Delete indexed chunks matching a search filter for the current user. |
 | `GET` | `/chunks` | Inspect indexed chunks with optional filters and pagination. |
-| `GET` | `/file` | Serve an uploaded PDF file for preview. Uses a query token for iframe access. |
+| `GET` | `/file` | Serve an uploaded PDF file for preview. Uses a query token for iframe access and verifies the requested filename belongs to the current `data_user_id`. |
 | `POST` | `/rename-unit` | Rename a unit in ChromaDB metadata and update concept JSON when present. |
 
 ## Timetable Endpoints
@@ -108,4 +108,3 @@ Some older docs mention `web/index.html`; update those references when the web e
 ## SCiyl Boundary
 
 Phase 1 recall trace storage/query is implemented as a local JSON-backed layer only. Phase 2 adds directional recall feedback through `/recall-feedback`. The graph now includes lightweight local recall metadata (`recall_count`, `last_recalled_at`, `weak_score`) without adding auth/user DB expansion. `weak_score` is treated as internal prioritization metadata, while the UI uses learner-friendly state labels.
-

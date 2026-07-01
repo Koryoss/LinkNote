@@ -28,6 +28,7 @@ from rag import (
     rename_unit,
     delete_chunks_by_filter,
     get_chunks,
+    get_file_metadata,
     get_filter_label,
     get_library_overview,
     get_units,
@@ -91,6 +92,7 @@ class SearchFilter(BaseModel):
 
 
 class AskRequest(BaseModel):
+    # Deprecated compatibility field; ownership is derived from current_uid().
     user_id: Optional[str] = None
     question: str
     mode: Optional[str] = "single"
@@ -140,6 +142,7 @@ class TimetableResponse(BaseModel):
 
 
 class DeleteLibraryPayload(BaseModel):
+    # Deprecated compatibility field; ownership is derived from current_uid().
     user_id: Optional[str] = None
     search_filter: Optional[SearchFilter] = None
 
@@ -297,6 +300,7 @@ class TimetableEntry(BaseModel):
 
 
 class RecallTraceCreate(BaseModel):
+    # Deprecated compatibility field; ownership is derived from current_uid().
     user_id: Optional[str] = None
     semester: str
     course: str
@@ -328,6 +332,7 @@ class RecallTraceListResponse(BaseModel):
 
 
 class RecallFeedbackRequest(BaseModel):
+    # Deprecated compatibility field; ownership is derived from current_uid().
     user_id: Optional[str] = None
     semester: str
     course: str
@@ -721,6 +726,7 @@ async def ingest(
         title=title.strip(),
         user_id=data_user_id,
         unit=unit.strip(),
+        stored_filename=unique_name,
     )
 
     # 업로드 시 해당 단원 개념 자동 추출(개념 지도용). 실패해도 업로드는 성공 처리.
@@ -919,7 +925,7 @@ async def create_recall_trace(
     if not all([user_id, semester, course, unit, concept, answer_text]):
         raise HTTPException(
             status_code=400,
-            detail="user_id, semester, course, unit, concept, answer_text가 필요합니다.",
+            detail="semester, course, unit, concept, answer_text가 필요합니다.",
         )
 
     trace = {
@@ -954,7 +960,7 @@ async def recall_traces(
         "unit": unit.strip(),
     }
     if not all(filters.values()):
-        raise HTTPException(status_code=400, detail="user_id, semester, course, unit이 필요합니다.")
+        raise HTTPException(status_code=400, detail="semester, course, unit이 필요합니다.")
 
     concept_filter = (concept or "").strip()
     traces = []
@@ -993,7 +999,7 @@ async def recall_feedback(
     if not all([user_id, semester, course, unit, concept, answer_text]):
         raise HTTPException(
             status_code=400,
-            detail="user_id, semester, course, unit, concept, answer_text가 필요합니다.",
+            detail="semester, course, unit, concept, answer_text가 필요합니다.",
         )
 
     source_chunks = _feedback_source_chunks(user_id, semester, course, unit, concept)
@@ -1071,15 +1077,56 @@ def _uid_from_token(token: str) -> str:
     return user.get("data_user_id") or user["email"]
 
 
+def _safe_preview_filename(filename: str) -> str:
+    normalized = unicodedata.normalize("NFC", (filename or "").strip())
+    if not normalized or normalized in {".", ".."}:
+        raise HTTPException(status_code=400, detail="잘못된 파일명입니다.")
+    if "/" in normalized or "\\" in normalized or os.path.basename(normalized) != normalized:
+        raise HTTPException(status_code=400, detail="잘못된 파일명입니다.")
+    return normalized
+
+
+def _safe_upload_path(stored_filename: str) -> Optional[str]:
+    base = os.path.basename(stored_filename or "")
+    if not base:
+        return None
+    upload_root = os.path.realpath(UPLOAD_DIR)
+    candidate = os.path.realpath(os.path.join(UPLOAD_DIR, base))
+    if not candidate.startswith(upload_root + os.sep):
+        return None
+    return candidate if os.path.isfile(candidate) else None
+
+
+def _legacy_upload_matches(filename: str) -> List[str]:
+    matches = []
+    want = unicodedata.normalize("NFC", filename)
+    for stored in os.listdir(UPLOAD_DIR):
+        base = unicodedata.normalize("NFC", stored)
+        if base == want or base.endswith("_" + want):
+            if path := _safe_upload_path(stored):
+                matches.append(path)
+    return sorted(matches)
+
+
 @app.get("/file")
 async def serve_file(filename: str, token: str = ""):
-    """업로드된 원본 PDF 자체를 반환 (iframe 미리보기용). 토큰은 쿼리로 받음."""
-    _uid_from_token(token)
-    want = unicodedata.normalize("NFC", os.path.basename(filename))
-    for fn in os.listdir(UPLOAD_DIR):
-        base = unicodedata.normalize("NFC", fn)
-        if base == want or base.endswith("_" + want):
-            return FileResponse(os.path.join(UPLOAD_DIR, fn), media_type="application/pdf")
+    """업로드된 원본 PDF preview. 쿼리 토큰에서 도출한 data_user_id 소유 파일만 반환."""
+    data_user_id = _uid_from_token(token)
+    safe_filename = _safe_preview_filename(filename)
+    metadata = get_file_metadata(data_user_id, safe_filename)
+    if not metadata:
+        raise HTTPException(status_code=404, detail="파일을 찾을 수 없습니다.")
+
+    stored_names = sorted({meta.get("stored_filename") for meta in metadata if meta.get("stored_filename")})
+    for stored_name in stored_names:
+        if path := _safe_upload_path(stored_name):
+            return FileResponse(path, media_type="application/pdf")
+
+    legacy_matches = _legacy_upload_matches(safe_filename)
+    if len(legacy_matches) == 1:
+        return FileResponse(legacy_matches[0], media_type="application/pdf")
+    if len(legacy_matches) > 1:
+        logger.warning("Ambiguous legacy upload preview for data_user_id=%s filename=%s", data_user_id, safe_filename)
     raise HTTPException(status_code=404, detail="파일을 찾을 수 없습니다.")
 
 

@@ -1,3 +1,6 @@
+// Legacy/experimental UI only. The active app is web/gallery.html, served at /.
+// Protected APIs derive ownership from the Authorization token; frontend user_id
+// is deprecated compatibility state and must not decide data access.
 const apiUrl = "http://127.0.0.1:8000";
 const uploadBtn = document.getElementById("uploadBtn");
 const queryBtn = document.getElementById("queryBtn");
@@ -7,9 +10,13 @@ const answerText = document.getElementById("answerText");
 const sourceList = document.getElementById("sourceList");
 
 const getValue = (id) => document.getElementById(id).value.trim();
+const token = () => localStorage.getItem("ln_token") || "";
+const authHeaders = (extra = {}) => {
+  const authToken = token();
+  return authToken ? { ...extra, Authorization: `Bearer ${authToken}` } : extra;
+};
 
 uploadBtn.addEventListener("click", async () => {
-  const user_id = getValue("user_id");
   const semester = getValue("semester");
   const course = getValue("course");
   const title = getValue("title");
@@ -20,7 +27,7 @@ uploadBtn.addEventListener("click", async () => {
   uploadStatus.textContent = "업로드 준비 중...";
 
   const missing = [];
-  if (!user_id) missing.push("사용자명(맨 위 1번)");
+  if (!token()) missing.push("로그인 토큰");
   if (!semester) missing.push("학기");
   if (!course) missing.push("과목");
   if (!title) missing.push("자료명");
@@ -31,7 +38,6 @@ uploadBtn.addEventListener("click", async () => {
   }
 
   const formData = new FormData();
-  formData.append("user_id", user_id);
   formData.append("semester", semester);
   formData.append("course", course);
   formData.append("title", title);
@@ -41,6 +47,7 @@ uploadBtn.addEventListener("click", async () => {
   try {
     const response = await fetch(`${apiUrl}/ingest`, {
       method: "POST",
+      headers: authHeaders(),
       body: formData,
     });
 
@@ -58,7 +65,6 @@ uploadBtn.addEventListener("click", async () => {
 });
 
 queryBtn.addEventListener("click", async () => {
-  const user_id = getValue("user_id");
   const question = getValue("question");
   const mode = getValue("mode");
   const search_filter = {
@@ -71,13 +77,12 @@ queryBtn.addEventListener("click", async () => {
   answerText.textContent = "";
   sourceList.innerHTML = "";
 
-  if (!user_id || !question) {
-    queryStatus.textContent = "user_id와 질문을 입력해주세요.";
+  if (!token() || !question) {
+    queryStatus.textContent = "로그인 토큰과 질문이 필요합니다.";
     return;
   }
 
   const payload = {
-    user_id,
     question,
     mode,
     search_filter,
@@ -87,7 +92,7 @@ queryBtn.addEventListener("click", async () => {
   try {
     const response = await fetch(`${apiUrl}/ask`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: authHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify(payload),
     });
 
