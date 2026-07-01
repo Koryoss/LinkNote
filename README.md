@@ -170,7 +170,7 @@ Concept graph metadata now includes:
 
 Learning Memory turns saved `설명해보기` recall traces and feedback into reusable review material for lectures, weekly review, and exam preparation.
 
-The page at `web/learning-memory.html` loads without GPT/OpenAI calls. Current summaries are rule-based from local recall data: recent memories, frequent missing links, weak concepts, and exam review focus.
+The page at `web/learning-memory.html` loads without GPT/OpenAI calls. Current summaries are rule-based from local recall data: recent memories, frequent missing links, weak concepts, and exam review focus. Optional AI Summary generation is available only when the learner explicitly clicks an AI Summary button; generated summaries are saved and can be viewed later without another GPT call.
 
 See [Recall and Learning Memory](docs/recall-learning-memory.md).
 

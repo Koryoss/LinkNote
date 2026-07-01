@@ -19,6 +19,8 @@ Implemented endpoints:
 - `POST /recall-feedback`: generates directional feedback and stores it with the trace.
 - `GET /learning-memory`: lists normalized Learning Memory records.
 - `GET /learning-memory/summary`: returns rule-based review summary data.
+- `POST /learning-memory/ai-summary`: generates an optional GPT-based AI Summary after an explicit button click.
+- `GET /learning-memory/ai-summaries`: lists previously generated AI Summaries without a new GPT call.
 
 All protected endpoints derive ownership from:
 
@@ -67,5 +69,36 @@ The first version does not call GPT/OpenAI for page load.
 - weekly summary from recent memories
 - exam review focus from missing links and weak concepts
 
-AI-generated summaries can be added later only when the user explicitly asks for them.
+## Optional AI Summary
 
+Learning Memory page load remains free of GPT/OpenAI calls. The page can read:
+
+- saved Learning Memory records
+- rule-based summary data
+- previously generated AI Summaries
+
+GPT is called only when the user explicitly clicks one of the AI Summary buttons:
+
+- 이번 주 요약 생성
+- 과목 요약 생성
+- 시험 대비 요약 생성
+- 약한 개념 요약 생성
+
+Generated summaries are appended to `data/learning_memory_summaries.json` for reuse.
+
+The AI Summary request can filter by:
+
+- `summary_type`: `weekly`, `course`, `exam`, or `weak_concepts`
+- `course`
+- `unit`
+- `date_from` / `date_to`
+- `concepts`
+- `max_items`
+
+Ownership is still server-derived:
+
+```text
+Authorization token -> current_uid() -> data_user_id
+```
+
+The frontend must not send or control `user_id`. If `OPENAI_API_KEY` is missing, `POST /learning-memory/ai-summary` returns a clear `503` error. Existing summaries can still be viewed without GPT.

@@ -41,6 +41,7 @@ UPLOAD_DIR = os.path.join(DATA_DIR, "uploads")
 TIMETABLE_PATH = os.path.join(DATA_DIR, "timetable.json")
 CONCEPTS_PATH = os.path.join(DATA_DIR, "concepts.json")
 RECALL_TRACES_PATH = os.path.join(DATA_DIR, "recall_traces.json")
+LEARNING_MEMORY_SUMMARIES_PATH = os.path.join(DATA_DIR, "learning_memory_summaries.json")
 SEARCH_CACHE_PATH = os.path.join(DATA_DIR, "search_cache.json")
 CONCEPT_INDEX_PATH = os.path.join(DATA_DIR, "concept_index.json")
 CONCEPT_LINKS_PATH = os.path.join(DATA_DIR, "concept_links.json")
@@ -228,6 +229,17 @@ def _save_recall_traces(items: List[Dict[str, Any]]) -> None:
         json.dump(items, f, ensure_ascii=False, indent=2)
 
 
+def _load_learning_memory_summaries() -> List[Dict[str, Any]]:
+    data = _load_json_file(LEARNING_MEMORY_SUMMARIES_PATH)
+    return data if isinstance(data, list) else []
+
+
+def _save_learning_memory_summaries(items: List[Dict[str, Any]]) -> None:
+    os.makedirs(os.path.dirname(LEARNING_MEMORY_SUMMARIES_PATH), exist_ok=True)
+    with open(LEARNING_MEMORY_SUMMARIES_PATH, "w", encoding="utf-8") as f:
+        json.dump(items, f, ensure_ascii=False, indent=2)
+
+
 def _load_recall_feedback_prompt() -> str:
     try:
         with open(RECALL_FEEDBACK_PROMPT_PATH, "r", encoding="utf-8") as f:
@@ -358,6 +370,31 @@ class RecallFeedbackResponse(BaseModel):
     missing_links: List[str]
     followup_question: str
     source_hint: str
+
+
+class LearningMemoryAiSummaryRequest(BaseModel):
+    summary_type: Optional[str] = "weekly"
+    course: Optional[str] = None
+    unit: Optional[str] = None
+    date_from: Optional[str] = None
+    date_to: Optional[str] = None
+    concepts: Optional[List[str]] = None
+    max_items: Optional[int] = 30
+
+
+class LearningMemoryAiSummaryResponse(BaseModel):
+    summary_type: str
+    title: str
+    summary: str
+    review_focus: List[str]
+    weak_concepts: List[str]
+    suggested_questions: List[str]
+    source_memory_ids: List[str]
+    created_at: str
+
+
+class LearningMemoryAiSummariesResponse(BaseModel):
+    items: List[Dict[str, Any]]
 
 
 
@@ -797,6 +834,165 @@ def _learning_memory_summary_for_user(user_id: str) -> Dict[str, Any]:
         "weekly_summary": weekly_summary,
         "exam_review_focus": exam_review_focus,
         "last_memory_created_at": str(memories[0].get("created_at") or "") if memories else None,
+    }
+
+
+_SUMMARY_TYPES = {"weekly", "course", "exam", "weak_concepts"}
+
+
+def _normalize_summary_type(value: Optional[str]) -> str:
+    raw = (value or "weekly").strip()
+    return raw if raw in _SUMMARY_TYPES else "weekly"
+
+
+def _date_filter_bound(value: Optional[str], end_of_day: bool = False) -> Optional[datetime]:
+    raw = (value or "").strip()
+    if not raw:
+        return None
+    if re.fullmatch(r"\d{4}-\d{2}-\d{2}", raw):
+        raw = raw + ("T23:59:59+00:00" if end_of_day else "T00:00:00+00:00")
+    parsed = _parse_iso_datetime(raw)
+    return parsed
+
+
+def _memory_matches_ai_summary_filters(memory: Dict[str, Any], payload: LearningMemoryAiSummaryRequest) -> bool:
+    course = (payload.course or "").strip()
+    unit = (payload.unit or "").strip()
+    if course and str(memory.get("course") or "") != course:
+        return False
+    if unit and str(memory.get("unit") or "") != unit:
+        return False
+
+    concepts = {_concept_key(item) for item in (payload.concepts or []) if _concept_key(item)}
+    if concepts and _concept_key(memory.get("concept")) not in concepts:
+        return False
+
+    created_at = _parse_iso_datetime(memory.get("created_at"))
+    date_from = _date_filter_bound(payload.date_from)
+    date_to = _date_filter_bound(payload.date_to, end_of_day=True)
+    if date_from and (created_at is None or created_at < date_from):
+        return False
+    if date_to and (created_at is None or created_at > date_to):
+        return False
+    return True
+
+
+def _ai_summary_memories_for_user(user_id: str, payload: LearningMemoryAiSummaryRequest) -> List[Dict[str, Any]]:
+    max_items = max(1, min(int(payload.max_items or 30), 80))
+    memories = _learning_memory_items_for_user(user_id, limit=5000)
+    filtered = [item for item in memories if _memory_matches_ai_summary_filters(item, payload)]
+    return filtered[:max_items]
+
+
+def _ai_summary_filters(payload: LearningMemoryAiSummaryRequest) -> Dict[str, Any]:
+    data = _model_to_dict(payload)
+    return {
+        key: value
+        for key, value in data.items()
+        if key != "summary_type" and value not in (None, "", [])
+    }
+
+
+def _format_ai_summary_memories(memories: List[Dict[str, Any]]) -> str:
+    blocks = []
+    for index, item in enumerate(memories, start=1):
+        blocks.append(
+            "\n".join([
+                f"[{index}] id={item.get('id', '')}",
+                f"course={item.get('course', '')} / unit={item.get('unit', '')} / concept={item.get('concept', '')}",
+                f"created_at={item.get('created_at', '')}",
+                f"answer_text={str(item.get('answer_text', ''))[:700]}",
+                f"good_points={', '.join(item.get('good_points', []) or [])}",
+                f"missing_links={', '.join(item.get('missing_links', []) or [])}",
+                f"followup_question={item.get('followup_question', '')}",
+                f"improved_summary={str(item.get('improved_summary', ''))[:500]}",
+            ])
+        )
+    return "\n\n".join(blocks)
+
+
+def _ai_summary_instruction(summary_type: str) -> str:
+    if summary_type == "course":
+        return "선택된 과목의 Learning Memory를 요약하고, 반복되는 missing links를 연결해 과목별 복습 계획을 제안하세요."
+    if summary_type == "exam":
+        return "시험 대비 관점에서 우선순위 개념, 흔한 혼동, 짧은 서술형 연습 질문을 정리하세요."
+    if summary_type == "weak_concepts":
+        return "반복되는 missing links와 낮은 회상 근거가 보이는 약한 개념을 중심으로 원자료와 다시 연결하는 방법을 제안하세요."
+    return "이번 주 또는 최근 Learning Memory에서 설명한 내용, 강해지는 개념, 다음에 복습할 개념, 후속 질문 3개를 정리하세요."
+
+
+def _build_learning_memory_ai_summary_prompt(
+    payload: LearningMemoryAiSummaryRequest,
+    memories: List[Dict[str, Any]],
+) -> str:
+    summary_type = _normalize_summary_type(payload.summary_type)
+    return f"""You are LinkNote's Learning Memory study summarizer.
+Use only the saved student learning memories below. Be educational, specific, and non-judgmental.
+Do not invent medical diagnosis, prognosis, prescription, or patient-specific advice.
+Return JSON only with keys: title, summary, review_focus, weak_concepts, suggested_questions.
+
+[Summary type]
+{summary_type}
+
+[Instruction]
+{_ai_summary_instruction(summary_type)}
+
+[Filters]
+{json.dumps(_ai_summary_filters(payload), ensure_ascii=False)}
+
+[Learning Memory records]
+{_format_ai_summary_memories(memories)}
+"""
+
+
+def _list_of_strings_from_payload(payload: Dict[str, Any], key: str, limit: int = 8) -> List[str]:
+    value = payload.get(key)
+    if isinstance(value, list):
+        return [str(item).strip() for item in value if str(item).strip()][:limit]
+    if isinstance(value, str) and value.strip():
+        return [value.strip()]
+    return []
+
+
+def _normalize_ai_summary_payload(
+    raw: Dict[str, Any],
+    payload: LearningMemoryAiSummaryRequest,
+    memories: List[Dict[str, Any]],
+) -> LearningMemoryAiSummaryResponse:
+    summary_type = _normalize_summary_type(payload.summary_type)
+    summary = str(raw.get("summary") or "").strip()
+    if not summary:
+        summary = "AI Summary가 생성되었지만 요약 본문이 비어 있습니다. 원 Learning Memory를 함께 확인해주세요."
+    title = str(raw.get("title") or "").strip() or {
+        "weekly": "이번 주 Learning Memory 요약",
+        "course": "과목별 Learning Memory 요약",
+        "exam": "시험 대비 Learning Memory 요약",
+        "weak_concepts": "약한 개념 중심 Learning Memory 요약",
+    }.get(summary_type, "Learning Memory AI Summary")
+    return LearningMemoryAiSummaryResponse(
+        summary_type=summary_type,
+        title=title,
+        summary=summary,
+        review_focus=_list_of_strings_from_payload(raw, "review_focus", 10),
+        weak_concepts=_list_of_strings_from_payload(raw, "weak_concepts", 10),
+        suggested_questions=_list_of_strings_from_payload(raw, "suggested_questions", 10),
+        source_memory_ids=[str(item.get("id") or "") for item in memories if str(item.get("id") or "")],
+        created_at=datetime.now(timezone.utc).isoformat(),
+    )
+
+
+def _public_ai_summary_record(item: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        "id": str(item.get("id") or ""),
+        "summary_type": str(item.get("summary_type") or ""),
+        "filters": item.get("filters") if isinstance(item.get("filters"), dict) else {},
+        "title": str(item.get("title") or ""),
+        "summary": str(item.get("summary") or ""),
+        "review_focus": [str(x) for x in item.get("review_focus", []) if str(x).strip()] if isinstance(item.get("review_focus"), list) else [],
+        "weak_concepts": [str(x) for x in item.get("weak_concepts", []) if str(x).strip()] if isinstance(item.get("weak_concepts"), list) else [],
+        "suggested_questions": [str(x) for x in item.get("suggested_questions", []) if str(x).strip()] if isinstance(item.get("suggested_questions"), list) else [],
+        "source_memory_ids": [str(x) for x in item.get("source_memory_ids", []) if str(x).strip()] if isinstance(item.get("source_memory_ids"), list) else [],
+        "created_at": str(item.get("created_at") or ""),
     }
 
 
@@ -1760,6 +1956,66 @@ async def learning_memory_summary(data_user_id: str = Depends(current_uid)) -> D
     return _learning_memory_summary_for_user(data_user_id)
 
 
+@app.post("/learning-memory/ai-summary", response_model=LearningMemoryAiSummaryResponse)
+async def learning_memory_ai_summary(
+    payload: LearningMemoryAiSummaryRequest,
+    data_user_id: str = Depends(current_uid),
+) -> LearningMemoryAiSummaryResponse:
+    if not os.getenv("OPENAI_API_KEY"):
+        raise HTTPException(status_code=503, detail="AI summary generation is not configured.")
+
+    payload.summary_type = _normalize_summary_type(payload.summary_type)
+    memories = _ai_summary_memories_for_user(data_user_id, payload)
+    if not memories:
+        raise HTTPException(status_code=400, detail="AI Summary에 사용할 Learning Memory가 없습니다.")
+
+    prompt = _build_learning_memory_ai_summary_prompt(payload, memories)
+    try:
+        raw_summary = generate_openai_answer(prompt, max_tokens=900)
+        response = _normalize_ai_summary_payload(_extract_json_object(raw_summary), payload, memories)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"AI summary 생성에 실패했습니다: {exc}") from exc
+
+    record = {
+        "id": uuid.uuid4().hex,
+        "user_id": data_user_id,
+        "summary_type": response.summary_type,
+        "filters": _ai_summary_filters(payload),
+        "title": response.title,
+        "summary": response.summary,
+        "review_focus": response.review_focus,
+        "weak_concepts": response.weak_concepts,
+        "suggested_questions": response.suggested_questions,
+        "source_memory_ids": response.source_memory_ids,
+        "created_at": response.created_at,
+    }
+    summaries = _load_learning_memory_summaries()
+    summaries.append(record)
+    _save_learning_memory_summaries(summaries)
+    return response
+
+
+@app.get("/learning-memory/ai-summaries", response_model=LearningMemoryAiSummariesResponse)
+async def learning_memory_ai_summaries(
+    summary_type: Optional[str] = None,
+    limit: int = 10,
+    data_user_id: str = Depends(current_uid),
+) -> LearningMemoryAiSummariesResponse:
+    requested_type = (summary_type or "").strip()
+    safe_limit = max(1, min(limit, 50))
+    items = []
+    for item in _load_learning_memory_summaries():
+        if not isinstance(item, dict) or item.get("user_id") != data_user_id:
+            continue
+        if requested_type and item.get("summary_type") != _normalize_summary_type(requested_type):
+            continue
+        items.append(_public_ai_summary_record(item))
+    items.sort(key=lambda x: str(x.get("created_at") or ""), reverse=True)
+    return LearningMemoryAiSummariesResponse(items=items[:safe_limit])
+
+
 # ============== 계정 / 인증 (Stage C-1) ==============
 from fastapi import Header
 import auth as _auth
@@ -1835,7 +2091,15 @@ async def health() -> Dict[str, Any]:
     return {
         "ok": True,
         "version": app.version,
-        "routes": ["/auth/me", "/me/summary", "/learning-memory", "/learning-memory/summary", "/ask/search"],
+        "routes": [
+            "/auth/me",
+            "/me/summary",
+            "/learning-memory",
+            "/learning-memory/summary",
+            "/learning-memory/ai-summary",
+            "/learning-memory/ai-summaries",
+            "/ask/search",
+        ],
     }
 
 
