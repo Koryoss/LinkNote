@@ -793,7 +793,22 @@ def _learning_text_field(item: Dict[str, Any], key: str) -> str:
     return ""
 
 
+def _learning_has_ai_feedback(item: Dict[str, Any]) -> bool:
+    if str(item.get("feedback_type") or "") == "explain_concept":
+        return True
+    if _feedback_object(item):
+        return True
+    for key in ["feedback_text", "good_points", "missing_links", "followup_question", "improved_summary", "review_hint", "source_hint"]:
+        if _learning_list_field(item, key) or _learning_text_field(item, key):
+            return True
+    return False
+
+
 def _learning_memory_item(item: Dict[str, Any]) -> Dict[str, Any]:
+    has_ai_feedback = _learning_has_ai_feedback(item)
+    feedback_created_at = str(item.get("feedback_created_at") or "")
+    if not feedback_created_at and str(item.get("feedback_type") or "") == "explain_concept":
+        feedback_created_at = str(item.get("created_at") or "")
     return {
         "id": str(item.get("id") or ""),
         "semester": str(item.get("semester") or ""),
@@ -807,7 +822,10 @@ def _learning_memory_item(item: Dict[str, Any]) -> Dict[str, Any]:
         "followup_question": _learning_text_field(item, "followup_question"),
         "improved_summary": _learning_text_field(item, "improved_summary"),
         "review_hint": _learning_text_field(item, "review_hint"),
+        "source_hint": _learning_text_field(item, "source_hint"),
+        "has_ai_feedback": has_ai_feedback,
         "created_at": item.get("created_at") or "",
+        "feedback_created_at": feedback_created_at,
     }
 
 

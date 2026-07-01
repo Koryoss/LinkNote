@@ -31,6 +31,12 @@
   .item { border:1px solid #eef1f6; border-radius:12px; padding:12px 13px; background:#f8fafc; font-size:.86rem; line-height:1.55; }
   .item small { display:block; color:#94a3b8; margin-bottom:7px; }
   .item p { margin-top:8px; }
+  .memory-card { border:1px solid #e2e8f0; border-radius:12px; padding:14px; background:#fff; box-shadow:0 5px 16px rgba(15,23,42,.04); }
+  .memory-meta { color:#94a3b8; font-size:.78rem; margin-top:3px; }
+  .memory-two-col { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:12px; }
+  .memory-pane { border:1px solid #eef1f6; border-radius:10px; padding:12px; background:#f8fafc; }
+  .memory-pane h4 { font-size:.86rem; color:#1e293b; margin-bottom:8px; }
+  .feedback-empty { border:1px dashed #cbd5e1; border-radius:10px; padding:12px; background:#fff; color:#64748b; }
   .chips { display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; }
   .chip { border:1px solid #bfdbfe; background:#eff6ff; color:#1d4ed8; border-radius:999px; padding:3px 8px; font-size:.74rem; font-weight:700; }
   .notice { border:1px solid #dbeafe; background:#eff6ff; color:#1e40af; border-radius:12px; padding:10px 12px; font-size:.82rem; line-height:1.5; margin-bottom:12px; }
@@ -42,7 +48,7 @@
   .empty, .error { border:1px dashed #d8dee9; border-radius:12px; padding:18px; color:#64748b; background:#fff; margin-top:18px; }
   .error { border-color:#fecaca; color:#b91c1c; background:#fff7f7; }
   .actions { display:flex; flex-wrap:wrap; gap:8px; }
-  @media (max-width:760px){ .grid{grid-template-columns:1fr;} .stats,.filters{grid-template-columns:1fr 1fr;} }
+  @media (max-width:760px){ .grid,.memory-two-col{grid-template-columns:1fr;} .stats,.filters{grid-template-columns:1fr 1fr;} }
 </style>
 </head>
 <body>
@@ -88,18 +94,43 @@
   const chips = (items) => Array.isArray(items) && items.length
     ? `<div class="chips">${items.map(item => `<span class="chip">${esc(item.name || item.concept || item)}</span>`).join('')}</div>`
     : '<p class="sub">아직 표시할 항목이 없습니다.</p>';
-  function memoryCard(item){
+  let currentMemories = [];
+  function feedbackSection(item, index){
     const missing = Array.isArray(item.missing_links) ? item.missing_links : [];
     const good = Array.isArray(item.good_points) ? item.good_points : [];
-    return `<div class="item">
+    if(!item.has_ai_feedback){
+      return `<div class="feedback-empty">
+        아직 AI 피드백이 없습니다.
+        <div class="actions" style="margin-top:10px">
+          <button onclick="generateMemoryFeedback(${index})">AI 피드백 생성</button>
+          <span id="feedbackStatus${index}" class="sub"></span>
+        </div>
+      </div>`;
+    }
+    return `
+      ${item.feedback_text ? `<p><strong>요약 피드백</strong><br>${esc(item.feedback_text)}</p>` : ''}
+      ${good.length ? `<p><strong>좋았던 점</strong></p>${chips(good)}` : ''}
+      ${missing.length ? `<p><strong>더 연결해볼 점</strong></p>${chips(missing)}` : ''}
+      ${item.followup_question ? `<p><strong>다시 생각해볼 질문</strong><br>${esc(item.followup_question)}</p>` : ''}
+      ${item.improved_summary ? `<p><strong>개선 요약</strong><br>${esc(item.improved_summary)}</p>` : ''}
+      ${item.review_hint ? `<p><strong>복습 힌트</strong><br>${esc(item.review_hint)}</p>` : ''}
+      ${item.source_hint ? `<p><strong>다시 볼 자료</strong><br>${esc(item.source_hint)}</p>` : ''}
+      ${item.feedback_created_at ? `<p class="sub">AI 피드백 생성: ${esc(dateText(item.feedback_created_at))}</p>` : ''}`;
+  }
+  function memoryCard(item, index){
+    return `<div class="memory-card">
       <h3>${esc(item.concept || '개념 미지정')}</h3>
-      <small>${esc(item.course)} · ${esc(item.unit)} · ${esc(dateText(item.created_at))}</small>
-      <p><strong>내 설명</strong><br>${esc(item.answer_text || '')}</p>
-      ${item.improved_summary ? `<p><strong>Improved Summary</strong><br>${esc(item.improved_summary)}</p>` : ''}
-      ${good.length ? `<p><strong>Good Points</strong></p>${chips(good)}` : ''}
-      ${missing.length ? `<p><strong>Missing Links</strong></p>${chips(missing)}` : ''}
-      ${item.followup_question ? `<p><strong>Follow-up Question</strong><br>${esc(item.followup_question)}</p>` : ''}
-      ${item.review_hint ? `<p><strong>Review Hint</strong><br>${esc(item.review_hint)}</p>` : ''}
+      <div class="memory-meta">${esc(item.course)} · ${esc(item.unit)} · ${esc(dateText(item.created_at))}</div>
+      <div class="memory-two-col">
+        <section class="memory-pane">
+          <h4>내 설명</h4>
+          <p>${esc(item.answer_text || '')}</p>
+        </section>
+        <section class="memory-pane">
+          <h4>AI 피드백</h4>
+          ${feedbackSection(item, index)}
+        </section>
+      </div>
     </div>`;
   }
   function filtersHTML(){
@@ -129,6 +160,7 @@
       <h2>AI Summary</h2>
       <div class="notice">Learning Memory 조회: GPT 호출 없음</div>
       <div class="notice cost">AI Summary 생성: GPT 호출 · 버튼을 누를 때만 API 비용이 발생합니다.</div>
+      <div class="notice cost">AI 피드백 생성: GPT 호출 · 피드백 없는 카드에서 버튼을 누를 때만 API 비용이 발생합니다.</div>
       <div class="ai-buttons">
         <button onclick="generateAiSummary('weekly')">이번 주 요약 생성</button>
         <button onclick="generateAiSummary('course')">과목 요약 생성</button>
@@ -142,6 +174,7 @@
   }
   function render(summary, data, aiSummaries){
     const memories = Array.isArray(data.items) ? data.items : [];
+    currentMemories = memories;
     const app = document.getElementById('app');
     app.className = 'grid';
     app.innerHTML = `
@@ -204,6 +237,26 @@
       await loadMemories();
     } catch(e) {
       if(status) status.textContent = 'AI Summary를 생성하지 못했습니다: ' + e.message;
+    }
+  }
+  async function generateMemoryFeedback(index){
+    const item = currentMemories[index];
+    const status = document.getElementById('feedbackStatus' + index);
+    if(!item) return;
+    if(status) status.textContent = 'AI 피드백 생성 중... API 비용이 발생할 수 있습니다.';
+    try {
+      await postJSON('/recall-feedback', {
+        semester:item.semester,
+        course:item.course,
+        unit:item.unit,
+        concept:item.concept,
+        answer_text:item.answer_text,
+        trace_id:item.id
+      });
+      if(status) status.textContent = 'AI 피드백을 저장했습니다.';
+      await loadMemories();
+    } catch(e) {
+      if(status) status.textContent = 'AI 피드백을 생성하지 못했습니다: ' + e.message;
     }
   }
   async function init(){

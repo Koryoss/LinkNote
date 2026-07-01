@@ -52,9 +52,30 @@ Newer feedback records may also contain:
 - `followup_question`
 - `improved_summary`
 - `review_hint`
+- `source_hint`
+- `has_ai_feedback`
+- `feedback_created_at`
 - `feedback_type`
 
 Learning Memory normalizes missing fields to empty strings or empty arrays so old records remain readable.
+
+## Memory Cards
+
+Each Learning Memory card shows two study surfaces side by side on wide screens:
+
+- `내 설명`: the learner's original `answer_text`
+- `AI 피드백`: saved feedback from `/recall-feedback`
+
+The AI feedback area can include:
+
+- 좋았던 점
+- 더 연결해볼 점
+- 다시 생각해볼 질문
+- 개선 요약
+- 복습 힌트
+- 다시 볼 자료 / source hint
+
+If a memory does not have AI feedback yet, the page shows `아직 AI 피드백이 없습니다.` and an explicit `AI 피드백 생성` button. That button calls `POST /recall-feedback` using the current user's token-derived ownership and the memory's semester, course, unit, concept, and answer text.
 
 ## Rule-Based Summary
 
@@ -76,13 +97,15 @@ Learning Memory page load remains free of GPT/OpenAI calls. The page can read:
 - saved Learning Memory records
 - rule-based summary data
 - previously generated AI Summaries
+- saved AI feedback generated from `/recall-feedback`
 
-GPT is called only when the user explicitly clicks one of the AI Summary buttons:
+GPT is called only when the user explicitly clicks one of these buttons:
 
 - 이번 주 요약 생성
 - 과목 요약 생성
 - 시험 대비 요약 생성
 - 약한 개념 요약 생성
+- AI 피드백 생성
 
 Generated summaries are appended to `data/learning_memory_summaries.json` for reuse.
 
