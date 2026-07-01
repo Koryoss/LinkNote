@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LinkNote · My Page</title>
+<style>
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { font-family:-apple-system,"Apple SD Gothic Neo","Malgun Gothic",sans-serif; background:#fbfcfe; color:#1f2937; }
+  .topbar { position:sticky; top:0; z-index:20; display:flex; align-items:center; gap:14px; padding:12px 24px; background:rgba(255,255,255,.94); backdrop-filter:blur(6px); border-bottom:1px solid #eef1f6; }
+  .brand { font-size:1.25rem; font-weight:800; color:#1e293b; text-decoration:none; }
+  .spacer { flex:1; }
+  .btn, button { border:1px solid #d8dee9; background:#fff; color:#2563eb; border-radius:8px; padding:8px 12px; font-size:.84rem; font-weight:700; text-decoration:none; cursor:pointer; }
+  .btn.primary { background:#2563eb; border-color:#2563eb; color:#fff; }
+  main { width:min(1080px, calc(100vw - 32px)); margin:24px auto 42px; }
+  .hero { margin-bottom:18px; }
+  h1 { font-size:1.5rem; color:#0f172a; }
+  .sub { margin-top:6px; color:#64748b; font-size:.9rem; }
+  .grid { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:16px; }
+  section { background:#fff; border:1px solid #e8ebf2; border-radius:14px; padding:18px; box-shadow:0 8px 24px rgba(15,23,42,.06); }
+  section.wide { grid-column:1/-1; }
+  h2 { font-size:.98rem; margin-bottom:13px; color:#1e293b; }
+  .kv { display:grid; grid-template-columns:150px 1fr; gap:9px 12px; font-size:.86rem; }
+  .k { color:#64748b; }
+  .v { font-weight:700; color:#1f2937; overflow-wrap:anywhere; }
+  .stats { display:grid; grid-template-columns:repeat(3, minmax(0,1fr)); gap:10px; }
+  .stat { border:1px solid #eef1f6; border-radius:12px; padding:12px; background:#f8fafc; }
+  .stat small { display:block; color:#64748b; font-size:.74rem; margin-bottom:5px; }
+  .stat strong { font-size:1.25rem; color:#0f172a; }
+  .list { display:flex; flex-direction:column; gap:8px; margin-top:12px; }
+  .item { border:1px solid #eef1f6; border-radius:10px; padding:10px 12px; background:#f8fafc; font-size:.84rem; line-height:1.45; }
+  .item small { display:block; color:#94a3b8; margin-top:3px; }
+  .badge { display:inline-block; border:1px solid #bfdbfe; background:#eff6ff; color:#1d4ed8; border-radius:999px; padding:3px 9px; font-size:.75rem; font-weight:800; }
+  .empty, .error { border:1px dashed #d8dee9; border-radius:12px; padding:18px; color:#64748b; background:#fff; }
+  .error { border-color:#fecaca; color:#b91c1c; background:#fff7f7; }
+  .actions { display:flex; flex-wrap:wrap; gap:8px; }
+  @media (max-width:760px){ .grid{grid-template-columns:1fr;} .kv{grid-template-columns:1fr;} .stats{grid-template-columns:1fr 1fr;} }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <a class="brand" href="/">LinkNote</a>
+    <span id="userLabel" class="sub"></span>
+    <span class="spacer"></span>
+    <a class="btn" href="/">Gallery</a>
+    <button onclick="logout()">Logout</button>
+  </div>
+  <main>
+    <div class="hero">
+      <h1>My Page</h1>
+      <p class="sub">계정, 자료 네임스페이스, 라이브러리와 설명해보기 활동을 읽기 전용으로 요약합니다.</p>
+    </div>
+    <div id="app" class="empty">불러오는 중...</div>
+  </main>
+<script>
+  const API = location.protocol.startsWith('http') ? '' : 'http://127.0.0.1:8000';
+  const token = () => localStorage.getItem('ln_token') || '';
+  const headers = () => token() ? { Authorization:'Bearer ' + token() } : {};
+  const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const short = (s) => { s=String(s||''); return s.length > 12 ? s.slice(0,8) + '...' + s.slice(-4) : s; };
+  const dateText = (v) => {
+    if(!v) return '-';
+    if(typeof v === 'number') return new Date(v*1000).toLocaleString('ko-KR');
+    const d = new Date(v);
+    return Number.isNaN(d.getTime()) ? String(v) : d.toLocaleString('ko-KR');
+  };
+  async function getJSON(path){
+    const r = await fetch(API + path, { headers: headers() });
+    const d = await r.json().catch(()=>({}));
+    if(!r.ok) throw new Error(d.detail || 'HTTP ' + r.status);
+    return d;
+  }
+  function logout(){ localStorage.removeItem('ln_token'); location.href='/'; }
+  function stat(label, value){ return `<div class="stat"><small>${esc(label)}</small><strong>${esc(value)}</strong></div>`; }
+  function row(k,v){ return `<div class="k">${esc(k)}</div><div class="v">${esc(v || '-')}</div>`; }
+  function render(summary, me){
+    const account = summary.account || me.user || {};
+    const library = summary.library || {};
+    const learning = summary.learning || {};
+    document.getElementById('userLabel').textContent = account.display_name || account.email || '';
+    const recentUploads = (library.recent_uploads || []).map(x => `<div class="item"><strong>${esc(x.title || x.filename)}</strong><small>${esc(x.semester)} · ${esc(x.course)} · ${esc(x.filename)}</small></div>`).join('') || '<div class="item">최근 자료가 없습니다.</div>';
+    const recentExplanations = (learning.recent_explanations || []).map(x => `<div class="item"><strong>${esc(x.concept)}</strong><div>${esc(x.answer_text || '').slice(0,160)}</div><small>${esc(x.semester)} · ${esc(x.course)} · ${esc(x.unit)} · ${esc(dateText(x.created_at))}</small></div>`).join('') || '<div class="item">저장된 AI 피드백 기록이 없습니다.</div>';
+    document.getElementById('app').className = 'grid';
+    document.getElementById('app').innerHTML = `
+      <section><h2>Account</h2><div class="kv">
+        ${row('email', account.email)}
+        ${row('display_name', account.display_name)}
+        ${row('login method', account.login_method || account.auth_provider)}
+        ${row('account_id', short(account.account_id || account.id))}
+        ${row('data_user_id', account.data_user_id)}
+        ${row('joined_at', dateText(account.joined_at || account.created_at || account.created))}
+      </div></section>
+      <section><h2>Data Namespace</h2><div class="kv">
+        ${row('data_user_id', account.data_user_id)}
+        ${row('maintainer', account.is_maintainer ? 'yes' : 'no')}
+        ${row('legacy namespace', account.is_legacy_namespace ? 'yes' : 'no')}
+        ${row('namespace label', account.namespace_label)}
+        ${row('migration status', account.migration_status)}
+      </div></section>
+      <section class="wide"><h2>My Library Summary</h2><div class="stats">
+        ${stat('uploaded PDFs', library.pdf_count || 0)}
+        ${stat('courses', library.course_count || 0)}
+        ${stat('units', library.unit_count || 0)}
+      </div><div class="list">${recentUploads}</div></section>
+      <section class="wide"><h2>My Learning Data</h2><div class="stats">
+        ${stat('concepts', learning.concept_count || 0)}
+        ${stat('graph nodes', learning.graph_node_count || 0)}
+        ${stat('graph edges', learning.graph_edge_count || 0)}
+        ${stat('feedback count', learning.explanation_feedback_count || 0)}
+        ${stat('concepts explained', learning.concepts_explained_count || 0)}
+        ${stat('last explained', dateText(learning.last_explained_at))}
+      </div><p class="sub" style="margin-top:10px">Last studied: ${esc(dateText(learning.last_studied_at))}</p><div class="list">${recentExplanations}</div></section>
+      <section class="wide"><h2>Actions</h2><div class="actions">
+        <a class="btn primary" href="/">My Library / Gallery</a>
+        <a class="btn" href="/#concept-graph">Concept Graph</a>
+        <button disabled title="Coming soon">Recall History / Explanation History</button>
+        <button onclick="logout()">Logout</button>
+      </div></section>`;
+  }
+  async function init(){
+    const app = document.getElementById('app');
+    if(!token()) { app.className='error'; app.textContent='로그인이 필요합니다. Gallery에서 먼저 로그인해주세요.'; return; }
+    try {
+      const me = await getJSON('/auth/me');
+      const summary = await getJSON('/me/summary');
+      render(summary, me);
+    } catch(e) {
+      app.className='error';
+      app.textContent = 'My Page를 불러오지 못했습니다: ' + e.message;
+    }
+  }
+  init();
+</script>
+</body>
+</html>

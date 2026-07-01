@@ -280,6 +280,7 @@
   /* 로그인 화면 */
   .user-chip { font-size:0.82rem; font-weight:600; color:#1f2937; }
   .topbar #logoutBtn { background:#fff; color:#2563eb; border:1px solid #d8dee9; }
+  .topbar .nav-link { display:none; border:1px solid #d8dee9; background:#fff; color:#2563eb; border-radius:8px; padding:7px 12px; font-size:0.84rem; text-decoration:none; font-weight:600; }
   .auth-overlay { position:fixed; inset:0; z-index:200; background:linear-gradient(135deg,#eef4ff,#f7f9ff 60%,#fff); display:flex; align-items:center; justify-content:center; }
   .auth-overlay[hidden]{ display:none; }
   .auth-card { width:min(380px,92vw); background:#fff; border:1px solid #e8ebf2; border-radius:18px; padding:28px 26px; box-shadow:0 24px 60px rgba(15,23,42,0.16); display:flex; flex-direction:column; }
@@ -320,6 +321,7 @@
     <span class="brand" onclick="loadHome(false)" style="cursor:pointer;">LinkNote</span>
     <input id="uid" type="hidden" value="">
     <span id="userChip" class="user-chip"></span>
+    <a id="myPageLink" class="nav-link" href="/mypage.html">My Page</a>
     <button id="logoutBtn" onclick="logout()" style="display:none;">로그아웃</button>
     <button id="backBtn" style="display:none;">뒤로</button>
     <button onclick="openAdd()">＋ 자료 추가</button>
@@ -1567,6 +1569,7 @@
   function setSession(user){
     document.getElementById('uid').value = user.data_user_id || user.email;
     document.getElementById('userChip').textContent = user.display_name || user.email;
+    document.getElementById('myPageLink').style.display = 'inline-block';
     document.getElementById('logoutBtn').style.display = 'inline-block';
     document.getElementById('authOverlay').hidden = true;
     ensureInitialHistory();

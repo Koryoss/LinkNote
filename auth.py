@@ -120,11 +120,19 @@ def verify_token(token: str):
 
 # ---------- 사용자 ----------
 def _public(user: dict) -> dict:
+    provider = "google" if user.get("google_sub") else "password"
+    created = user.get("created")
     return {
         "id": user["id"],
+        "account_id": user["id"],
         "email": user["email"],
         "display_name": user.get("display_name", ""),
+        "auth_provider": provider,
+        "login_method": provider,
         "data_user_id": user.get("data_user_id", user["email"]),
+        "created": created,
+        "created_at": created,
+        "joined_at": created,
     }
 
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import uuid
 from datetime import datetime, timezone
@@ -15,6 +16,8 @@ from pydantic import BaseModel
 from providers.openai_provider import generate_answer as generate_openai_answer
 
 from pdf_loader import extract_pdf_text
+logger = logging.getLogger(__name__)
+
 from rag import (
     add_pdf_pages_to_db,
     answer_question,
@@ -35,6 +38,9 @@ UPLOAD_DIR = os.path.join(DATA_DIR, "uploads")
 TIMETABLE_PATH = os.path.join(DATA_DIR, "timetable.json")
 CONCEPTS_PATH = os.path.join(DATA_DIR, "concepts.json")
 RECALL_TRACES_PATH = os.path.join(DATA_DIR, "recall_traces.json")
+CONCEPT_INDEX_PATH = os.path.join(DATA_DIR, "concept_index.json")
+CONCEPT_LINKS_PATH = os.path.join(DATA_DIR, "concept_links.json")
+MAINTAINER_EMAIL = "kory124@snu.ac.kr"
 PROMPTS_DIR = os.getenv("PROMPTS_DIR", "./prompts")
 RECALL_FEEDBACK_PROMPT_PATH = os.path.join(PROMPTS_DIR, "recall_feedback.md")
 
@@ -59,9 +65,8 @@ app.add_middleware(
 import auth as _auth
 
 
-def current_uid(authorization: Optional[str] = Header(None)) -> str:
-    """Authorization: Bearer 토큰에서 로그인 사용자의 data_user_id 를 도출.
-    토큰 없거나 잘못되면 401. (클라이언트가 보낸 user_id 는 신뢰하지 않음.)"""
+def current_user(authorization: Optional[str] = Header(None)) -> Dict[str, Any]:
+    """Authorization 토큰에서 로그인 사용자 레코드를 반환한다."""
     token = (authorization or "").replace("Bearer ", "").strip()
     uid = _auth.verify_token(token)
     if not uid:
@@ -69,6 +74,13 @@ def current_uid(authorization: Optional[str] = Header(None)) -> str:
     user = _auth.get_user_by_id(uid)
     if not user:
         raise HTTPException(status_code=401, detail="사용자를 찾을 수 없습니다.")
+    return user
+
+
+def current_uid(authorization: Optional[str] = Header(None)) -> str:
+    """Authorization: Bearer 토큰에서 로그인 사용자의 data_user_id 를 도출.
+    토큰 없거나 잘못되면 401. (클라이언트가 보낸 user_id 는 신뢰하지 않음.)"""
+    user = current_user(authorization)
     return user.get("data_user_id") or user["email"]
 
 
@@ -451,13 +463,15 @@ def _persist_recall_feedback(payload: RecallFeedbackRequest, feedback: RecallFee
 
     if trace_id:
         for index, item in enumerate(traces):
+            if isinstance(item, dict) and str(item.get("feedback_type") or ""):
+                continue
             if isinstance(item, dict) and str(item.get("id", "")).strip() == trace_id:
                 matched_index = index
                 break
 
     if matched_index is None:
         for index, item in enumerate(traces):
-            if not isinstance(item, dict):
+            if not isinstance(item, dict) or str(item.get("feedback_type") or ""):
                 continue
             if not _trace_matches(
                 item,
@@ -473,12 +487,158 @@ def _persist_recall_feedback(payload: RecallFeedbackRequest, feedback: RecallFee
             if matched_index is None or str(item.get("created_at", "")) > str(traces[matched_index].get("created_at", "")):
                 matched_index = index
 
-    if matched_index is None:
-        return
+    created_at = datetime.now(timezone.utc).isoformat()
+    feedback_record = {
+        "id": uuid.uuid4().hex,
+        "user_id": payload.user_id.strip(),
+        "semester": payload.semester.strip(),
+        "course": payload.course.strip(),
+        "unit": payload.unit.strip(),
+        "concept": payload.concept.strip(),
+        "answer_text": payload.answer_text.strip(),
+        "feedback": feedback_data,
+        "feedback_text": json.dumps(feedback_data, ensure_ascii=False),
+        "feedback_type": "explain_concept",
+        "source_trace_id": trace_id or (traces[matched_index].get("id") if matched_index is not None else ""),
+        "created_at": created_at,
+    }
 
-    traces[matched_index]["feedback"] = feedback_data
-    traces[matched_index]["feedback_created_at"] = datetime.now(timezone.utc).isoformat()
+    if matched_index is not None:
+        traces[matched_index]["feedback"] = feedback_data
+        traces[matched_index]["feedback_created_at"] = created_at
+
+    traces.append(feedback_record)
     _save_recall_traces(traces)
+
+
+def _is_uuid_like(value: str) -> bool:
+    raw = str(value or "").strip()
+    if not raw:
+        return False
+    try:
+        uuid.UUID(raw)
+        return True
+    except ValueError:
+        pass
+    try:
+        uuid.UUID(raw.replace("-", ""))
+        return len(raw.replace("-", "")) == 32
+    except ValueError:
+        return False
+
+
+def _safe_list_json(path: str) -> List[Dict[str, Any]]:
+    data = _load_json_file(path)
+    return [item for item in data if isinstance(item, dict)] if isinstance(data, list) else []
+
+
+def _iter_user_concepts(data: Any, user_id: str) -> List[Dict[str, Any]]:
+    concepts: List[Dict[str, Any]] = []
+    user_data = data.get(user_id, {}) if isinstance(data, dict) else {}
+    if not isinstance(user_data, dict):
+        return concepts
+    for semester_data in user_data.values():
+        if not isinstance(semester_data, dict):
+            continue
+        for course_data in semester_data.values():
+            if not isinstance(course_data, dict):
+                continue
+            for unit_concepts in course_data.values():
+                if isinstance(unit_concepts, list):
+                    concepts.extend([item for item in unit_concepts if isinstance(item, dict)])
+    return concepts
+
+
+def _library_summary_for_user(user_id: str) -> Dict[str, Any]:
+    overview = get_library_overview(user_id=user_id)
+    semesters = overview.get("semesters", {}) if isinstance(overview, dict) else {}
+    filenames = set()
+    courses = set()
+    recent_uploads_by_file: Dict[str, Dict[str, Any]] = {}
+
+    if isinstance(semesters, dict):
+        for semester, semester_courses in semesters.items():
+            if not isinstance(semester_courses, dict):
+                continue
+            for course, files in semester_courses.items():
+                courses.add((str(semester), str(course)))
+                if not isinstance(files, dict):
+                    continue
+                for filename, info in files.items():
+                    filenames.add(str(filename))
+                    recent_uploads_by_file[str(filename)] = {
+                        "semester": semester,
+                        "course": course,
+                        "filename": filename,
+                        "title": info.get("title", "") if isinstance(info, dict) else "",
+                    }
+
+    chunk_data = get_chunks(user_id=user_id, limit=5000, offset=0, full=False)
+    units = {
+        (str(item.get("semester") or ""), str(item.get("course") or ""), str(item.get("unit") or ""))
+        for item in chunk_data.get("items", [])
+        if str(item.get("unit") or "").strip()
+    }
+
+    recent_uploads = list(recent_uploads_by_file.values())[-5:]
+    recent_uploads.reverse()
+    return {
+        "pdf_count": len(filenames),
+        "course_count": len(courses),
+        "unit_count": len(units),
+        "recent_uploads": recent_uploads,
+    }
+
+
+def _learning_summary_for_user(user_id: str) -> Dict[str, Any]:
+    concepts = _iter_user_concepts(_load_json_file(CONCEPTS_PATH), user_id)
+    graph_nodes = [item for item in _safe_list_json(CONCEPT_INDEX_PATH) if item.get("user_id") == user_id]
+    node_ids = {str(item.get("id")) for item in graph_nodes if item.get("id")}
+    links_data = _load_json_file(CONCEPT_LINKS_PATH)
+    graph_edges = []
+    if isinstance(links_data, dict):
+        graph_edges = [
+            edge for edge in links_data.get("edges", [])
+            if isinstance(edge, dict) and str(edge.get("a")) in node_ids and str(edge.get("b")) in node_ids
+        ]
+
+    traces = [item for item in _load_recall_traces() if item.get("user_id") == user_id]
+    explanation_traces = [item for item in traces if not str(item.get("feedback_type") or "")]
+    feedback_records = [item for item in traces if item.get("feedback_type") == "explain_concept"]
+    concepts_explained = {
+        _concept_key(item.get("concept")) for item in feedback_records if _concept_key(item.get("concept"))
+    }
+    last_explained_at = max([str(item.get("created_at") or "") for item in feedback_records] or ["",]) or None
+    last_studied_at = max(
+        [str(item.get("created_at") or "") for item in (feedback_records or explanation_traces)] or ["",]
+    ) or None
+
+    recent = sorted(feedback_records, key=lambda item: str(item.get("created_at") or ""), reverse=True)[:5]
+    recent_explanations = [
+        {
+            "id": item.get("id", ""),
+            "semester": item.get("semester", ""),
+            "course": item.get("course", ""),
+            "unit": item.get("unit", ""),
+            "concept": item.get("concept", ""),
+            "answer_text": item.get("answer_text", ""),
+            "feedback_text": item.get("feedback_text", ""),
+            "feedback_type": item.get("feedback_type", "explain_concept"),
+            "created_at": item.get("created_at"),
+        }
+        for item in recent
+    ]
+
+    return {
+        "concept_count": len(concepts),
+        "graph_node_count": len(graph_nodes),
+        "graph_edge_count": len(graph_edges),
+        "explanation_feedback_count": len(feedback_records),
+        "concepts_explained_count": len(concepts_explained),
+        "last_explained_at": last_explained_at,
+        "last_studied_at": last_studied_at,
+        "recent_explanations": recent_explanations,
+    }
 
 def _build_timetable_response(uid: str) -> TimetableResponse:
     timetable = [e for e in _load_timetable() if e.get("user_id") == uid]
@@ -799,7 +959,7 @@ async def recall_traces(
     concept_filter = (concept or "").strip()
     traces = []
     for item in _load_recall_traces():
-        if not isinstance(item, dict):
+        if not isinstance(item, dict) or str(item.get("feedback_type") or ""):
             continue
         if any(str(item.get(key, "")) != value for key, value in filters.items()):
             continue
@@ -871,7 +1031,10 @@ async def recall_feedback(
         feedback.source_hint = f"{first.get('course', course)} · {first.get('unit', unit)} · {first.get('filename', '')} p.{first.get('page', '')} 근처를 다시 보세요."
 
     payload_for_persist = payload.copy(update={"user_id": data_user_id})
-    _persist_recall_feedback(payload_for_persist, feedback)
+    try:
+        _persist_recall_feedback(payload_for_persist, feedback)
+    except Exception:
+        logger.exception("Failed to persist explanation feedback for user_id=%s", data_user_id)
     return feedback
 
 
@@ -1069,6 +1232,34 @@ async def concept_graph(semester: Optional[str] = None, data_user_id: str = Depe
             status_code=500,
             detail=f"그래프 조회 중 오류 발생: {str(exc)}"
         ) from exc
+
+
+
+@app.get("/me/summary")
+async def me_summary(user: Dict[str, Any] = Depends(current_user)) -> Dict[str, Any]:
+    data_user_id = user.get("data_user_id") or user["email"]
+    email = str(user.get("email") or "").lower()
+    is_maintainer = email == MAINTAINER_EMAIL
+    is_legacy_namespace = not _is_uuid_like(str(data_user_id))
+    public = _auth.public_user(user)
+
+    account = {
+        **public,
+        "is_maintainer": is_maintainer,
+        "is_legacy_namespace": is_legacy_namespace,
+        "namespace_label": "Legacy user_id" if is_legacy_namespace else "UUID data_user_id",
+        "migration_status": (
+            "Existing data namespace linked"
+            if is_maintainer and is_legacy_namespace
+            else "Isolated data namespace"
+        ),
+    }
+
+    return {
+        "account": account,
+        "library": _library_summary_for_user(data_user_id),
+        "learning": _learning_summary_for_user(data_user_id),
+    }
 
 
 # ============== 계정 / 인증 (Stage C-1) ==============
