@@ -1075,11 +1075,17 @@ def _uid_from_token(token: str) -> str:
     return user.get("data_user_id") or user["email"]
 
 
-def _safe_preview_filename(filename: str) -> str:
-    normalized = unicodedata.normalize("NFC", (filename or "").strip())
-    if not normalized or normalized in {".", ".."}:
-        raise HTTPException(status_code=400, detail="잘못된 파일명입니다.")
-    if "/" in normalized or "\\" in normalized or os.path.basename(normalized) != normalized:
+def _normalize_filename(name: str) -> str:
+    normalized = unicodedata.normalize("NFC", (name or "").strip())
+    if (
+        not normalized
+        or normalized in {".", ".."}
+        or ".." in normalized
+        or "/" in normalized
+        or "\\" in normalized
+        or os.path.isabs(normalized)
+        or os.path.basename(normalized) != normalized
+    ):
         raise HTTPException(status_code=400, detail="잘못된 파일명입니다.")
     return normalized
 
@@ -1095,14 +1101,16 @@ def _safe_upload_path(upload_filename: str) -> Optional[str]:
     return candidate if os.path.isfile(candidate) else None
 
 
-def _owned_filenames_for_user(data_user_id: str) -> set[str]:
+def _filenames_owned_by_user(data_user_id: str) -> set[str]:
     overview = get_library_overview(user_id=data_user_id)
     owned: set[str] = set()
     for courses in overview.get("semesters", {}).values():
         for files in courses.values():
             for filename in files.keys():
-                if safe_name := unicodedata.normalize("NFC", os.path.basename(filename or "")).strip():
-                    owned.add(safe_name)
+                try:
+                    owned.add(_normalize_filename(filename or ""))
+                except HTTPException:
+                    continue
     return owned
 
 
@@ -1118,8 +1126,8 @@ def _matching_upload_paths(filename: str) -> List[str]:
 
 
 def _resolve_owned_upload_path(data_user_id: str, requested_filename: str) -> Optional[str]:
-    safe_filename = _safe_preview_filename(requested_filename)
-    if safe_filename not in _owned_filenames_for_user(data_user_id):
+    safe_filename = _normalize_filename(requested_filename)
+    if safe_filename not in _filenames_owned_by_user(data_user_id):
         return None
 
     matches = _matching_upload_paths(safe_filename)
