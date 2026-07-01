@@ -323,7 +323,7 @@
     <input id="uid" type="hidden" value="">
     <span id="userChip" class="user-chip"></span>
     <a id="myPageLink" class="nav-link" href="/mypage.html">My Page</a>
-    <button id="clinicalReflectionBtn" class="nav-link nursing-only" onclick="clinicalReflectionSoon()">실습 회고</button>
+    <button id="clinicalReflectionBtn" class="nav-link nursing-only" onclick="clinicalReflectionSoon()" title="Clinical Reflection · Coming soon">실습 회고 · Clinical Reflection</button>
     <button id="logoutBtn" onclick="logout()" style="display:none;">로그아웃</button>
     <button id="backBtn" style="display:none;">뒤로</button>
     <button onclick="openAdd()">＋ 자료 추가</button>
@@ -1584,7 +1584,7 @@
     loadHome(false);
   }
   function logout(){ localStorage.removeItem('ln_token'); location.reload(); }
-  function clinicalReflectionSoon(){ alert('Clinical Reflection / 실습 회고는 다음 PR에서 추가될 예정입니다.'); }
+  function clinicalReflectionSoon(){ alert('실습 회고 / Clinical Reflection은 Coming soon입니다. 환자 이름, 등록번호, 주민등록번호, 전화번호, 병실번호 등 식별 정보는 입력하지 않는 교육용 기능으로 설계될 예정입니다.'); }
   function authTab(which){
     document.getElementById('authTabLogin').classList.toggle('on', which==='login');
     document.getElementById('authTabReg').classList.toggle('on', which==='register');

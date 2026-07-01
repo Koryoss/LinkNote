@@ -27,7 +27,7 @@ Nursing students may eventually get additional educational tools:
 - exam connection points
 - My Page nursing practice summary
 
-Clinical Reflection must be educational only. Users must not enter patient-identifying information such as patient name, resident number, hospital ID, phone number, exact room number, or other personal identifiers. This feature does not replace clinical judgment, instructor guidance, or hospital policy.
+Clinical Reflection must be educational only. Users must not enter patient-identifying information such as patient name, resident number, hospital ID, phone number, exact room number, or other personal identifiers. This feature does not replace clinical judgment, instructor guidance, or hospital policy. See [Nursing Clinical Reflection Plan](docs/nursing-clinical-reflection.md).
 
 ## Current Project Structure
 

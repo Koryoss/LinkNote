@@ -127,15 +127,15 @@ Do not delete yet:
 
 These scripts are development utilities and may still be useful for local recovery, migration, and verification.
 
-## Recall Implementation Boundary
+## Recall Implementation Status
 
-Phase 1 Recall Trace should be a later implementation PR.
+This audit originally marked Recall Trace as future work. The current backend and gallery UI now include a lightweight local recall layer:
 
-Do not add in this documentation pass:
+- `POST /recall-traces` stores a learner explanation in `data/recall_traces.json`.
+- `GET /recall-traces` lists explanation traces for the authenticated user's server-derived `data_user_id`.
+- `POST /recall-feedback` generates SCiyl-style feedback and appends successful feedback calls as `feedback_type: "explain_concept"` records.
+- `web/gallery.html` contains the existing `설명해보기` panel and calls the recall endpoints.
+- `GET /me/summary` counts successful explanation feedback records for My Page.
 
-- recall API endpoints
-- recall database schema
-- recall frontend buttons
-- `data/recall_traces.json`
-- `services/recall.py`
+The implementation remains local-first and JSON-backed. Future work may still add a full Recall History page or production storage, but the endpoint/UI presence above should be treated as implemented in the current codebase.
 
