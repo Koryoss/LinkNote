@@ -976,6 +976,236 @@
     layoutNodes(nodes);
     loadUnitDoc(state.semester, state.course, unit);
   }
+
+
+  function toggleDocPanel(force){
+    const cols = document.getElementById('unitCols');
+    const btn = document.getElementById('docToggleBtn');
+    if(!cols) return;
+    const shouldCollapse = typeof force === 'boolean' ? force : !cols.classList.contains('doc-collapsed');
+    cols.classList.toggle('doc-collapsed', shouldCollapse);
+    if(btn) btn.textContent = shouldCollapse ? 'PDF 열기' : 'PDF 닫기';
+    localStorage.setItem('ln_doc_panel_collapsed', shouldCollapse ? '1' : '0');
+    setTimeout(()=>{ if(lastNodes) layoutNodes(lastNodes); }, 0);
+  }
+
+  function restoreDocPanelState(){
+    toggleDocPanel(localStorage.getItem('ln_doc_panel_collapsed') === '1');
+  }
+
+
+  function toggleGraphPanel(force){
+    const panel = document.getElementById('graphPanel');
+    const btn = document.getElementById('graphToggleBtn');
+    if(!panel) return;
+    const shouldCollapse = typeof force === 'boolean' ? force : !panel.classList.contains('graph-collapsed');
+    panel.classList.toggle('graph-collapsed', shouldCollapse);
+    if(btn) btn.textContent = shouldCollapse ? '지도 열기' : '지도 닫기';
+    localStorage.setItem('ln_graph_panel_collapsed', shouldCollapse ? '1' : '0');
+    if(!shouldCollapse) setTimeout(()=>{ if(lastNodes) layoutNodes(lastNodes); }, 0);
+  }
+
+  function restoreGraphPanelState(){
+    toggleGraphPanel(localStorage.getItem('ln_graph_panel_collapsed') === '1');
+  }
+
+  function recallPanelHTML(){
+    return `<div id="recallPanel" class="recall-panel" hidden>
+      <div class="recall-head">
+        <div class="recall-title">설명해보기 · <span id="recallConcept" class="recall-concept"></span></div>
+        <button id="recallHistoryToggle" class="recall-history-toggle" onclick="toggleRecallHistory()">최근 recall 기록</button>
+      </div>
+      <textarea id="recallAnswer" placeholder="이 개념을 내 말로 설명해보세요."></textarea>
+      <div class="recall-actions">
+        <button onclick="saveRecallTrace()">저장</button>
+        <span id="recallStatus" class="recall-status"></span>
+      </div>
+      <div id="recallList" class="recall-list"></div>
+    </div>`;
+  }
+
+  let selectedRecallConcept = "";
+  function recallQuery(concept){
+    const params = new URLSearchParams({
+      user_id: uid(),
+      semester: state.semester || "",
+      course: state.course || "",
+      unit: state.unit || "",
+    });
+    if(concept) params.set("concept", concept);
+    return params.toString();
+  }
+
+  async function showRecallPanel(concept){
+    selectedRecallConcept = concept || "";
+    const panel = document.getElementById("recallPanel");
+    if(!panel || !selectedRecallConcept) return;
+    panel.hidden = false;
+    recallHistoryExpanded = false;
+    document.getElementById("recallConcept").textContent = selectedRecallConcept;
+    document.getElementById("recallAnswer").value = "";
+    await loadRecallTraces(selectedRecallConcept);
+  }
+
+  async function loadRecallTraces(concept){
+    const status = document.getElementById("recallStatus");
+    const list = document.getElementById("recallList");
+    if(!list) return;
+    status.textContent = "기록을 불러오는 중...";
+    try {
+      const data = await getJSON(`/recall-traces?${recallQuery(concept)}&limit=100`);
+      latestRecallTraces = Array.isArray(data.traces) ? data.traces : [];
+      renderRecallTraces();
+      status.textContent = "";
+    } catch(e){
+      latestRecallTraces = [];
+      status.textContent = "recall 기록을 불러오지 못했습니다.";
+      list.innerHTML = "";
+    }
+  }
+
+
+  let latestRecallTraces = [];
+  let recallHistoryExpanded = false;
+
+  function toggleRecallHistory(){
+    recallHistoryExpanded = !recallHistoryExpanded;
+    renderRecallTraces();
+  }
+
+  function recallConceptKey(value){
+    return String(value || '').replace(/\s+/g, '').toLowerCase();
+  }
+
+  function applyRecallTraceToGraph(trace){
+    if(!trace || !lastNodes) return;
+    const key = recallConceptKey(trace.concept);
+    let changed = false;
+    lastNodes.forEach(n => {
+      if(recallConceptKey(n.name) !== key && recallConceptKey(n.keyword) !== key) return;
+      n.recall_count = Number(n.recall_count || 0) + 1;
+      n.last_recalled_at = trace.created_at || n.last_recalled_at || null;
+      changed = true;
+    });
+    if(changed) layoutNodes(lastNodes);
+  }
+
+  function renderRecallTraces(){
+    const list = document.getElementById("recallList");
+    const toggle = document.getElementById("recallHistoryToggle");
+    if(!list) return;
+    const traces = latestRecallTraces || [];
+    if(toggle){
+      toggle.textContent = recallHistoryExpanded ? `전체 recall 기록 ${traces.length}개` : "최근 recall 기록";
+      toggle.disabled = !traces.length;
+      toggle.title = traces.length ? "누적 recall 기록 보기" : "저장된 recall 기록 없음";
+    }
+    if(!traces.length){
+      list.innerHTML = `<div class="recall-item">아직 저장된 설명이 없습니다.</div>`;
+      return;
+    }
+    const visibleTraces = recallHistoryExpanded ? traces : traces.slice(0, 5);
+    const rows = visibleTraces.map((t, i) => {
+      const originalIndex = traces.indexOf(t);
+      const feedback = t.feedback && typeof t.feedback === "object" ? t.feedback : null;
+      const feedbackStamp = t.feedback_created_at ? `<small>AI 피드백 · ${esc(formatRecallDate(t.feedback_created_at))}</small>` : "";
+      const feedbackBox = feedback
+        ? `<div id="feedbackBox${originalIndex}" class="feedback-box">${feedbackStamp}${renderFeedback(feedback)}</div>`
+        : `<div id="feedbackBox${originalIndex}" class="feedback-box" hidden></div>`;
+      return `<div class="recall-item"><small>${esc(formatRecallDate(t.created_at))}</small>${esc(t.answer_text)}<div class="recall-item-actions"><button onclick="requestRecallFeedback(${originalIndex})">${feedback ? "AI 피드백 다시 생성" : "AI 피드백"}</button><span id="feedbackStatus${originalIndex}" class="recall-status"></span></div>${feedbackBox}</div>`;
+    }).join("");
+    const more = !recallHistoryExpanded && traces.length > 5
+      ? `<button class="recall-history-toggle" onclick="toggleRecallHistory()">누적 기록 ${traces.length}개 보기</button>`
+      : "";
+    list.innerHTML = rows + more;
+  }
+
+  function renderFeedback(data){
+    const list = (items) => Array.isArray(items) && items.length
+      ? `<ul>${items.map(item => `<li>${esc(item)}</li>`).join("")}</ul>`
+      : `<div class="muted">자료에서 뚜렷하게 확인되지 않았습니다.</div>`;
+    return `<strong>좋았던 점</strong>${list(data.good_points)}
+      <strong>더 연결해볼 점</strong>${list(data.missing_links)}
+      <strong>다시 생각해볼 질문</strong><div>${esc(data.followup_question || "")}</div>
+      <strong>다시 볼 자료</strong><div>${esc(data.source_hint || "")}</div>`;
+  }
+
+  async function requestRecallFeedback(index){
+    const trace = latestRecallTraces[index];
+    const status = document.getElementById(`feedbackStatus${index}`);
+    const box = document.getElementById(`feedbackBox${index}`);
+    if(!trace || !status || !box) return;
+    status.textContent = "생성 중...";
+    box.hidden = true;
+    try {
+      const r = await fetch(API + "/recall-feedback", {
+        method:"POST",
+        headers: authHeaders({"Content-Type":"application/json"}),
+        body:JSON.stringify({
+          user_id: trace.user_id,
+          semester: trace.semester,
+          course: trace.course,
+          unit: trace.unit,
+          concept: trace.concept,
+          answer_text: trace.answer_text,
+          trace_id: trace.id || "",
+        }),
+      });
+      const d = await r.json().catch(()=>({}));
+      if(!r.ok){ status.textContent = d.detail || "피드백 실패"; return; }
+      trace.feedback = d;
+      trace.feedback_created_at = new Date().toISOString();
+      box.innerHTML = `<small>AI 피드백 · ${esc(formatRecallDate(trace.feedback_created_at))}</small>` + renderFeedback(d);
+      box.hidden = false;
+      status.textContent = "";
+    } catch(e){
+      status.textContent = "서버에 연결할 수 없습니다.";
+    }
+  }
+
+  async function saveRecallTrace(){
+    const status = document.getElementById("recallStatus");
+    const answer = document.getElementById("recallAnswer").value.trim();
+    if(!selectedRecallConcept){ status.textContent = "먼저 개념을 선택하세요."; return; }
+    if(!answer){ status.textContent = "설명을 입력하세요."; return; }
+    status.textContent = "저장 중...";
+    const body = {
+      user_id: uid(),
+      semester: state.semester || "",
+      course: state.course || "",
+      unit: state.unit || "",
+      concept: selectedRecallConcept,
+      answer_text: answer,
+    };
+    try {
+      const r = await fetch(API + "/recall-traces", {
+        method:"POST",
+        headers: authHeaders({"Content-Type":"application/json"}),
+        body:JSON.stringify(body),
+      });
+      const d = await r.json().catch(()=>({}));
+      if(!r.ok){ status.textContent = d.detail || "저장 실패"; return; }
+      document.getElementById("recallAnswer").value = "";
+      status.textContent = "저장됨";
+      applyRecallTraceToGraph(d.trace);
+      await loadRecallTraces(selectedRecallConcept);
+    } catch(e){
+      status.textContent = "서버에 연결할 수 없습니다.";
+    }
+  }
+
+
+  function startRecallForActive(){
+    const concept = selectedRecallConcept || lastCore || (lastNodes && lastNodes[0] && lastNodes[0].name) || "";
+    if(concept) showRecallPanel(concept);
+  }
+
+  function formatRecallDate(value){
+    const d = new Date(value);
+    if(Number.isNaN(d.getTime())) return value || "";
+    return d.toLocaleString("ko-KR", { dateStyle:"short", timeStyle:"short" });
+  }
+
   let lastNodes = null;
   let lastCore = null;
   let drillVisible = null;
@@ -1317,7 +1547,7 @@
       let url, body;
       if(mode==='register'){
         url = API+'/auth/register';
-        body = { email, password:pw, display_name:document.getElementById('au_name').value.trim(), link_user_id:(document.getElementById('au_link')?document.getElementById('au_link').value.trim():'') };
+        body = { email, password:pw, display_name:document.getElementById('au_name').value.trim() };
       } else {
         url = API+'/auth/login'; body = { email, password:pw };
       }
@@ -1356,9 +1586,7 @@
   async function onGoogleCredential(resp){
     const st=document.getElementById('au_status'); st.style.color='#2563eb'; st.textContent='Google 로그인 중…';
     try{
-      const linkEl=document.getElementById('au_link');
-      const link = linkEl ? linkEl.value.trim() : '';
-      const r=await fetch(API+'/auth/google',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({credential:resp.credential, link_user_id:link})});
+      const r=await fetch(API+'/auth/google',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({credential:resp.credential})});
       const d=await r.json();
       if(!r.ok){ st.style.color='#ef4444'; st.textContent=(d.detail||'실패'); return; }
       localStorage.setItem('ln_token', d.token); setSession(d.user);
