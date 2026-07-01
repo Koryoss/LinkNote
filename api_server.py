@@ -2102,6 +2102,81 @@ async def concept_graph(semester: Optional[str] = None, data_user_id: str = Depe
         ) from exc
 
 
+@app.get("/concept-graph/overview")
+async def concept_graph_overview(
+    course: Optional[str] = None,
+    unit: Optional[str] = None,
+    weak_only: bool = False,
+    data_user_id: str = Depends(current_uid),
+) -> Dict[str, Any]:
+    """Read-only user-level concept graph view. Uses existing graph files only."""
+    if not os.path.exists(CONCEPT_INDEX_PATH) or not os.path.exists(CONCEPT_LINKS_PATH):
+        return {"nodes": [], "edges": [], "stats": {"node_count": 0, "edge_count": 0, "weak_concept_count": 0}}
+
+    index_data = _safe_list_json(CONCEPT_INDEX_PATH)
+    links_data = _load_json_file(CONCEPT_LINKS_PATH)
+    course_filter = (course or "").strip()
+    unit_filter = (unit or "").strip()
+    nodes: List[Dict[str, Any]] = []
+
+    for item in index_data:
+        if not isinstance(item, dict) or item.get("user_id") != data_user_id:
+            continue
+        if course_filter and str(item.get("course") or "") != course_filter:
+            continue
+        if unit_filter and str(item.get("unit") or "") != unit_filter:
+            continue
+        semester = str(item.get("semester") or "")
+        node_course = str(item.get("course") or "")
+        node_unit = str(item.get("unit") or "")
+        label = str(item.get("name") or item.get("keyword") or "")
+        meta = _recall_metadata_for_scope(data_user_id, semester, node_course, node_unit).get(_concept_key(label), {})
+        recall_count = int(meta.get("recall_count") or 0)
+        missing_links_count = int(meta.get("missing_links_count") or 0)
+        weak_score = _score_recall_weakness(recall_count, meta.get("last_recalled_at"), missing_links_count)
+        if weak_only and weak_score < 50:
+            continue
+        nodes.append({
+            "id": str(item.get("id") or ""),
+            "label": label,
+            "name": label,
+            "course": node_course,
+            "unit": node_unit,
+            "semester": semester,
+            "weight": item.get("weight", 1),
+            "recall_count": recall_count,
+            "missing_links_count": missing_links_count,
+            "weak_score": weak_score,
+            "last_recalled_at": meta.get("last_recalled_at"),
+        })
+
+    node_ids = {node["id"] for node in nodes if node.get("id")}
+    edges = []
+    if isinstance(links_data, dict):
+        for edge in links_data.get("edges", []):
+            if not isinstance(edge, dict):
+                continue
+            source = str(edge.get("source") or edge.get("a") or "")
+            target = str(edge.get("target") or edge.get("b") or "")
+            if source in node_ids and target in node_ids:
+                edges.append({
+                    "source": source,
+                    "target": target,
+                    "weight": edge.get("weight", edge.get("score", 0)),
+                })
+
+    return {
+        "nodes": nodes,
+        "edges": edges,
+        "stats": {
+            "node_count": len(nodes),
+            "edge_count": len(edges),
+            "weak_concept_count": len([node for node in nodes if int(node.get("weak_score") or 0) >= 50]),
+            "recalled_concept_count": len([node for node in nodes if int(node.get("recall_count") or 0) > 0]),
+        },
+    }
+
+
 
 @app.get("/me/summary")
 async def me_summary(user: Dict[str, Any] = Depends(current_user)) -> Dict[str, Any]:
@@ -2376,6 +2451,7 @@ async def health() -> Dict[str, Any]:
             "/learning-memory/ai-summaries",
             "/clinical-reflection",
             "/clinical-reflections",
+            "/concept-graph/overview",
             "/ask/search",
         ],
     }

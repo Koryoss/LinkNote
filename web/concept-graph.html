@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LinkNote · Concept Graph</title>
+<style>
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { font-family:-apple-system,"Apple SD Gothic Neo","Malgun Gothic",sans-serif; background:#fbfcfe; color:#1f2937; }
+  .topbar { position:sticky; top:0; z-index:20; display:flex; align-items:center; gap:10px; padding:12px 24px; background:rgba(255,255,255,.94); backdrop-filter:blur(6px); border-bottom:1px solid #eef1f6; }
+  .brand { font-size:1.18rem; font-weight:800; color:#1e293b; text-decoration:none; }
+  .spacer { flex:1; }
+  .btn, button { border:1px solid #d8dee9; background:#fff; color:#2563eb; border-radius:8px; padding:8px 12px; font-size:.84rem; font-weight:700; text-decoration:none; cursor:pointer; }
+  .btn.primary { background:#2563eb; border-color:#2563eb; color:#fff; }
+  main { width:min(1180px, calc(100vw - 32px)); margin:24px auto 44px; }
+  h1 { font-size:1.55rem; color:#0f172a; }
+  h2 { font-size:1rem; margin-bottom:12px; color:#1e293b; }
+  .sub { margin-top:6px; color:#64748b; font-size:.9rem; line-height:1.55; }
+  .grid { display:grid; grid-template-columns:2fr 1fr; gap:16px; margin-top:18px; }
+  section { background:#fff; border:1px solid #e8ebf2; border-radius:14px; padding:18px; box-shadow:0 8px 24px rgba(15,23,42,.06); }
+  section.wide { grid-column:1/-1; }
+  .stats { display:grid; grid-template-columns:repeat(4, minmax(0, 1fr)); gap:10px; }
+  .stat { border:1px solid #eef1f6; border-radius:12px; padding:12px; background:#f8fafc; }
+  .stat small { display:block; color:#64748b; font-size:.74rem; margin-bottom:5px; }
+  .stat strong { font-size:1.2rem; color:#0f172a; }
+  .filters { display:grid; grid-template-columns:repeat(4, minmax(0, 1fr)); gap:8px; align-items:end; margin-top:14px; }
+  .filters label { color:#64748b; font-size:.74rem; font-weight:700; }
+  .filters input { width:100%; border:1px solid #d8dee9; border-radius:8px; padding:8px 10px; font-size:.85rem; margin-top:4px; }
+  .filters .check { display:flex; align-items:center; gap:8px; margin-top:22px; }
+  .filters .check input { width:auto; margin:0; }
+  .graph-wrap { position:relative; height:580px; border:1px solid #eef1f6; border-radius:12px; overflow:hidden; background:radial-gradient(circle at 50% 50%, #fff, #f8fafc); }
+  svg { width:100%; height:100%; display:block; }
+  .edge { stroke:#cbd5e1; stroke-width:1.5; opacity:.72; }
+  .node { cursor:pointer; }
+  .node circle { fill:#eff6ff; stroke:#93c5fd; stroke-width:2; }
+  .node.recalled circle { fill:#dbeafe; stroke:#2563eb; }
+  .node.weak circle { fill:#fff7ed; stroke:#f97316; }
+  .node text { font-size:12px; fill:#1f2937; font-weight:700; paint-order:stroke; stroke:#fff; stroke-width:3px; }
+  .empty, .error { border:1px dashed #d8dee9; border-radius:12px; padding:18px; color:#64748b; background:#fff; margin-top:18px; }
+  .error { border-color:#fecaca; color:#b91c1c; background:#fff7f7; }
+  .detail { font-size:.88rem; line-height:1.6; }
+  .detail dt { color:#64748b; font-size:.75rem; font-weight:800; margin-top:8px; }
+  .detail dd { color:#111827; font-weight:700; overflow-wrap:anywhere; }
+  @media (max-width:860px){ .grid{grid-template-columns:1fr;} .stats,.filters{grid-template-columns:1fr 1fr;} .graph-wrap{height:520px;} }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <a class="brand" href="/">LinkNote</a>
+    <span class="spacer"></span>
+    <a class="btn" href="/mypage.html">My Page</a>
+    <a class="btn" href="/">Gallery</a>
+  </div>
+  <main>
+    <h1>Concept Graph</h1>
+    <p class="sub">저장된 개념 그래프와 설명해보기 metadata를 읽기 전용으로 확인합니다. 이 화면은 GPT/OpenAI를 호출하지 않습니다.</p>
+    <div id="app" class="empty">불러오는 중...</div>
+  </main>
+<script>
+  const configuredApi = window.LINKNOTE_API_BASE || localStorage.getItem('ln_api_base') || '';
+  const API = (configuredApi || (location.protocol.startsWith('http') ? '' : 'http://127.0.0.1:8000')).replace(/\/$/, '');
+  const token = () => localStorage.getItem('ln_token') || '';
+  const headers = () => token() ? { Authorization:'Bearer ' + token() } : {};
+  const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  async function getJSON(path){
+    const r = await fetch(API + path, { headers: headers() });
+    const d = await r.json().catch(()=>({}));
+    if(!r.ok) throw new Error(`${path} returned ${r.status} ${d.detail || r.statusText}`);
+    return d;
+  }
+  const stat = (label, value) => `<div class="stat"><small>${esc(label)}</small><strong>${esc(value)}</strong></div>`;
+  function filtersHTML(){
+    return `<div class="filters">
+      <label>Course<input id="course" placeholder="과목"></label>
+      <label>Unit<input id="unit" placeholder="단원"></label>
+      <label class="check"><input id="weakOnly" type="checkbox"> weak concepts only</label>
+      <button onclick="loadGraph()">적용</button>
+    </div>`;
+  }
+  function layout(nodes, width, height){
+    const cx = width / 2, cy = height / 2;
+    const sorted = [...nodes].sort((a,b)=>(Number(b.weak_score||0)-Number(a.weak_score||0)) || (Number(b.weight||0)-Number(a.weight||0)));
+    const radius = Math.max(120, Math.min(width, height) * 0.36);
+    const pos = {};
+    sorted.forEach((node, i) => {
+      const angle = (Math.PI * 2 * i) / Math.max(sorted.length, 1) - Math.PI / 2;
+      const inner = i === 0 ? 0 : radius * (0.55 + (i % 3) * 0.16);
+      pos[node.id] = {
+        x: cx + Math.cos(angle) * inner,
+        y: cy + Math.sin(angle) * inner,
+      };
+    });
+    return pos;
+  }
+  function renderGraph(data){
+    const nodes = Array.isArray(data.nodes) ? data.nodes : [];
+    const edges = Array.isArray(data.edges) ? data.edges : [];
+    const stats = data.stats || {};
+    const app = document.getElementById('app');
+    app.className = 'grid';
+    app.innerHTML = `
+      <section class="wide"><h2>Summary</h2><div class="stats">
+        ${stat('total concepts', stats.node_count || 0)}
+        ${stat('total links', stats.edge_count || 0)}
+        ${stat('weak concepts', stats.weak_concept_count || 0)}
+        ${stat('recalled concepts', stats.recalled_concept_count || 0)}
+      </div>${filtersHTML()}</section>
+      <section><h2>Graph</h2><div id="graphWrap" class="graph-wrap">${nodes.length ? '<svg id="graphSvg"></svg>' : '<div class="empty">아직 표시할 Concept Graph가 없습니다. 자료를 업로드하고 개념 추출을 먼저 진행해 주세요.</div>'}</div></section>
+      <section><h2>Details</h2><div id="details" class="detail">노드를 클릭하면 상세 정보가 표시됩니다.</div></section>`;
+    restoreFilters();
+    if(nodes.length) draw(nodes, edges);
+  }
+  function restoreFilters(){
+    const params = window._graphFilters || {};
+    if(document.getElementById('course')) document.getElementById('course').value = params.course || '';
+    if(document.getElementById('unit')) document.getElementById('unit').value = params.unit || '';
+    if(document.getElementById('weakOnly')) document.getElementById('weakOnly').checked = !!params.weakOnly;
+  }
+  function draw(nodes, edges){
+    const svg = document.getElementById('graphSvg');
+    const rect = svg.getBoundingClientRect();
+    const width = rect.width || 760, height = rect.height || 560;
+    svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
+    const pos = layout(nodes, width, height);
+    const byId = Object.fromEntries(nodes.map(node => [node.id, node]));
+    const edgeLines = edges.map(edge => {
+      const a = pos[edge.source], b = pos[edge.target];
+      if(!a || !b) return '';
+      return `<line class="edge" x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}"></line>`;
+    }).join('');
+    const nodeEls = nodes.map(node => {
+      const p = pos[node.id] || {x:width/2,y:height/2};
+      const weak = Number(node.weak_score || 0) >= 50;
+      const recalled = Number(node.recall_count || 0) > 0;
+      const cls = ['node', weak ? 'weak' : '', recalled ? 'recalled' : ''].filter(Boolean).join(' ');
+      const r = Math.max(18, Math.min(38, 18 + Number(node.weight || 1) * 2));
+      return `<g class="${cls}" data-id="${esc(node.id)}" transform="translate(${p.x},${p.y})"><circle r="${r}"></circle><text text-anchor="middle" y="4">${esc(String(node.label || '').slice(0, 14))}</text></g>`;
+    }).join('');
+    svg.innerHTML = edgeLines + nodeEls;
+    svg.querySelectorAll('.node').forEach(el => {
+      el.addEventListener('click', () => showDetails(byId[el.dataset.id]));
+    });
+  }
+  function showDetails(node){
+    if(!node) return;
+    document.getElementById('details').innerHTML = `<dl>
+      <dt>Concept</dt><dd>${esc(node.label || '')}</dd>
+      <dt>Course / Unit</dt><dd>${esc(node.course || '-')} · ${esc(node.unit || '-')}</dd>
+      <dt>Recall Count</dt><dd>${esc(node.recall_count || 0)}</dd>
+      <dt>Missing Links</dt><dd>${esc(node.missing_links_count || 0)}</dd>
+      <dt>Weak Score</dt><dd>${esc(node.weak_score || 0)}</dd>
+    </dl>`;
+  }
+  async function loadGraph(){
+    const course = document.getElementById('course')?.value.trim() || '';
+    const unit = document.getElementById('unit')?.value.trim() || '';
+    const weakOnly = !!document.getElementById('weakOnly')?.checked;
+    window._graphFilters = { course, unit, weakOnly };
+    const params = new URLSearchParams();
+    if(course) params.set('course', course);
+    if(unit) params.set('unit', unit);
+    if(weakOnly) params.set('weak_only', 'true');
+    const data = await getJSON('/concept-graph/overview' + (params.toString() ? '?' + params.toString() : ''));
+    renderGraph(data);
+  }
+  async function init(){
+    const app = document.getElementById('app');
+    if(!token()) { app.className='error'; app.textContent='로그인이 필요합니다. Gallery에서 먼저 로그인해주세요.'; return; }
+    try { await loadGraph(); }
+    catch(e){ app.className='error'; app.textContent='Concept Graph를 불러오지 못했습니다: ' + e.message; }
+  }
+  init();
+</script>
+</body>
+</html>

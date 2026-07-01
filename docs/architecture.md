@@ -6,6 +6,7 @@ This document records small architecture decisions that affect data ownership an
 
 - `web/gallery.html` is the current main UI served at `/`.
 - `web/mypage.html` is the read-only My Page.
+- `web/concept-graph.html` is the read-only Concept Graph destination.
 - `web/app.js` is a legacy experimental frontend and should not be used for authenticated production flow.
 
 ## Ownership For Protected Data
@@ -34,6 +35,12 @@ The gallery question UI separates search from generated answers:
 Search-only results are cached in `data/search_cache.json` by `data_user_id`, normalized question, search filter, and scope. Sensitive patient/clinical-looking queries are not cached. Repeating the same owned search can return `from_cache = true`.
 
 Single-document style search uses the selected semester/course/unit/file filter when present. Multi-document search ignores the UI course filter and searches across the current user's owned materials.
+
+## Concept Graph Destination
+
+My Page and Learning Memory link to `web/concept-graph.html` instead of the gallery root hash. The page reads `GET /concept-graph/overview`, which derives ownership from `Authorization` -> `current_uid()` -> `data_user_id`.
+
+The graph destination is read-only. It uses existing `data/concept_index.json`, `data/concept_links.json`, and recall metadata. Viewing the graph does not call GPT, OpenAI embeddings, reindex ChromaDB, or rebuild concept graph data.
 
 ## PDF Preview Access
 

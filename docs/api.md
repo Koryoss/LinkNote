@@ -61,6 +61,7 @@ Important current-state note:
 | `GET` | `/concepts` | Return extracted concepts for a semester/course/unit. |
 | `POST` | `/reindex-graph` | Build `data/concept_index.json` and `data/concept_links.json` from extracted concepts. |
 | `GET` | `/concept-graph` | Return concept graph nodes and edges for visualization, including lightweight recall metadata. |
+| `GET` | `/concept-graph/overview` | Return a read-only user-level graph overview for `web/concept-graph.html`; no GPT, embedding, reindex, or rebuild. |
 
 ## Recall Trace Endpoints
 

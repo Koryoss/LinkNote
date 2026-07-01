@@ -44,6 +44,7 @@ Current frontend entry points:
 - `web/gallery.html` is the main UI served at `/`.
 - `web/mypage.html` is the read-only My Page.
 - `web/clinical-reflection.html` is the nursing-only Clinical Reflection page.
+- `web/concept-graph.html` is the read-only Concept Graph destination.
 - `web/learning-memory.html` is the read-only Learning Memory page for review reuse.
 - `web/app.js` is a legacy experimental frontend and should not be used for authenticated production flow.
 - Protected APIs derive data ownership from `Authorization` token -> `data_user_id`, not from frontend-provided `user_id`.
@@ -166,6 +167,8 @@ Concept graph metadata now includes:
 - `last_recalled_at`
 - `weak_score`
 - `missing_links`
+
+The graph can be opened directly from My Page or Learning Memory through `web/concept-graph.html`. The graph page reads existing graph metadata only and does not call GPT/OpenAI or rebuild graph data.
 
 ### Phase 4: Learning Memory
 
