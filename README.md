@@ -43,6 +43,7 @@ Current frontend entry points:
 
 - `web/gallery.html` is the main UI served at `/`.
 - `web/mypage.html` is the read-only My Page.
+- `web/learning-memory.html` is the read-only Learning Memory page for saved explanation feedback.
 - `web/app.js` is a legacy experimental frontend and should not be used for authenticated production flow.
 - Protected APIs derive data ownership from `Authorization` token -> `data_user_id`, not from frontend-provided `user_id`.
 
@@ -59,7 +60,9 @@ linknote/
 │
 ├── web/
 │   ├── index.html
-│   └── gallery.html
+│   ├── gallery.html
+│   ├── mypage.html
+│   └── learning-memory.html
 │
 ├── desktop/
 │   ├── README.md
@@ -156,6 +159,14 @@ Concept graph metadata now includes:
 - `weak_score`
 - `missing_links`
 
+### Phase 4: Learning Memory
+
+Initial lightweight implementation added after recall feedback.
+
+Successful `설명해 보기` feedback calls are stored as cumulative Learning Memory records. My Page and `web/learning-memory.html` can summarize these records without making an OpenAI call. The backend uses the authenticated user's server-derived `data_user_id`; frontend-provided `user_id` must not control protected recall or memory ownership.
+
+See [Recall and Learning Memory](docs/recall-learning-memory.md).
+
 ## Existing Documentation
 
 - `API_SERVER_README.md`: FastAPI server run instructions.
@@ -178,6 +189,7 @@ Concept graph metadata now includes:
 
 - [API notes](docs/api.md)
 - [Deployment notes](docs/deployment.md)
+- [Recall and Learning Memory](docs/recall-learning-memory.md)
 - [Repository audit](docs/repository-audit.md)
 
 # LinkNote Development Roadmap

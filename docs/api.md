@@ -63,13 +63,14 @@ Important current-state note:
 
 ## Recall Trace Endpoints
 
-These endpoints intentionally use the existing lightweight `user_id` string and do not create a new auth/user database. Phase 1 trace save/list does not call OpenAI and works without `OPENAI_API_KEY`; `/recall-feedback` is the Phase 2 AI endpoint and returns a clear error when the key is unavailable.
+These endpoints are protected and use `Authorization` token -> `current_uid()` -> `data_user_id` for ownership. Any legacy `user_id` field in a request body is compatibility-only and must not control protected data access. Phase 1 trace save/list does not call OpenAI and works without `OPENAI_API_KEY`; `/recall-feedback` is the Phase 2 AI endpoint and returns a clear error when the key is unavailable.
 
 | Method | Path | Purpose |
 | --- | --- | --- |
 | `POST` | `/recall-traces` | Store a learner's explanation for a concept in `data/recall_traces.json`. |
-| `GET` | `/recall-traces` | List recent recall traces by `user_id`, `semester`, `course`, and `unit`; optional `concept` and `limit`. |
+| `GET` | `/recall-traces` | List recent recall traces for the authenticated user's `data_user_id`, filtered by `semester`, `course`, and `unit`; optional `concept` and `limit`. |
 | `POST` | `/recall-feedback` | Generate SCiyl-style directional AI feedback for a saved recall answer. Requires `OPENAI_API_KEY`. |
+| `GET` | `/learning-memory/summary` | Return a read-only Learning Memory summary for the authenticated user's `data_user_id`; no OpenAI call required. |
 
 
 Concept responses may include these recall metadata fields per node/concept:
@@ -80,6 +81,8 @@ Concept responses may include these recall metadata fields per node/concept:
 - `weak_score`: local rule-based score from 0-100 for internal prioritization. The UI should prefer state labels such as `미설명` or `설명 N회` instead of exposing the raw score.
 - `feedback` and `feedback_created_at`: optional saved AI feedback attached to the trace after `/recall-feedback` is generated.
 - `/recall-feedback` may receive optional `trace_id`; when present, feedback is persisted directly to that recall trace.
+
+See [Recall and Learning Memory](recall-learning-memory.md) for the current Learning Memory storage fields and page behavior.
 
 ## Auth Endpoints
 

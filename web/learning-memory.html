@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LinkNote · Learning Memory</title>
+<style>
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { font-family:-apple-system,"Apple SD Gothic Neo","Malgun Gothic",sans-serif; background:#fbfcfe; color:#1f2937; }
+  .topbar { position:sticky; top:0; z-index:20; display:flex; align-items:center; gap:10px; padding:12px 24px; background:rgba(255,255,255,.94); backdrop-filter:blur(6px); border-bottom:1px solid #eef1f6; }
+  .brand { font-size:1.18rem; font-weight:800; color:#1e293b; text-decoration:none; }
+  .spacer { flex:1; }
+  .btn, button { border:1px solid #d8dee9; background:#fff; color:#2563eb; border-radius:8px; padding:8px 12px; font-size:.84rem; font-weight:700; text-decoration:none; cursor:pointer; }
+  .btn.primary { background:#2563eb; border-color:#2563eb; color:#fff; }
+  main { width:min(1120px, calc(100vw - 32px)); margin:24px auto 44px; }
+  h1 { font-size:1.55rem; color:#0f172a; }
+  h2 { font-size:1rem; margin-bottom:12px; color:#1e293b; }
+  .sub { margin-top:6px; color:#64748b; font-size:.9rem; line-height:1.55; }
+  .grid { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:16px; margin-top:18px; }
+  section { background:#fff; border:1px solid #e8ebf2; border-radius:14px; padding:18px; box-shadow:0 8px 24px rgba(15,23,42,.06); }
+  section.wide { grid-column:1/-1; }
+  .stats { display:grid; grid-template-columns:repeat(4, minmax(0, 1fr)); gap:10px; }
+  .stat { border:1px solid #eef1f6; border-radius:12px; padding:12px; background:#f8fafc; }
+  .stat small { display:block; color:#64748b; font-size:.74rem; margin-bottom:5px; }
+  .stat strong { font-size:1.2rem; color:#0f172a; overflow-wrap:anywhere; }
+  .list { display:flex; flex-direction:column; gap:10px; }
+  .item { border:1px solid #eef1f6; border-radius:12px; padding:12px 13px; background:#f8fafc; font-size:.86rem; line-height:1.55; }
+  .item h3 { font-size:.96rem; margin-bottom:5px; color:#0f172a; }
+  .item small { display:block; color:#94a3b8; margin-bottom:7px; }
+  .chips { display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; }
+  .chip { border:1px solid #bfdbfe; background:#eff6ff; color:#1d4ed8; border-radius:999px; padding:3px 8px; font-size:.74rem; font-weight:700; }
+  .empty, .error { border:1px dashed #d8dee9; border-radius:12px; padding:18px; color:#64748b; background:#fff; margin-top:18px; }
+  .error { border-color:#fecaca; color:#b91c1c; background:#fff7f7; }
+  .actions { display:flex; flex-wrap:wrap; gap:8px; }
+  @media (max-width:760px){ .grid{grid-template-columns:1fr;} .stats{grid-template-columns:1fr 1fr;} }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <a class="brand" href="/">LinkNote</a>
+    <span class="spacer"></span>
+    <a class="btn" href="/">Gallery</a>
+    <a class="btn" href="/mypage.html">My Page</a>
+  </div>
+  <main>
+    <h1>Learning Memory</h1>
+    <p class="sub">설명해보기로 남긴 내 설명과 피드백을 복습 가능한 메모리로 모아봅니다.</p>
+    <div id="app" class="empty">불러오는 중...</div>
+  </main>
+<script>
+  const configuredApi = window.LINKNOTE_API_BASE || localStorage.getItem('ln_api_base') || '';
+  const API = (configuredApi || (location.protocol.startsWith('http') ? '' : 'http://127.0.0.1:8000')).replace(/\/$/, '');
+  const token = () => localStorage.getItem('ln_token') || '';
+  const headers = () => token() ? { Authorization:'Bearer ' + token() } : {};
+  const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const dateText = (v) => {
+    if(!v) return '-';
+    const d = new Date(v);
+    return Number.isNaN(d.getTime()) ? String(v) : d.toLocaleString('ko-KR');
+  };
+  async function getJSON(path){
+    const r = await fetch(API + path, { headers: headers() });
+    const d = await r.json().catch(()=>({}));
+    if(!r.ok) throw new Error(`${path} returned ${r.status} ${d.detail || r.statusText}`);
+    return d;
+  }
+  const stat = (label, value) => `<div class="stat"><small>${esc(label)}</small><strong>${esc(value)}</strong></div>`;
+  const chips = (items) => Array.isArray(items) && items.length
+    ? `<div class="chips">${items.map(item => `<span class="chip">${esc(item.name || item.concept || item)}</span>`).join('')}</div>`
+    : '<p class="sub">아직 표시할 항목이 없습니다.</p>';
+  function memoryCard(item){
+    const missing = Array.isArray(item.missing_links) ? item.missing_links : [];
+    return `<div class="item">
+      <h3>${esc(item.concept || '개념 미지정')}</h3>
+      <small>${esc(item.course)} · ${esc(item.unit)} · ${esc(dateText(item.created_at))}</small>
+      <p><strong>내 설명</strong><br>${esc(String(item.answer_text || '').slice(0, 240))}</p>
+      ${item.improved_summary ? `<p style="margin-top:8px"><strong>Improved Summary</strong><br>${esc(item.improved_summary)}</p>` : ''}
+      ${missing.length ? `<p style="margin-top:8px"><strong>Missing Links</strong></p>${chips(missing)}` : ''}
+      ${item.followup_question ? `<p style="margin-top:8px"><strong>Follow-up Question</strong><br>${esc(item.followup_question)}</p>` : ''}
+    </div>`;
+  }
+  function render(data){
+    const recent = Array.isArray(data.recent_memories) ? data.recent_memories : [];
+    document.getElementById('app').className = 'grid';
+    document.getElementById('app').innerHTML = `
+      <section class="wide"><h2>Overview</h2><div class="stats">
+        ${stat('total memories', data.total_memories || 0)}
+        ${stat('concepts explained', data.concepts_explained || 0)}
+        ${stat('weak concepts', (data.weak_concepts || []).length)}
+        ${stat('recent activity', recent.length)}
+      </div></section>
+      <section class="wide"><h2>Recent Memories</h2><div class="list">${recent.length ? recent.map(memoryCard).join('') : '<div class="item">아직 저장된 Learning Memory가 없습니다.</div>'}</div></section>
+      <section><h2>Review Focus</h2>
+        <p class="sub">Weak Concepts</p>${chips(data.weak_concepts || [])}
+        <p class="sub" style="margin-top:12px">Frequent Missing Links</p>${chips(data.frequent_missing_links || [])}
+      </section>
+      <section><h2>Weekly Summary</h2>
+        <p class="sub">${esc(data.weekly_summary || '')}</p>
+        <p class="sub" style="margin-top:12px">Exam Review Focus</p>${chips(data.exam_review_focus || [])}
+      </section>
+      <section class="wide"><h2>Actions</h2><div class="actions">
+        <a class="btn primary" href="/">Back to Gallery</a>
+        <a class="btn" href="/#concept-graph">Concept Graph</a>
+        <a class="btn" href="/mypage.html">My Page</a>
+      </div></section>`;
+  }
+  async function init(){
+    const app = document.getElementById('app');
+    if(!token()) { app.className='error'; app.textContent='로그인이 필요합니다. Gallery에서 먼저 로그인해주세요.'; return; }
+    try { render(await getJSON('/learning-memory/summary')); }
+    catch(e){ app.className='error'; app.textContent='Learning Memory를 불러오지 못했습니다: ' + e.message; }
+  }
+  init();
+</script>
+</body>
+</html>

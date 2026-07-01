@@ -4,6 +4,7 @@ import json
 import logging
 import os
 import uuid
+from collections import Counter
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
@@ -11,7 +12,7 @@ from fastapi import FastAPI, File, Form, HTTPException, UploadFile, Depends, Hea
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 import unicodedata
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from providers.openai_provider import generate_answer as generate_openai_answer
 
@@ -244,19 +245,40 @@ def _extract_json_object(text: str) -> Dict[str, Any]:
     return parsed
 
 
+def _list_of_strings(value: Any, limit: int = 5) -> List[str]:
+    if isinstance(value, list):
+        return [str(item).strip() for item in value if str(item).strip()][:limit]
+    if isinstance(value, str) and value.strip():
+        return [value.strip()]
+    return []
+
+
 def _normalize_feedback_payload(payload: Dict[str, Any]) -> RecallFeedbackResponse:
-    def list_of_strings(value: Any) -> List[str]:
-        if isinstance(value, list):
-            return [str(item).strip() for item in value if str(item).strip()][:5]
-        if isinstance(value, str) and value.strip():
-            return [value.strip()]
-        return []
+    good_points = _list_of_strings(payload.get("good_points"))
+    missing_links = _list_of_strings(payload.get("missing_links"))
+    followup_question = str(payload.get("followup_question") or "").strip()
+    improved_summary = str(payload.get("improved_summary") or "").strip()
+    review_hint = str(payload.get("review_hint") or "").strip()
+    source_hint = str(payload.get("source_hint") or "").strip()
+    feedback_text = str(payload.get("feedback_text") or "").strip()
+    if not feedback_text:
+        parts = []
+        if good_points:
+            parts.append("좋았던 점: " + ", ".join(good_points))
+        if missing_links:
+            parts.append("더 연결해볼 점: " + ", ".join(missing_links))
+        if followup_question:
+            parts.append("질문: " + followup_question)
+        feedback_text = " / ".join(parts)
 
     return RecallFeedbackResponse(
-        good_points=list_of_strings(payload.get("good_points")),
-        missing_links=list_of_strings(payload.get("missing_links")),
-        followup_question=str(payload.get("followup_question") or "").strip(),
-        source_hint=str(payload.get("source_hint") or "").strip(),
+        feedback_text=feedback_text,
+        good_points=good_points,
+        missing_links=missing_links,
+        followup_question=followup_question,
+        improved_summary=improved_summary,
+        review_hint=review_hint,
+        source_hint=source_hint,
     )
 
 
@@ -319,6 +341,12 @@ class RecallTrace(BaseModel):
     created_at: str
     feedback: Optional[Dict[str, Any]] = None
     feedback_created_at: Optional[str] = None
+    feedback_text: Optional[str] = ""
+    good_points: List[str] = Field(default_factory=list)
+    missing_links: List[str] = Field(default_factory=list)
+    followup_question: str = ""
+    improved_summary: str = ""
+    review_hint: str = ""
 
 
 class RecallTraceResponse(BaseModel):
@@ -342,9 +370,12 @@ class RecallFeedbackRequest(BaseModel):
 
 
 class RecallFeedbackResponse(BaseModel):
+    feedback_text: str = ""
     good_points: List[str]
     missing_links: List[str]
     followup_question: str
+    improved_summary: str = ""
+    review_hint: str = ""
     source_hint: str
 
 
@@ -501,7 +532,12 @@ def _persist_recall_feedback(payload: RecallFeedbackRequest, feedback: RecallFee
         "concept": payload.concept.strip(),
         "answer_text": payload.answer_text.strip(),
         "feedback": feedback_data,
-        "feedback_text": json.dumps(feedback_data, ensure_ascii=False),
+        "feedback_text": feedback_data.get("feedback_text") or json.dumps(feedback_data, ensure_ascii=False),
+        "good_points": feedback_data.get("good_points") or [],
+        "missing_links": feedback_data.get("missing_links") or [],
+        "followup_question": feedback_data.get("followup_question") or "",
+        "improved_summary": feedback_data.get("improved_summary") or "",
+        "review_hint": feedback_data.get("review_hint") or "",
         "feedback_type": "explain_concept",
         "source_trace_id": trace_id or (traces[matched_index].get("id") if matched_index is not None else ""),
         "created_at": created_at,
@@ -643,6 +679,95 @@ def _learning_summary_for_user(user_id: str) -> Dict[str, Any]:
         "last_studied_at": last_studied_at,
         "recent_explanations": recent_explanations,
     }
+
+
+def _memory_feedback(item: Dict[str, Any]) -> Dict[str, Any]:
+    feedback = item.get("feedback")
+    return feedback if isinstance(feedback, dict) else {}
+
+
+def _memory_list_field(item: Dict[str, Any], key: str) -> List[str]:
+    values = _list_of_strings(item.get(key), limit=10)
+    if values:
+        return values
+    return _list_of_strings(_memory_feedback(item).get(key), limit=10)
+
+
+def _memory_text_field(item: Dict[str, Any], key: str) -> str:
+    value = str(item.get(key) or "").strip()
+    if value:
+        return value
+    return str(_memory_feedback(item).get(key) or "").strip()
+
+
+def _learning_memory_item(item: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        "id": item.get("id", ""),
+        "semester": item.get("semester", ""),
+        "course": item.get("course", ""),
+        "unit": item.get("unit", ""),
+        "concept": item.get("concept", ""),
+        "answer_text": item.get("answer_text", ""),
+        "feedback_text": _memory_text_field(item, "feedback_text"),
+        "good_points": _memory_list_field(item, "good_points"),
+        "missing_links": _memory_list_field(item, "missing_links"),
+        "followup_question": _memory_text_field(item, "followup_question"),
+        "improved_summary": _memory_text_field(item, "improved_summary"),
+        "review_hint": _memory_text_field(item, "review_hint"),
+        "feedback_type": item.get("feedback_type", ""),
+        "created_at": item.get("created_at"),
+    }
+
+
+def _learning_memory_summary_for_user(user_id: str) -> Dict[str, Any]:
+    traces = [item for item in _load_recall_traces() if isinstance(item, dict) and item.get("user_id") == user_id]
+    traces.sort(key=lambda item: str(item.get("created_at") or ""), reverse=True)
+    memories = [_learning_memory_item(item) for item in traces]
+    concept_keys = {_concept_key(item.get("concept")) for item in memories if _concept_key(item.get("concept"))}
+
+    missing_counter: Counter[str] = Counter()
+    concept_issue_counter: Counter[str] = Counter()
+    for item in memories:
+        missing_links = [link for link in item.get("missing_links", []) if str(link).strip()]
+        missing_counter.update(missing_links)
+        if missing_links and item.get("concept"):
+            concept_issue_counter[str(item.get("concept"))] += len(missing_links)
+
+    frequent_missing_links = [
+        {"name": name, "count": count}
+        for name, count in missing_counter.most_common(8)
+    ]
+    weak_concepts = [
+        {"concept": name, "issue_count": count}
+        for name, count in concept_issue_counter.most_common(8)
+    ]
+    exam_review_focus = [
+        item["name"] for item in frequent_missing_links[:5]
+    ] or [item["concept"] for item in weak_concepts[:5]]
+
+    recent = memories[:5]
+    if recent:
+        recent_concepts = [str(item.get("concept") or "").strip() for item in recent if str(item.get("concept") or "").strip()]
+        weekly_summary = (
+            f"최근 {len(recent)}개의 설명 기록에서 "
+            f"{', '.join(recent_concepts[:3]) or '여러 개념'}을 복습했습니다. "
+            "다음 복습에서는 missing links와 follow-up question을 먼저 확인하세요."
+        )
+    else:
+        weekly_summary = "아직 저장된 Learning Memory가 없습니다. 개념 지도에서 설명해보기를 사용하면 복습 메모리가 쌓입니다."
+
+    last_memory_created_at = str(memories[0].get("created_at") or "") if memories else None
+    return {
+        "total_memories": len(memories),
+        "concepts_explained": len(concept_keys),
+        "recent_memories": recent,
+        "weak_concepts": weak_concepts,
+        "frequent_missing_links": frequent_missing_links,
+        "weekly_summary": weekly_summary,
+        "exam_review_focus": exam_review_focus,
+        "last_memory_created_at": last_memory_created_at,
+    }
+
 
 def _build_timetable_response(uid: str) -> TimetableResponse:
     timetable = [e for e in _load_timetable() if e.get("user_id") == uid]
@@ -1022,7 +1147,10 @@ async def recall_feedback(
 
     try:
         raw_feedback = generate_openai_answer(prompt, max_tokens=700)
-        feedback = _normalize_feedback_payload(_extract_json_object(raw_feedback))
+        try:
+            feedback = _normalize_feedback_payload(_extract_json_object(raw_feedback))
+        except Exception:
+            feedback = _normalize_feedback_payload({"feedback_text": raw_feedback})
     except HTTPException:
         raise
     except Exception as exc:
@@ -1030,9 +1158,19 @@ async def recall_feedback(
 
     if not feedback.followup_question:
         feedback.followup_question = "이 개념이 단원 전체 흐름에서 어떤 역할을 하는지 한 문장으로 다시 설명해볼까요?"
+    if not feedback.improved_summary:
+        feedback.improved_summary = "내 설명과 자료 근거를 함께 보며 핵심 개념, 연결 개념, 적용 상황을 한 문단으로 다시 정리해보세요."
+    if not feedback.review_hint:
+        feedback.review_hint = "다음 복습 때는 더 연결해볼 점과 다시 생각해볼 질문을 먼저 확인하세요."
     if not feedback.source_hint:
         first = source_chunks[0]
         feedback.source_hint = f"{first.get('course', course)} · {first.get('unit', unit)} · {first.get('filename', '')} p.{first.get('page', '')} 근처를 다시 보세요."
+    if not feedback.feedback_text:
+        feedback.feedback_text = " / ".join([
+            "좋았던 점: " + ", ".join(feedback.good_points) if feedback.good_points else "",
+            "더 연결해볼 점: " + ", ".join(feedback.missing_links) if feedback.missing_links else "",
+            "질문: " + feedback.followup_question if feedback.followup_question else "",
+        ]).strip(" /")
 
     payload_for_persist = payload.copy(update={"user_id": data_user_id})
     try:
@@ -1326,6 +1464,11 @@ async def me_summary(user: Dict[str, Any] = Depends(current_user)) -> Dict[str, 
     }
 
 
+@app.get("/learning-memory/summary")
+async def learning_memory_summary(data_user_id: str = Depends(current_uid)) -> Dict[str, Any]:
+    return _learning_memory_summary_for_user(data_user_id)
+
+
 # ============== 계정 / 인증 (Stage C-1) ==============
 from fastapi import Header
 import auth as _auth
@@ -1401,7 +1544,7 @@ async def health() -> Dict[str, Any]:
     return {
         "ok": True,
         "version": app.version,
-        "routes": ["/auth/me", "/me/summary"],
+        "routes": ["/auth/me", "/me/summary", "/learning-memory/summary"],
     }
 
 

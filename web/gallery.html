@@ -1063,7 +1063,7 @@
     return `<div id="recallPanel" class="recall-panel" hidden>
       <div class="recall-head">
         <div class="recall-title">설명해보기 · <span id="recallConcept" class="recall-concept"></span></div>
-        <button id="recallHistoryToggle" class="recall-history-toggle" onclick="toggleRecallHistory()">최근 recall 기록</button>
+        <button id="recallHistoryToggle" class="recall-history-toggle" onclick="toggleRecallHistory()">최근 Learning Memory</button>
       </div>
       <textarea id="recallAnswer" placeholder="이 개념을 내 말로 설명해보세요."></textarea>
       <div class="recall-actions">
@@ -1109,7 +1109,7 @@
       status.textContent = "";
     } catch(e){
       latestRecallTraces = [];
-      status.textContent = "recall 기록을 불러오지 못했습니다.";
+      status.textContent = "Learning Memory를 불러오지 못했습니다.";
       list.innerHTML = "";
     }
   }
@@ -1146,9 +1146,9 @@
     if(!list) return;
     const traces = latestRecallTraces || [];
     if(toggle){
-      toggle.textContent = recallHistoryExpanded ? `전체 recall 기록 ${traces.length}개` : "최근 recall 기록";
+      toggle.textContent = recallHistoryExpanded ? `전체 Learning Memory ${traces.length}개` : "최근 Learning Memory";
       toggle.disabled = !traces.length;
-      toggle.title = traces.length ? "누적 recall 기록 보기" : "저장된 recall 기록 없음";
+      toggle.title = traces.length ? "누적 Learning Memory 보기" : "저장된 Learning Memory 없음";
     }
     if(!traces.length){
       list.innerHTML = `<div class="recall-item">아직 저장된 설명이 없습니다.</div>`;
@@ -1165,7 +1165,7 @@
       return `<div class="recall-item"><small>${esc(formatRecallDate(t.created_at))}</small>${esc(t.answer_text)}<div class="recall-item-actions"><button onclick="requestRecallFeedback(${originalIndex})">${feedback ? "AI 피드백 다시 생성" : "AI 피드백"}</button><span id="feedbackStatus${originalIndex}" class="recall-status"></span></div>${feedbackBox}</div>`;
     }).join("");
     const more = !recallHistoryExpanded && traces.length > 5
-      ? `<button class="recall-history-toggle" onclick="toggleRecallHistory()">누적 기록 ${traces.length}개 보기</button>`
+      ? `<button class="recall-history-toggle" onclick="toggleRecallHistory()">Learning Memory ${traces.length}개 보기</button>`
       : "";
     list.innerHTML = rows + more;
   }
@@ -1177,6 +1177,8 @@
     return `<strong>좋았던 점</strong>${list(data.good_points)}
       <strong>더 연결해볼 점</strong>${list(data.missing_links)}
       <strong>다시 생각해볼 질문</strong><div>${esc(data.followup_question || "")}</div>
+      <strong>Improved Summary</strong><div>${esc(data.improved_summary || "")}</div>
+      <strong>Review Hint</strong><div>${esc(data.review_hint || "")}</div>
       <strong>다시 볼 자료</strong><div>${esc(data.source_hint || "")}</div>`;
   }
 

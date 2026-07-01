@@ -10,9 +10,12 @@ Required JSON shape:
 
 ```json
 {
+  "feedback_text": "...",
   "good_points": ["..."],
   "missing_links": ["..."],
   "followup_question": "...",
+  "improved_summary": "...",
+  "review_hint": "...",
   "source_hint": "..."
 }
 ```
@@ -27,4 +30,6 @@ Rules:
 - `good_points` should name what the learner already captured well.
 - `missing_links` should name concepts, relationships, mechanisms, or distinctions worth connecting.
 - `followup_question` should be one question that helps the learner reason more deeply.
+- `improved_summary` should be a concise corrected review summary the learner can reuse later.
+- `review_hint` should say what to focus on in the next lecture review or exam preparation session.
 - `source_hint` should point to the most useful course/unit/file/page area from the excerpts.
