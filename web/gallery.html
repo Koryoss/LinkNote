@@ -67,46 +67,67 @@
   .card .cmeta { font-size: 0.76rem; color: #9ca3af; margin-top: 14px; }
   .empty { margin: 10px 24px 30px; padding: 26px; border: 1px dashed #d8dee9; border-radius: 14px; color: #6b7280; font-size: 0.86rem; background:#fff; }
 
-  #canvas { position: relative; height: 470px; margin: 8px 16px 30px; border: 1px solid #eef1f6; border-radius: 16px; background:#fff; overflow: hidden; }
+  #canvas { position: relative; height: 470px; border: 1px solid #eef1f6; border-radius: 0 0 16px 16px; background:#fff; overflow: hidden; }
   #canvas svg { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
   .unit-cols { display:flex; gap:14px; margin:8px 16px 30px; align-items:flex-start; }
   .unit-main { flex:1; min-width:0; }
-  .unit-main #canvas { margin:0 0 12px; }
   .unit-main .iq { margin:0; }
-  .doc-panel { flex:0 0 320px; max-height:620px; overflow:auto; border:1px solid #eef1f6; border-radius:14px; background:#fff; }
+  .doc-panel { flex:0 0 400px; height:calc(100vh - 170px); min-height:520px; overflow:hidden; border:1px solid #eef1f6; border-radius:14px; background:#fff; display:flex; flex-direction:column; }
+  .unit-cols.doc-collapsed .doc-panel { flex-basis:210px; height:44px; min-height:44px; overflow:hidden; }
+  .unit-cols.doc-collapsed .doc-panel .doc-frame { display:none; }
+  .unit-cols.doc-collapsed .doc-panel select { display:none; }
+  .unit-cols.doc-collapsed .unit-main { width:100%; }
   .doc-head { position:sticky; top:0; background:#f8fafc; border-bottom:1px solid #eef1f6; padding:10px 14px; font-weight:700; font-size:0.85rem; }
+  .doc-title { margin-right:auto; }
   .doc-body { padding:10px 14px; font-size:0.8rem; line-height:1.5; color:#334155; }
   .doc-file { font-weight:700; color:#1e293b; margin:10px 0 4px; font-size:0.82rem; }
   .doc-pg { color:#2563eb; font-weight:600; font-size:0.74rem; margin:8px 0 2px; }
   .doc-tx { white-space:pre-wrap; margin-bottom:6px; }
-  @media (max-width:900px){ .unit-cols{flex-direction:column;} .doc-panel{flex:1 1 auto; width:100%; max-height:300px;} }
+  @media (max-width:900px){ .unit-cols{flex-direction:column;} .doc-panel{flex:1 1 auto; width:100%; height:min(62vh,520px); min-height:320px;} }
   .line { stroke: #cbd5e1; stroke-width: 2; opacity: 0.4; }
   .line.active { stroke: #2563eb; opacity: 0.95; stroke-width: 2.5; }
   .node { position: absolute; transform: translate(-50%,-50%); background: #fff; border: 1px solid #e5e7eb;
-    border-radius: 14px; padding: 12px 16px; cursor: grab; box-shadow: 0 2px 10px rgba(15,23,42,0.06);
+    border-radius: 11px; padding: 9px 12px; cursor: grab; box-shadow: 0 2px 10px rgba(15,23,42,0.06);
     transition: opacity .2s, box-shadow .18s, border-color .18s; white-space: nowrap;
     animation: pop .4s cubic-bezier(.2,.7,.3,1) both; }
   .node:hover { box-shadow: 0 8px 22px rgba(15,23,42,0.14); }
   .node.dragging { cursor: grabbing; box-shadow: 0 14px 32px rgba(15,23,42,0.20); transition: none; z-index: 5; }
-  .node .nm { font-weight: 700; } .node .pg { font-size: 0.72rem; color: #9ca3af; margin-top: 3px; }
+  .node .nm { font-weight: 700; } .node .pg { font-size: 0.66rem; color: #9ca3af; margin-top: 2px; }
   .node.core { border-color:#c7d6ff; background:linear-gradient(135deg,#f3f7ff,#fff); } .node.core .nm { color:#1e3a8a; }
+  .node.recall-none { border-color:#d1d5db; background:#f8fafc; color:#475569; }
+  .node.recall-none .nm { color:#475569; }
+  .node.recall-1 { border-color:#bfdbfe; background:#eff6ff; }
+  .node.recall-2 { border-color:#93c5fd; background:#dbeafe; }
+  .node.recall-3 { border-color:#60a5fa; background:#bfdbfe; }
+  .node.recall-4 { border-color:#2563eb; background:#2563eb; color:#fff; box-shadow:0 0 0 2px rgba(37,99,235,0.16); }
+  .node.recall-4 .nm, .node.recall-4 .pg { color:#fff; }
+  .node .state-badge { position:absolute; left:50%; bottom:-18px; transform:translateX(-50%); white-space:nowrap;
+    border:1px solid #cbd5e1; background:#fff; color:#475569; border-radius:999px; padding:1px 6px; font-size:0.62rem; font-weight:700; }
+  .node.recall-1 .state-badge, .node.recall-2 .state-badge, .node.recall-3 .state-badge { border-color:#bfdbfe; color:#1d4ed8; background:#eff6ff; }
+  .node.recall-4 .state-badge { border-color:#2563eb; color:#1d4ed8; background:#eff6ff; }
   .group-hub { position:absolute; transform:translate(-50%,-50%); background:#eef2ff; color:#3730a3; border:1px solid #c7d2fe; border-radius:999px; padding:3px 10px; font-size:0.72rem; font-weight:700; pointer-events:none; z-index:1; white-space:nowrap; }
   .line.group-line { stroke:#c7d2fe; stroke-dasharray:4 4; }
   .view-controls select, .view-controls button { height:38px; box-sizing:border-box; line-height:1.2; }
   .iq-row input, .iq-row select, .iq-row button { height:38px; box-sizing:border-box; }
-  .doc-frame { width:100%; height:470px; border:0; display:block; background:#f8fafc; }
+  .doc-frame { width:100%; flex:1 1 auto; min-height:0; border:0; display:block; background:#f8fafc; }
   .doc-head { display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
   .doc-head select { max-width:150px; border:1px solid #d8dee9; border-radius:6px; padding:3px 6px; font-size:0.72rem; }
   .mini-btn { border:1px solid #d8dee9; background:#fff; color:#475569; border-radius:6px; padding:3px 8px; font-size:0.72rem; cursor:pointer; margin-left:8px; font-weight:600; }
   .mini-btn:hover { border-color:#2563eb; color:#2563eb; }
   .drill-bar { display:flex; align-items:center; gap:8px; margin:14px 0; }
+  .graph-panel { margin:12px 0; border-radius:16px; background:#fff; }
+  .graph-head { display:flex; align-items:center; justify-content:space-between; gap:10px; padding:9px 12px; border:1px solid #eef1f6; border-bottom:0; border-radius:16px 16px 0 0; background:#f8fafc; }
+  .graph-title { font-size:0.85rem; font-weight:700; color:#1f2937; }
+  .graph-tools { position:absolute; top:12px; right:12px; z-index:10; display:flex; flex-direction:column; gap:7px; align-items:stretch; }
+  .graph-tools .mini-btn { margin-left:0; background:rgba(255,255,255,0.94); box-shadow:0 6px 16px rgba(15,23,42,0.08); }
+  .graph-panel.graph-collapsed #canvas { display:none; }
   .node.has-more { box-shadow:0 0 0 2px #dbeafe; }
-  .node .more { position:absolute; top:-7px; right:-7px; width:16px; height:16px; line-height:15px; text-align:center; background:#2563eb; color:#fff; border-radius:50%; font-size:11px; font-weight:700; }
+  .node .more { position:absolute; top:-6px; right:-6px; width:14px; height:14px; line-height:13px; text-align:center; background:#2563eb; color:#fff; border-radius:50%; font-size:10px; font-weight:700; }
   .mini-sel { height:30px; border:1px solid #d8dee9; border-radius:8px; padding:0 8px; font-size:0.8rem; cursor:pointer; }
   .card[draggable="true"] { cursor:grab; }
   .card.dragging { opacity:.45; }
   .node.dim { opacity: 0.22; } .node.active { border-color:#2563eb; box-shadow:0 8px 26px rgba(37,99,235,0.22); }
-  .w5 .nm{font-size:1.18rem;} .w4 .nm{font-size:1.02rem;} .w3 .nm{font-size:0.92rem;} .w2 .nm{font-size:0.82rem;}
+  .w5 .nm{font-size:1.02rem;} .w4 .nm{font-size:0.92rem;} .w3 .nm{font-size:0.84rem;} .w2 .nm{font-size:0.76rem;}
   .badge-demo { display:inline-block; font-size:0.7rem; color:#9a3412; background:#fff7ed; border:1px solid #fed7aa; border-radius:999px; padding:2px 9px; margin-left:8px; }
 
   /* 등장 애니메이션 */
@@ -273,6 +294,24 @@
   .auth-divider::before, .auth-divider::after { content:""; flex:1; height:1px; background:#e5e7eb; }
   .auth-google { border:1px solid #d8dee9; background:#fff; color:#1f2937; border-radius:9px; padding:11px; font-size:0.9rem; font-weight:600; cursor:pointer; }
   .auth-status { font-size:0.82rem; margin-top:12px; min-height:1em; text-align:center; }
+  .recall-panel { margin:12px 0 0; background:#fff; border:1px solid #e8ebf2; border-radius:14px; padding:14px 16px; box-shadow:0 6px 18px rgba(15,23,42,0.05); }
+  .recall-head { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:10px; }
+  .recall-title { font-weight:700; font-size:0.9rem; color:#1f2937; }
+  .recall-history-toggle { border:0; background:transparent; color:#64748b; font-size:0.78rem; cursor:pointer; padding:3px 0; font-weight:700; }
+  .recall-history-toggle:hover { color:#2563eb; }
+  .recall-concept { color:#2563eb; }
+  .recall-panel textarea { width:100%; min-height:92px; resize:vertical; border:1px solid #d8dee9; border-radius:10px; padding:10px 12px; font-size:0.88rem; line-height:1.5; }
+  .recall-actions { display:flex; align-items:center; gap:8px; margin-top:8px; flex-wrap:wrap; }
+  .recall-actions button { border:none; background:#2563eb; color:#fff; border-radius:8px; padding:8px 14px; cursor:pointer; font-size:0.85rem; }
+  .recall-status { min-height:1em; font-size:0.78rem; color:#64748b; }
+  .recall-list { margin-top:12px; display:flex; flex-direction:column; gap:8px; }
+  .recall-item { border:1px solid #eef1f6; background:#f8fafc; border-radius:10px; padding:9px 10px; font-size:0.82rem; line-height:1.5; color:#334155; }
+  .recall-item small { display:block; margin-bottom:4px; color:#94a3b8; font-size:0.72rem; }
+  .recall-item-actions { margin-top:8px; display:flex; align-items:center; gap:8px; }
+  .recall-item-actions button { border:1px solid #c8d6f1; background:#fff; color:#2563eb; border-radius:7px; padding:5px 9px; font-size:0.76rem; cursor:pointer; font-weight:700; }
+  .feedback-box { margin-top:8px; padding:9px 10px; border-radius:9px; border:1px solid #dbeafe; background:#f8fbff; color:#334155; }
+  .feedback-box strong { display:block; margin:6px 0 3px; color:#1e3a8a; font-size:0.78rem; }
+  .feedback-box ul { margin:3px 0 6px 17px; padding:0; }
 </style>
   <script src="https://accounts.google.com/gsi/client" async></script>
 </head>
@@ -968,23 +1007,252 @@
     const note = notReady ? '<span class="badge-demo">개념 추출 전 · 예시</span>' : (demo ? '<span class="badge-demo">데모</span>' : '');
     inlineAskCourse = state.course;
     view.innerHTML = `<div class="section-title">${esc(unit)} · 개념 지도 ${note} <button class="mini-btn" onclick="renameUnitPrompt()">✏️ 단원명 수정</button></div>
-      <div class="unit-cols">
-        <div class="doc-panel"><div class="doc-head">📄 파일 원문 <select id="doc_sel" onchange="docShow()"></select></div><iframe id="doc_frame" class="doc-frame" title="원문 PDF"></iframe></div>
-        <div class="unit-main">${inlineQuestionHTML(state.course)}<div class="drill-bar"><button class="mini-btn" onclick="drillReset()">⟲ 핵심만</button><button class="mini-btn" onclick="drillAll()">전체 보기</button><span class="muted" style="font-size:.72rem">개념 클릭 = 연관 펼치기</span></div><div id="canvas"><svg id="lines"></svg></div></div>
+      <div class="unit-cols" id="unitCols">
+        <div class="doc-panel"><div class="doc-head"><span class="doc-title">📄 파일 원문</span><select id="doc_sel" onchange="docShow()"></select><button class="mini-btn" onclick="toggleDocPanel()" id="docToggleBtn">PDF 닫기</button></div><iframe id="doc_frame" class="doc-frame" title="원문 PDF"></iframe></div>
+        <div class="unit-main">${inlineQuestionHTML(state.course)}<div class="drill-bar"><button class="mini-btn" onclick="startRecallForActive()">설명해보기</button><span class="muted" style="font-size:.72rem">개념 클릭 = 연관 펼치기</span></div>${recallPanelHTML()}<div class="graph-panel" id="graphPanel"><div class="graph-head"><span class="graph-title">개념 지도</span><button class="mini-btn" onclick="toggleGraphPanel()" id="graphToggleBtn">지도 닫기</button></div><div id="canvas"><div class="graph-tools"><button class="mini-btn" onclick="drillReset()">핵심만</button><button class="mini-btn" onclick="drillAll()">전체 보기</button></div><svg id="lines"></svg></div></div></div>
       </div>`;
     drillVisible = null;
     layoutNodes(nodes);
+    restoreDocPanelState();
+    restoreGraphPanelState();
     loadUnitDoc(state.semester, state.course, unit);
   }
+
+
+  function toggleDocPanel(force){
+    const cols = document.getElementById('unitCols');
+    const btn = document.getElementById('docToggleBtn');
+    if(!cols) return;
+    const shouldCollapse = typeof force === 'boolean' ? force : !cols.classList.contains('doc-collapsed');
+    cols.classList.toggle('doc-collapsed', shouldCollapse);
+    if(btn) btn.textContent = shouldCollapse ? 'PDF 열기' : 'PDF 닫기';
+    localStorage.setItem('ln_doc_panel_collapsed', shouldCollapse ? '1' : '0');
+    setTimeout(()=>{ if(lastNodes) layoutNodes(lastNodes); }, 0);
+  }
+
+  function restoreDocPanelState(){
+    toggleDocPanel(localStorage.getItem('ln_doc_panel_collapsed') === '1');
+  }
+
+
+  function toggleGraphPanel(force){
+    const panel = document.getElementById('graphPanel');
+    const btn = document.getElementById('graphToggleBtn');
+    if(!panel) return;
+    const shouldCollapse = typeof force === 'boolean' ? force : !panel.classList.contains('graph-collapsed');
+    panel.classList.toggle('graph-collapsed', shouldCollapse);
+    if(btn) btn.textContent = shouldCollapse ? '지도 열기' : '지도 닫기';
+    localStorage.setItem('ln_graph_panel_collapsed', shouldCollapse ? '1' : '0');
+    if(!shouldCollapse) setTimeout(()=>{ if(lastNodes) layoutNodes(lastNodes); }, 0);
+  }
+
+  function restoreGraphPanelState(){
+    toggleGraphPanel(localStorage.getItem('ln_graph_panel_collapsed') === '1');
+  }
+
+  function recallPanelHTML(){
+    return `<div id="recallPanel" class="recall-panel" hidden>
+      <div class="recall-head">
+        <div class="recall-title">설명해보기 · <span id="recallConcept" class="recall-concept"></span></div>
+        <button id="recallHistoryToggle" class="recall-history-toggle" onclick="toggleRecallHistory()">최근 recall 기록</button>
+      </div>
+      <textarea id="recallAnswer" placeholder="이 개념을 내 말로 설명해보세요."></textarea>
+      <div class="recall-actions">
+        <button onclick="saveRecallTrace()">저장</button>
+        <span id="recallStatus" class="recall-status"></span>
+      </div>
+      <div id="recallList" class="recall-list"></div>
+    </div>`;
+  }
+
+  let selectedRecallConcept = "";
+  function recallQuery(concept){
+    const params = new URLSearchParams({
+      user_id: uid(),
+      semester: state.semester || "",
+      course: state.course || "",
+      unit: state.unit || "",
+    });
+    if(concept) params.set("concept", concept);
+    return params.toString();
+  }
+
+  async function showRecallPanel(concept){
+    selectedRecallConcept = concept || "";
+    const panel = document.getElementById("recallPanel");
+    if(!panel || !selectedRecallConcept) return;
+    panel.hidden = false;
+    recallHistoryExpanded = false;
+    document.getElementById("recallConcept").textContent = selectedRecallConcept;
+    document.getElementById("recallAnswer").value = "";
+    await loadRecallTraces(selectedRecallConcept);
+  }
+
+  async function loadRecallTraces(concept){
+    const status = document.getElementById("recallStatus");
+    const list = document.getElementById("recallList");
+    if(!list) return;
+    status.textContent = "기록을 불러오는 중...";
+    try {
+      const data = await getJSON(`/recall-traces?${recallQuery(concept)}&limit=100`);
+      latestRecallTraces = Array.isArray(data.traces) ? data.traces : [];
+      renderRecallTraces();
+      status.textContent = "";
+    } catch(e){
+      latestRecallTraces = [];
+      status.textContent = "recall 기록을 불러오지 못했습니다.";
+      list.innerHTML = "";
+    }
+  }
+
+
+  let latestRecallTraces = [];
+  let recallHistoryExpanded = false;
+
+  function toggleRecallHistory(){
+    recallHistoryExpanded = !recallHistoryExpanded;
+    renderRecallTraces();
+  }
+
+  function recallConceptKey(value){
+    return String(value || '').replace(/\s+/g, '').toLowerCase();
+  }
+
+  function applyRecallTraceToGraph(trace){
+    if(!trace || !lastNodes) return;
+    const key = recallConceptKey(trace.concept);
+    let changed = false;
+    lastNodes.forEach(n => {
+      if(recallConceptKey(n.name) !== key && recallConceptKey(n.keyword) !== key) return;
+      n.recall_count = Number(n.recall_count || 0) + 1;
+      n.last_recalled_at = trace.created_at || n.last_recalled_at || null;
+      changed = true;
+    });
+    if(changed) layoutNodes(lastNodes);
+  }
+
+  function renderRecallTraces(){
+    const list = document.getElementById("recallList");
+    const toggle = document.getElementById("recallHistoryToggle");
+    if(!list) return;
+    const traces = latestRecallTraces || [];
+    if(toggle){
+      toggle.textContent = recallHistoryExpanded ? `전체 recall 기록 ${traces.length}개` : "최근 recall 기록";
+      toggle.disabled = !traces.length;
+      toggle.title = traces.length ? "누적 recall 기록 보기" : "저장된 recall 기록 없음";
+    }
+    if(!traces.length){
+      list.innerHTML = `<div class="recall-item">아직 저장된 설명이 없습니다.</div>`;
+      return;
+    }
+    const visibleTraces = recallHistoryExpanded ? traces : traces.slice(0, 5);
+    const rows = visibleTraces.map((t, i) => {
+      const originalIndex = traces.indexOf(t);
+      const feedback = t.feedback && typeof t.feedback === "object" ? t.feedback : null;
+      const feedbackStamp = t.feedback_created_at ? `<small>AI 피드백 · ${esc(formatRecallDate(t.feedback_created_at))}</small>` : "";
+      const feedbackBox = feedback
+        ? `<div id="feedbackBox${originalIndex}" class="feedback-box">${feedbackStamp}${renderFeedback(feedback)}</div>`
+        : `<div id="feedbackBox${originalIndex}" class="feedback-box" hidden></div>`;
+      return `<div class="recall-item"><small>${esc(formatRecallDate(t.created_at))}</small>${esc(t.answer_text)}<div class="recall-item-actions"><button onclick="requestRecallFeedback(${originalIndex})">${feedback ? "AI 피드백 다시 생성" : "AI 피드백"}</button><span id="feedbackStatus${originalIndex}" class="recall-status"></span></div>${feedbackBox}</div>`;
+    }).join("");
+    const more = !recallHistoryExpanded && traces.length > 5
+      ? `<button class="recall-history-toggle" onclick="toggleRecallHistory()">누적 기록 ${traces.length}개 보기</button>`
+      : "";
+    list.innerHTML = rows + more;
+  }
+
+  function renderFeedback(data){
+    const list = (items) => Array.isArray(items) && items.length
+      ? `<ul>${items.map(item => `<li>${esc(item)}</li>`).join("")}</ul>`
+      : `<div class="muted">자료에서 뚜렷하게 확인되지 않았습니다.</div>`;
+    return `<strong>좋았던 점</strong>${list(data.good_points)}
+      <strong>더 연결해볼 점</strong>${list(data.missing_links)}
+      <strong>다시 생각해볼 질문</strong><div>${esc(data.followup_question || "")}</div>
+      <strong>다시 볼 자료</strong><div>${esc(data.source_hint || "")}</div>`;
+  }
+
+  async function requestRecallFeedback(index){
+    const trace = latestRecallTraces[index];
+    const status = document.getElementById(`feedbackStatus${index}`);
+    const box = document.getElementById(`feedbackBox${index}`);
+    if(!trace || !status || !box) return;
+    status.textContent = "생성 중...";
+    box.hidden = true;
+    try {
+      const r = await fetch(API + "/recall-feedback", {
+        method:"POST",
+        headers: authHeaders({"Content-Type":"application/json"}),
+        body:JSON.stringify({
+          user_id: trace.user_id,
+          semester: trace.semester,
+          course: trace.course,
+          unit: trace.unit,
+          concept: trace.concept,
+          answer_text: trace.answer_text,
+          trace_id: trace.id || "",
+        }),
+      });
+      const d = await r.json().catch(()=>({}));
+      if(!r.ok){ status.textContent = d.detail || "피드백 실패"; return; }
+      trace.feedback = d;
+      trace.feedback_created_at = new Date().toISOString();
+      box.innerHTML = `<small>AI 피드백 · ${esc(formatRecallDate(trace.feedback_created_at))}</small>` + renderFeedback(d);
+      box.hidden = false;
+      status.textContent = "";
+    } catch(e){
+      status.textContent = "서버에 연결할 수 없습니다.";
+    }
+  }
+
+  async function saveRecallTrace(){
+    const status = document.getElementById("recallStatus");
+    const answer = document.getElementById("recallAnswer").value.trim();
+    if(!selectedRecallConcept){ status.textContent = "먼저 개념을 선택하세요."; return; }
+    if(!answer){ status.textContent = "설명을 입력하세요."; return; }
+    status.textContent = "저장 중...";
+    const body = {
+      user_id: uid(),
+      semester: state.semester || "",
+      course: state.course || "",
+      unit: state.unit || "",
+      concept: selectedRecallConcept,
+      answer_text: answer,
+    };
+    try {
+      const r = await fetch(API + "/recall-traces", {
+        method:"POST",
+        headers: authHeaders({"Content-Type":"application/json"}),
+        body:JSON.stringify(body),
+      });
+      const d = await r.json().catch(()=>({}));
+      if(!r.ok){ status.textContent = d.detail || "저장 실패"; return; }
+      document.getElementById("recallAnswer").value = "";
+      status.textContent = "저장됨";
+      applyRecallTraceToGraph(d.trace);
+      await loadRecallTraces(selectedRecallConcept);
+    } catch(e){
+      status.textContent = "서버에 연결할 수 없습니다.";
+    }
+  }
+
+
+  function startRecallForActive(){
+    const concept = selectedRecallConcept || lastCore || (lastNodes && lastNodes[0] && lastNodes[0].name) || "";
+    if(concept) showRecallPanel(concept);
+  }
+
+  function formatRecallDate(value){
+    const d = new Date(value);
+    if(Number.isNaN(d.getTime())) return value || "";
+    return d.toLocaleString("ko-KR", { dateStyle:"short", timeStyle:"short" });
+  }
+
   let lastNodes = null;
   let lastCore = null;
   let drillVisible = null;
   function initDrill(nodes){
-    const sorted=[...nodes].sort((a,b)=>(b.weight||0)-(a.weight||0));
-    const maxW = sorted.length ? (sorted[0].weight||0) : 0;
-    let roots = sorted.filter(n=>(n.weight||0)>=Math.max(4,maxW));
-    if(roots.length<3) roots = sorted.slice(0, Math.min(6, sorted.length));
-    drillVisible = new Set(roots.slice(0,12).map(n=>n.name));
+    const sorted=[...nodes].sort((a,b)=>((b.weak_score||0)-(a.weak_score||0)) || ((b.weight||0)-(a.weight||0)));
+    drillVisible = new Set(sorted.slice(0, Math.min(12, sorted.length)).map(n=>n.name));
   }
   function drillReset(){ drillVisible=null; if(lastNodes) layoutNodes(lastNodes); }
   function drillAll(){ if(lastNodes){ drillVisible=new Set(lastNodes.map(n=>n.name)); layoutNodes(lastNodes); } }
@@ -1035,10 +1303,14 @@
       const w = n.weight||3;
       const hasMore = (n.links||[]).some(t=>nodes.some(x=>x.name===t) && !drillVisible.has(t));
       const el = document.createElement('div');
-      el.className = `node w${w}` + (n===core?' core':'') + (hasMore?' has-more':'');
+      const recallCount = Number(n.recall_count || 0);
+      const recallClass = recallCount <= 0 ? ' recall-none' : ` recall-${Math.min(4, recallCount)}`;
+      const stateLabel = recallCount <= 0 ? '미설명' : `설명 ${recallCount}회`;
+      const stateBadge = `<div class="state-badge">${esc(stateLabel)}</div>`;
+      el.className = `node w${w}` + (n===core?' core':'') + (hasMore?' has-more':'') + recallClass;
       el.style.left = pos[n.name].x+'px'; el.style.top = pos[n.name].y+'px';
       el.style.animationDelay = (i*0.05)+'s';
-      el.innerHTML = `<div class="nm">${esc(n.name)}</div>` + (n.page?`<div class="pg">p.${esc(String(n.page))}</div>`:'') + (hasMore?`<div class="more">＋</div>`:'');
+      el.innerHTML = `<div class="nm">${esc(n.name)}</div>` + (n.page?`<div class="pg">p.${esc(String(n.page))}</div>`:'') + stateBadge + (hasMore?`<div class="more">＋</div>`:'');
       el.addEventListener('mouseenter', (e)=>{ if(!dragging) showTip(n, e); });
       el.addEventListener('mousemove', (e)=>{ if(!dragging) moveTip(e); });
       el.addEventListener('mouseleave', hideTip);
@@ -1072,8 +1344,10 @@
   function showTip(n, e){
     const tip = document.getElementById('tip');
     const links = (n.links||[]).length;
+    const recallCount = Number(n.recall_count || 0);
+    const stateText = recallCount <= 0 ? '아직 설명 없음' : `설명 ${recallCount}회`;
     tip.innerHTML = `<div class="t-nm">${esc(n.name)}</div>` +
-      `<div class="t-meta">${n.page?('p.'+esc(String(n.page))+' · '):''}연결 개념 ${links}개</div>`;
+      `<div class="t-meta">${n.page?('p.'+esc(String(n.page))+' · '):''}연결 개념 ${links}개 · ${stateText}</div>`;
     tip.classList.add('on'); moveTip(e);
   }
   function moveTip(e){
@@ -1095,6 +1369,7 @@
     document.querySelectorAll('#lines .line').forEach(l => {
       l.classList.toggle('active', l.dataset.a===name || l.dataset.b===name);
     });
+    showRecallPanel(name);
   }
 
   async function gotoSemester(sem){
@@ -1317,7 +1592,7 @@
       let url, body;
       if(mode==='register'){
         url = API+'/auth/register';
-        body = { email, password:pw, display_name:document.getElementById('au_name').value.trim(), link_user_id:(document.getElementById('au_link')?document.getElementById('au_link').value.trim():'') };
+        body = { email, password:pw, display_name:document.getElementById('au_name').value.trim() };
       } else {
         url = API+'/auth/login'; body = { email, password:pw };
       }
@@ -1356,9 +1631,7 @@
   async function onGoogleCredential(resp){
     const st=document.getElementById('au_status'); st.style.color='#2563eb'; st.textContent='Google 로그인 중…';
     try{
-      const linkEl=document.getElementById('au_link');
-      const link = linkEl ? linkEl.value.trim() : '';
-      const r=await fetch(API+'/auth/google',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({credential:resp.credential, link_user_id:link})});
+      const r=await fetch(API+'/auth/google',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({credential:resp.credential})});
       const d=await r.json();
       if(!r.ok){ st.style.color='#ef4444'; st.textContent=(d.detail||'실패'); return; }
       localStorage.setItem('ln_token', d.token); setSession(d.user);

@@ -35,7 +35,7 @@ linknote/
 │   ├── concepts.json
 │   ├── concept_index.json
 │   ├── concept_links.json
-│   └── recall_traces.json        # planned
+│   └── recall_traces.json        # local recall trace store
 │
 ├── chroma_db/
 │
@@ -88,31 +88,32 @@ The first version should remain lightweight and use the existing local `user_id`
 
 ### Phase 1: Recall Trace
 
-Planned only. Not implemented yet.
+Initial implementation added in the recall trace PR.
 
 - Store a learner's own explanation for a concept.
 - Suggested fields: `answer_text`, `concept`, `course`, `unit`, `semester`, `user_id`, `created_at`.
 - Start with JSON or another local lightweight store.
 - Do not add AI feedback in this phase.
+- Current implementation uses `POST /recall-traces` and `GET /recall-traces` with the existing lightweight `user_id` string.
 
 ### Phase 2: AI Reflection Feedback
 
-Planned only. Not implemented yet.
+Initial implementation added in the recall feedback PR.
 
-AI feedback should be directional, not a strict grading system. It should identify:
+AI feedback is directional, not a strict grading system. It identifies:
 
 - what was explained well
 - missing or weakly connected concepts
 - questions worth reconsidering
 - source locations worth reviewing
 
-The app should keep working even when `OPENAI_API_KEY` is not available.
+The app keeps recall trace save/list working even when `OPENAI_API_KEY` is not available; `/recall-feedback` returns a clear error when the key is missing.
 
 ### Phase 3: Personalized Concept Graph
 
-Planned only. Not implemented yet.
+Initial lightweight implementation added after recall feedback.
 
-Future concept graph metadata may include:
+Concept graph metadata now includes:
 
 - `recall_count`
 - `last_recalled_at`
@@ -134,8 +135,8 @@ Future concept graph metadata may include:
 - Keep the local-first learning workflow stable.
 - Keep `user_id` lightweight until real authentication is needed.
 - Avoid building a full account system too early.
-- Keep SCiyl-inspired recall work as a planned layer until the knowledge infrastructure is stable.
-- Do not implement recall APIs, database schema changes, or frontend recall controls until a later implementation PR.
+- Keep SCiyl-inspired recall work lightweight and local-first until the knowledge infrastructure is stable.
+- Recall trace storage/query remains limited to JSON-backed `user_id` records. AI feedback and weak concept graph metadata are local-first extensions; full account-based multi-user storage remains later work.
 
 ## Maintainer Docs
 
@@ -191,13 +192,13 @@ Each explanation becomes a **Recall Trace**, representing the learner's evolving
 
 Initially, recall traces will be stored using the existing lightweight storage mechanism (JSON/local database), allowing rapid iteration before migrating to a production database.
 
-This phase is planned only. It is not implemented in the current documentation update.
+This phase now has an initial local implementation for saving and listing recall traces. It intentionally does not add AI feedback, weak concept scoring, or a new auth/user database.
 
 ---
 
 ## Phase 2 — AI Reflection Feedback
 
-Once recall traces exist, LinkNote will provide reflective AI feedback.
+Once recall traces exist, LinkNote provides an initial reflective AI feedback endpoint.
 
 Instead of grading answers as "correct" or "incorrect", the AI will generate:
 
@@ -206,22 +207,22 @@ Instead of grading answers as "correct" or "incorrect", the AI will generate:
 * related concepts worth reviewing
 * one follow-up question encouraging deeper reasoning
 
-The objective is to guide thinking rather than evaluate performance.
+The objective is to guide thinking rather than evaluate performance. The current implementation uses `POST /recall-feedback`, requires `OPENAI_API_KEY`, and keeps recall trace storage/query working when the key is absent.
 
 ---
 
 ## Phase 3 — Personalized Concept Graph
 
-Recall traces will become part of the concept graph itself.
+Recall traces now lightly inform the concept graph without adding a new account database.
 
-Each concept node may contain learning metadata such as:
+Each concept node can contain learning metadata such as:
 
 * recall count
 * last recalled date
 * weak concept score
 * missing conceptual links
 
-This enables the concept graph to evolve from a representation of knowledge into a representation of the learner's understanding.
+This lets the concept graph begin representing the learner's understanding while keeping the current local `user_id` structure. The UI should avoid raw score labels and show softer states such as `미설명` or `설명 N회`.
 
 ---
 

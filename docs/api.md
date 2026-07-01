@@ -59,7 +59,27 @@ Important current-state note:
 | `POST` | `/reindex-concepts` | Rebuild concept extraction data into `data/concepts.json`. This may require `OPENAI_API_KEY`. |
 | `GET` | `/concepts` | Return extracted concepts for a semester/course/unit. |
 | `POST` | `/reindex-graph` | Build `data/concept_index.json` and `data/concept_links.json` from extracted concepts. |
-| `GET` | `/concept-graph` | Return concept graph nodes and edges for visualization. |
+| `GET` | `/concept-graph` | Return concept graph nodes and edges for visualization, including lightweight recall metadata. |
+
+## Recall Trace Endpoints
+
+These endpoints intentionally use the existing lightweight `user_id` string and do not create a new auth/user database. Phase 1 trace save/list does not call OpenAI and works without `OPENAI_API_KEY`; `/recall-feedback` is the Phase 2 AI endpoint and returns a clear error when the key is unavailable.
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| `POST` | `/recall-traces` | Store a learner's explanation for a concept in `data/recall_traces.json`. |
+| `GET` | `/recall-traces` | List recent recall traces by `user_id`, `semester`, `course`, and `unit`; optional `concept` and `limit`. |
+| `POST` | `/recall-feedback` | Generate SCiyl-style directional AI feedback for a saved recall answer. Requires `OPENAI_API_KEY`. |
+
+
+Concept responses may include these recall metadata fields per node/concept:
+
+- `recall_count`: number of saved recall traces for that concept in the same user/semester/course/unit scope.
+- `last_recalled_at`: most recent saved recall timestamp, or `null`.
+- `missing_links_count`: count of missing links from stored AI feedback attached to matching traces.
+- `weak_score`: local rule-based score from 0-100 for internal prioritization. The UI should prefer state labels such as `미설명` or `설명 N회` instead of exposing the raw score.
+- `feedback` and `feedback_created_at`: optional saved AI feedback attached to the trace after `/recall-feedback` is generated.
+- `/recall-feedback` may receive optional `trace_id`; when present, feedback is persisted directly to that recall trace.
 
 ## Auth Endpoints
 
@@ -87,7 +107,5 @@ Some older docs mention `web/index.html`; update those references when the web e
 
 ## SCiyl Boundary
 
-Do not add recall endpoints in this documentation phase.
-
-Future Phase 1 recall work should be introduced in a separate implementation PR and documented here only after it exists.
+Phase 1 recall trace storage/query is implemented as a local JSON-backed layer only. Phase 2 adds directional recall feedback through `/recall-feedback`. The graph now includes lightweight local recall metadata (`recall_count`, `last_recalled_at`, `weak_score`) without adding auth/user DB expansion. `weak_score` is treated as internal prioritization metadata, while the UI uses learner-friendly state labels.
 

@@ -1,6 +1,9 @@
+from __future__ import annotations
+
 import json
 import os
 import uuid
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile, Depends, Header
@@ -8,6 +11,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 import unicodedata
 from pydantic import BaseModel
+
+from providers.openai_provider import generate_answer as generate_openai_answer
 
 from pdf_loader import extract_pdf_text
 from rag import (
@@ -29,6 +34,9 @@ DATA_DIR = os.getenv("DATA_DIR", "./data")
 UPLOAD_DIR = os.path.join(DATA_DIR, "uploads")
 TIMETABLE_PATH = os.path.join(DATA_DIR, "timetable.json")
 CONCEPTS_PATH = os.path.join(DATA_DIR, "concepts.json")
+RECALL_TRACES_PATH = os.path.join(DATA_DIR, "recall_traces.json")
+PROMPTS_DIR = os.getenv("PROMPTS_DIR", "./prompts")
+RECALL_FEEDBACK_PROMPT_PATH = os.path.join(PROMPTS_DIR, "recall_feedback.md")
 
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 os.makedirs(os.path.dirname(CONCEPTS_PATH), exist_ok=True)
@@ -71,7 +79,7 @@ class SearchFilter(BaseModel):
 
 
 class AskRequest(BaseModel):
-    user_id: str
+    user_id: Optional[str] = None
     question: str
     mode: Optional[str] = "single"
     search_filter: Optional[SearchFilter] = None
@@ -120,7 +128,7 @@ class TimetableResponse(BaseModel):
 
 
 class DeleteLibraryPayload(BaseModel):
-    user_id: str
+    user_id: Optional[str] = None
     search_filter: Optional[SearchFilter] = None
 
 
@@ -183,6 +191,91 @@ def _save_timetable(items: List[Dict[str, Any]]) -> None:
         json.dump(items, f, ensure_ascii=False, indent=2)
 
 
+def _load_recall_traces() -> List[Dict[str, Any]]:
+    data = _load_json_file(RECALL_TRACES_PATH)
+    return data if isinstance(data, list) else []
+
+
+def _save_recall_traces(items: List[Dict[str, Any]]) -> None:
+    os.makedirs(os.path.dirname(RECALL_TRACES_PATH), exist_ok=True)
+    with open(RECALL_TRACES_PATH, "w", encoding="utf-8") as f:
+        json.dump(items, f, ensure_ascii=False, indent=2)
+
+
+def _load_recall_feedback_prompt() -> str:
+    try:
+        with open(RECALL_FEEDBACK_PROMPT_PATH, "r", encoding="utf-8") as f:
+            return f.read().strip()
+    except OSError:
+        return (
+            "You are a SCiyl-inspired active learning feedback layer. "
+            "Return JSON only with good_points, missing_links, followup_question, source_hint."
+        )
+
+
+def _extract_json_object(text: str) -> Dict[str, Any]:
+    if not isinstance(text, str):
+        raise ValueError("response is not text")
+    raw = text.strip()
+    if raw.startswith("```"):
+        raw = raw.strip("`")
+        if raw.lower().startswith("json"):
+            raw = raw[4:].strip()
+    start, end = raw.find("{"), raw.rfind("}")
+    if start != -1 and end > start:
+        raw = raw[start:end + 1]
+    parsed = json.loads(raw)
+    if not isinstance(parsed, dict):
+        raise ValueError("response is not a JSON object")
+    return parsed
+
+
+def _normalize_feedback_payload(payload: Dict[str, Any]) -> RecallFeedbackResponse:
+    def list_of_strings(value: Any) -> List[str]:
+        if isinstance(value, list):
+            return [str(item).strip() for item in value if str(item).strip()][:5]
+        if isinstance(value, str) and value.strip():
+            return [value.strip()]
+        return []
+
+    return RecallFeedbackResponse(
+        good_points=list_of_strings(payload.get("good_points")),
+        missing_links=list_of_strings(payload.get("missing_links")),
+        followup_question=str(payload.get("followup_question") or "").strip(),
+        source_hint=str(payload.get("source_hint") or "").strip(),
+    )
+
+
+def _format_feedback_sources(chunks: List[Dict[str, Any]]) -> str:
+    blocks = []
+    for item in chunks[:8]:
+        label = (
+            f"과목:{item.get('course', '')} · 단원:{item.get('unit', '')} · "
+            f"파일:{item.get('filename', '')} p.{item.get('page', '')}"
+        )
+        blocks.append(f"[{label}]\n{str(item.get('text', ''))[:1200]}")
+    return "\n\n".join(blocks)
+
+
+def _feedback_source_chunks(user_id: str, semester: str, course: str, unit: str, concept: str) -> List[Dict[str, Any]]:
+    data = get_chunks(
+        user_id=user_id,
+        limit=500,
+        offset=0,
+        full=True,
+        search_filter={"semester": semester, "course": course},
+    )
+    items = [item for item in data.get("items", []) if (item.get("unit") or "").strip() == unit]
+    concept_norm = concept.replace(" ", "").lower()
+    direct = [
+        item for item in items
+        if concept_norm and concept_norm in str(item.get("text", "")).replace(" ", "").lower()
+    ]
+    pool = direct or items
+    pool.sort(key=lambda item: (item.get("filename", ""), item.get("page", 0), item.get("chunk_index", 0)))
+    return pool[:8]
+
+
 class TimetableEntry(BaseModel):
     semester: str
     day: str = ""
@@ -190,6 +283,202 @@ class TimetableEntry(BaseModel):
     course: str
     memo: str = ""
 
+
+class RecallTraceCreate(BaseModel):
+    user_id: Optional[str] = None
+    semester: str
+    course: str
+    unit: str
+    concept: str
+    answer_text: str
+
+
+class RecallTrace(BaseModel):
+    id: str
+    user_id: str
+    semester: str
+    course: str
+    unit: str
+    concept: str
+    answer_text: str
+    created_at: str
+    feedback: Optional[Dict[str, Any]] = None
+    feedback_created_at: Optional[str] = None
+
+
+class RecallTraceResponse(BaseModel):
+    ok: bool
+    trace: RecallTrace
+
+
+class RecallTraceListResponse(BaseModel):
+    traces: List[RecallTrace]
+
+
+class RecallFeedbackRequest(BaseModel):
+    user_id: Optional[str] = None
+    semester: str
+    course: str
+    unit: str
+    concept: str
+    answer_text: str
+    trace_id: Optional[str] = None
+
+
+class RecallFeedbackResponse(BaseModel):
+    good_points: List[str]
+    missing_links: List[str]
+    followup_question: str
+    source_hint: str
+
+
+
+def _model_to_dict(model: BaseModel) -> Dict[str, Any]:
+    if hasattr(model, "model_dump"):
+        return model.model_dump()
+    return model.dict()
+
+
+def _concept_key(value: Any) -> str:
+    return str(value or "").replace(" ", "").strip().lower()
+
+
+def _parse_iso_datetime(value: Any) -> Optional[datetime]:
+    if not isinstance(value, str) or not value.strip():
+        return None
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed
+
+
+def _trace_matches(item: Dict[str, Any], user_id: str, semester: str, course: str, unit: str, concept: str) -> bool:
+    return (
+        str(item.get("user_id", "")).strip() == user_id
+        and str(item.get("semester", "")).strip() == semester
+        and str(item.get("course", "")).strip() == course
+        and str(item.get("unit", "")).strip() == unit
+        and _concept_key(item.get("concept")) == _concept_key(concept)
+    )
+
+
+def _score_recall_weakness(recall_count: int, last_recalled_at: Optional[str], missing_links_count: int) -> int:
+    if recall_count <= 0:
+        return 90
+
+    score = 15
+    last_dt = _parse_iso_datetime(last_recalled_at)
+    if last_dt is None:
+        score += 35
+    else:
+        age_days = (datetime.now(timezone.utc) - last_dt).days
+        if age_days >= 21:
+            score += 45
+        elif age_days >= 14:
+            score += 35
+        elif age_days >= 7:
+            score += 20
+
+    score += min(40, max(0, missing_links_count) * 15)
+    return max(0, min(100, score))
+
+
+def _recall_metadata_for_scope(user_id: str, semester: str, course: str, unit: str) -> Dict[str, Dict[str, Any]]:
+    metadata: Dict[str, Dict[str, Any]] = {}
+    for item in _load_recall_traces():
+        if not isinstance(item, dict):
+            continue
+        if not _trace_matches(item, user_id, semester, course, unit, item.get("concept", "")):
+            continue
+
+        key = _concept_key(item.get("concept"))
+        if not key:
+            continue
+
+        entry = metadata.setdefault(key, {
+            "recall_count": 0,
+            "last_recalled_at": None,
+            "missing_links_count": 0,
+        })
+        entry["recall_count"] += 1
+
+        created_at = str(item.get("created_at") or "")
+        if created_at and (not entry["last_recalled_at"] or created_at > entry["last_recalled_at"]):
+            entry["last_recalled_at"] = created_at
+
+        feedback = item.get("feedback")
+        missing_links = feedback.get("missing_links") if isinstance(feedback, dict) else []
+        if isinstance(missing_links, list):
+            entry["missing_links_count"] += len([x for x in missing_links if str(x).strip()])
+
+    return metadata
+
+
+def _augment_concepts_with_recall(
+    concepts: List[Dict[str, Any]],
+    user_id: str,
+    semester: str,
+    course: str,
+    unit: str,
+) -> List[Dict[str, Any]]:
+    metadata = _recall_metadata_for_scope(user_id, semester, course, unit)
+    augmented: List[Dict[str, Any]] = []
+
+    for concept in concepts:
+        item = dict(concept)
+        key = _concept_key(item.get("name") or item.get("keyword"))
+        meta = metadata.get(key, {})
+        recall_count = int(meta.get("recall_count") or 0)
+        last_recalled_at = meta.get("last_recalled_at")
+        missing_links_count = int(meta.get("missing_links_count") or 0)
+        item["recall_count"] = recall_count
+        item["last_recalled_at"] = last_recalled_at
+        item["missing_links_count"] = missing_links_count
+        item["weak_score"] = _score_recall_weakness(recall_count, last_recalled_at, missing_links_count)
+        augmented.append(item)
+
+    return augmented
+
+
+def _persist_recall_feedback(payload: RecallFeedbackRequest, feedback: RecallFeedbackResponse) -> None:
+    traces = _load_recall_traces()
+    feedback_data = _model_to_dict(feedback)
+    matched_index: Optional[int] = None
+    trace_id = (payload.trace_id or "").strip()
+
+    if trace_id:
+        for index, item in enumerate(traces):
+            if isinstance(item, dict) and str(item.get("id", "")).strip() == trace_id:
+                matched_index = index
+                break
+
+    if matched_index is None:
+        for index, item in enumerate(traces):
+            if not isinstance(item, dict):
+                continue
+            if not _trace_matches(
+                item,
+                payload.user_id.strip(),
+                payload.semester.strip(),
+                payload.course.strip(),
+                payload.unit.strip(),
+                payload.concept.strip(),
+            ):
+                continue
+            if str(item.get("answer_text", "")).strip() != payload.answer_text.strip():
+                continue
+            if matched_index is None or str(item.get("created_at", "")) > str(traces[matched_index].get("created_at", "")):
+                matched_index = index
+
+    if matched_index is None:
+        return
+
+    traces[matched_index]["feedback"] = feedback_data
+    traces[matched_index]["feedback_created_at"] = datetime.now(timezone.utc).isoformat()
+    _save_recall_traces(traces)
 
 def _build_timetable_response(uid: str) -> TimetableResponse:
     timetable = [e for e in _load_timetable() if e.get("user_id") == uid]
@@ -452,7 +741,138 @@ async def concepts(semester: str, course: str, unit: str, data_user_id: str = De
     if not concepts:
         return {"status": "empty", "concepts": []}
 
-    return {"status": "ready", "concepts": concepts}
+    return {"status": "ready", "concepts": _augment_concepts_with_recall(concepts, data_user_id, semester, course, unit)}
+
+
+@app.post("/recall-traces", response_model=RecallTraceResponse)
+async def create_recall_trace(
+    payload: RecallTraceCreate,
+    data_user_id: str = Depends(current_uid),
+) -> RecallTraceResponse:
+    user_id = data_user_id
+    semester = payload.semester.strip()
+    course = payload.course.strip()
+    unit = payload.unit.strip()
+    concept = payload.concept.strip()
+    answer_text = payload.answer_text.strip()
+
+    if not all([user_id, semester, course, unit, concept, answer_text]):
+        raise HTTPException(
+            status_code=400,
+            detail="user_id, semester, course, unit, concept, answer_text가 필요합니다.",
+        )
+
+    trace = {
+        "id": uuid.uuid4().hex,
+        "user_id": user_id,
+        "semester": semester,
+        "course": course,
+        "unit": unit,
+        "concept": concept,
+        "answer_text": answer_text,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    traces = _load_recall_traces()
+    traces.append(trace)
+    _save_recall_traces(traces)
+    return RecallTraceResponse(ok=True, trace=RecallTrace(**trace))
+
+
+@app.get("/recall-traces", response_model=RecallTraceListResponse)
+async def recall_traces(
+    semester: str,
+    course: str,
+    unit: str,
+    concept: Optional[str] = None,
+    limit: int = 20,
+    data_user_id: str = Depends(current_uid),
+) -> RecallTraceListResponse:
+    filters = {
+        "user_id": data_user_id,
+        "semester": semester.strip(),
+        "course": course.strip(),
+        "unit": unit.strip(),
+    }
+    if not all(filters.values()):
+        raise HTTPException(status_code=400, detail="user_id, semester, course, unit이 필요합니다.")
+
+    concept_filter = (concept or "").strip()
+    traces = []
+    for item in _load_recall_traces():
+        if not isinstance(item, dict):
+            continue
+        if any(str(item.get(key, "")) != value for key, value in filters.items()):
+            continue
+        if concept_filter and str(item.get("concept", "")) != concept_filter:
+            continue
+        traces.append(item)
+
+    traces.sort(key=lambda item: str(item.get("created_at", "")), reverse=True)
+    safe_limit = max(1, min(limit, 100))
+    return RecallTraceListResponse(traces=[RecallTrace(**item) for item in traces[:safe_limit]])
+
+
+@app.post("/recall-feedback", response_model=RecallFeedbackResponse)
+async def recall_feedback(
+    payload: RecallFeedbackRequest,
+    data_user_id: str = Depends(current_uid),
+) -> RecallFeedbackResponse:
+    if not os.getenv("OPENAI_API_KEY"):
+        raise HTTPException(
+            status_code=503,
+            detail="OPENAI_API_KEY가 설정되지 않아 recall feedback을 생성할 수 없습니다.",
+        )
+
+    user_id = data_user_id
+    semester = payload.semester.strip()
+    course = payload.course.strip()
+    unit = payload.unit.strip()
+    concept = payload.concept.strip()
+    answer_text = payload.answer_text.strip()
+
+    if not all([user_id, semester, course, unit, concept, answer_text]):
+        raise HTTPException(
+            status_code=400,
+            detail="user_id, semester, course, unit, concept, answer_text가 필요합니다.",
+        )
+
+    source_chunks = _feedback_source_chunks(user_id, semester, course, unit, concept)
+    if not source_chunks:
+        raise HTTPException(status_code=400, detail="피드백에 사용할 관련 자료 chunk를 찾지 못했습니다.")
+
+    prompt = f"""{_load_recall_feedback_prompt()}
+
+[학습 컨텍스트]
+- user_id: {user_id}
+- semester: {semester}
+- course: {course}
+- unit: {unit}
+- concept: {concept}
+
+[사용자 설명]
+{answer_text}
+
+[자료 근거]
+{_format_feedback_sources(source_chunks)}
+"""
+
+    try:
+        raw_feedback = generate_openai_answer(prompt, max_tokens=700)
+        feedback = _normalize_feedback_payload(_extract_json_object(raw_feedback))
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"recall feedback 생성에 실패했습니다: {exc}") from exc
+
+    if not feedback.followup_question:
+        feedback.followup_question = "이 개념이 단원 전체 흐름에서 어떤 역할을 하는지 한 문장으로 다시 설명해볼까요?"
+    if not feedback.source_hint:
+        first = source_chunks[0]
+        feedback.source_hint = f"{first.get('course', course)} · {first.get('unit', unit)} · {first.get('filename', '')} p.{first.get('page', '')} 근처를 다시 보세요."
+
+    payload_for_persist = payload.copy(update={"user_id": data_user_id})
+    _persist_recall_feedback(payload_for_persist, feedback)
+    return feedback
 
 
 @app.get("/chunks")
@@ -602,6 +1022,7 @@ async def concept_graph(semester: Optional[str] = None, data_user_id: str = Depe
                 "keyword": e["keyword"],
                 "course": e["course"],
                 "unit": e["unit"],
+                "semester": e.get("semester", ""),
                 "weight": e["weight"],
             }
             for e in embeddings_index if e.get("user_id") == user_id
@@ -609,8 +1030,28 @@ async def concept_graph(semester: Optional[str] = None, data_user_id: str = Depe
         
         # semester 필터링 (선택적)
         if semester and semester.strip():
-            user_nodes = [n for n in user_nodes if n.get("unit") == semester]
+            user_nodes = [n for n in user_nodes if n.get("semester") == semester.strip()]
         
+        graph_meta: Dict[str, Dict[str, Any]] = {}
+        for node in user_nodes:
+            node_semester = str(node.get("semester") or semester or "")
+            meta = _recall_metadata_for_scope(user_id, node_semester, str(node.get("course") or ""), str(node.get("unit") or ""))
+            graph_meta.update({
+                (node_semester, str(node.get("course") or ""), str(node.get("unit") or ""), key): value
+                for key, value in meta.items()
+            })
+
+        for node in user_nodes:
+            node_semester = str(node.get("semester") or semester or "")
+            meta = graph_meta.get((node_semester, str(node.get("course") or ""), str(node.get("unit") or ""), _concept_key(node.get("name") or node.get("keyword"))), {})
+            recall_count = int(meta.get("recall_count") or 0)
+            last_recalled_at = meta.get("last_recalled_at")
+            missing_links_count = int(meta.get("missing_links_count") or 0)
+            node["recall_count"] = recall_count
+            node["last_recalled_at"] = last_recalled_at
+            node["missing_links_count"] = missing_links_count
+            node["weak_score"] = _score_recall_weakness(recall_count, last_recalled_at, missing_links_count)
+
         # cross-link 노드 ID 검증
         node_ids = set(n["id"] for n in user_nodes)
         edges = [
@@ -712,7 +1153,10 @@ async def auth_google(req: GoogleRequest) -> Dict[str, Any]:
     email = info.get("email")
     if not email or str(info.get("email_verified", "")).lower() not in ("true", "1"):
         raise HTTPException(status_code=401, detail="이메일을 확인할 수 없습니다.")
-    user = _auth.upsert_google_user(email, info.get("sub", ""), info.get("name", ""), req.link_user_id or "")
+    try:
+        user = _auth.upsert_google_user(email, info.get("sub", ""), info.get("name", ""), req.link_user_id or "")
+    except ValueError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
     return {"token": _auth.create_token(user["id"]), "user": _auth.public_user(user)}
 
 

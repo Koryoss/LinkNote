@@ -1,18 +1,24 @@
-const { invoke } = window.__TAURI__.core;
+const API_URL = "http://127.0.0.1:8000";
 
-let greetInputEl;
-let greetMsgEl;
+const statusEl = document.getElementById("status");
+const openBtn = document.getElementById("open-backend");
+const checkBtn = document.getElementById("check-backend");
 
-async function greet() {
-  // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-  greetMsgEl.textContent = await invoke("greet", { name: greetInputEl.value });
+async function checkBackend() {
+  statusEl.textContent = "Checking local API...";
+  try {
+    const response = await fetch(`${API_URL}/auth/config`);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    statusEl.textContent = "Local API is running. The desktop window will show the gallery.";
+  } catch (error) {
+    statusEl.textContent = "Local API is not reachable. Run the backend first, then reopen the desktop app.";
+  }
 }
 
-window.addEventListener("DOMContentLoaded", () => {
-  greetInputEl = document.querySelector("#greet-input");
-  greetMsgEl = document.querySelector("#greet-msg");
-  document.querySelector("#greet-form").addEventListener("submit", (e) => {
-    e.preventDefault();
-    greet();
-  });
+openBtn.addEventListener("click", () => {
+  window.location.href = API_URL;
 });
+
+checkBtn.addEventListener("click", checkBackend);
+
+checkBackend();
