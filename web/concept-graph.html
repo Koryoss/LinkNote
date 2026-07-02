@@ -28,6 +28,8 @@
   .map-card small { display:block; color:#64748b; font-size:.72rem; margin-bottom:5px; }
   .map-card strong { display:block; color:#0f172a; font-size:1.05rem; }
   .map-card span { display:block; margin-top:6px; color:#475569; font-size:.78rem; line-height:1.35; }
+  .map-card.active { border-color:#2563eb; box-shadow:0 0 0 2px rgba(37,99,235,.16); }
+  .map-card { cursor:pointer; }
   .modebar { display:flex; flex-wrap:wrap; gap:8px; margin-top:14px; }
   .modebar button.active { background:#2563eb; border-color:#2563eb; color:#fff; }
   .modebar button.secondary { margin-left:auto; border-color:#cbd5e1; color:#475569; }
@@ -287,10 +289,8 @@
     };
   }
   function modeButtonsHTML(){
-    const primary = ['review','core','connection','memory','new'].map(mode =>
-      `<button class="${currentMode===mode?'active':''}" onclick="setMode('${mode}')">${esc(MODE_LABELS[mode])}</button>`
-    ).join('');
-    return `<div class="modebar">${primary}<button class="secondary ${currentMode==='full'?'active':''}" onclick="setMode('full')">Explore Full Knowledge Map</button></div>`;
+    // 카드 4개가 모드 선택을 담당 — 여기는 카드에 없는 보기만 남긴다.
+    return `<div class="modebar"><button class="secondary ${currentMode==='full'?'active':''}" onclick="setMode('full')">Explore Full Knowledge Map</button></div>`;
   }
   function uniqueSorted(items){
     return [...new Set(items.map(item => String(item || '').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b, 'ko'));
@@ -360,26 +360,17 @@
     app.className = 'grid';
     app.innerHTML = `
       <section class="wide"><h2>Today's Learning Map</h2>
-        <p class="sub">처음에는 전체 지도를 모두 보여주지 않습니다. 지금 복습에 도움이 되는 개념만 먼저 보여줍니다.</p>
+        <p class="sub">처음에는 전체 지도를 모두 보여주지 않습니다. 지금 복습에 도움이 되는 개념만 먼저 보여줍니다. 카드를 누르면 해당 보기로 바뀝니다.</p>
         <div class="map-cards">
-          <button class="map-card" onclick="setMode('review')"><small>오늘 복습할 개념</small><strong>${esc(summary.review.length)}</strong><span>${esc(topNames(summary.review))}</span></button>
-          <button class="map-card" onclick="setMode('core')"><small>중심 개념</small><strong>${esc(summary.core.length)}</strong><span>${esc(topNames(summary.core))}</span></button>
-          <button class="map-card" onclick="setMode('memory')"><small>최근 설명한 개념</small><strong>${esc(summary.recent.length)}</strong><span>${esc(topNames(summary.recent))}</span></button>
-          <button class="map-card" onclick="setMode('new')"><small>아직 설명 안 한 개념</small><strong>${esc(summary.fresh.length)}</strong><span>${esc(topNames(summary.fresh))}</span></button>
+          <button class="map-card ${currentMode==='review'?'active':''}" onclick="setMode('review')"><small>오늘 복습할 개념</small><strong>${esc(summary.review.length)}</strong><span>${esc(topNames(summary.review))}</span></button>
+          <button class="map-card ${currentMode==='core'?'active':''}" onclick="setMode('core')"><small>중심 개념</small><strong>${esc(summary.core.length)}</strong><span>${esc(topNames(summary.core))}</span></button>
+          <button class="map-card ${currentMode==='memory'?'active':''}" onclick="setMode('memory')"><small>최근 설명한 개념</small><strong>${esc(summary.recent.length)}</strong><span>${esc(topNames(summary.recent))}</span></button>
+          <button class="map-card ${currentMode==='new'?'active':''}" onclick="setMode('new')"><small>아직 설명 안 한 개념</small><strong>${esc(summary.fresh.length)}</strong><span>${esc(topNames(summary.fresh))}</span></button>
         </div>
-      </section>
-      <section class="wide"><h2>Summary</h2><div class="stats">
-        ${stat('total concepts', stats.node_count || 0)}
-        ${stat('total links', stats.edge_count || 0)}
-        ${stat('review concepts', stats.review_concept_count || stats.weak_concept_count || 0)}
-        ${stat('recalled concepts', stats.recalled_concept_count || 0)}
-      </div>
-      ${modeButtonsHTML()}
-      <p class="sub">${esc(MODE_LABELS[currentMode])}: ${esc(modeDescription)}</p>
-      <p class="sub">처음에는 전체 지도를 모두 보여주지 않습니다. Learning State와 Review Priority를 기준으로 복습에 도움이 되는 개념을 우선 표시합니다.</p>
-      <p class="sub">현재 node ${visible.nodes.length}개 / 전체 ${nodes.length}개, edge ${visible.edges.length}개 / 전체 ${edges.length}개를 표시합니다.</p>
-      ${fullWarning}
-      ${filtersHTML()}</section>
+        <p class="sub"><b>${esc(MODE_LABELS[currentMode])}</b> — ${esc(modeDescription)} (node ${visible.nodes.length}/${nodes.length} · edge ${visible.edges.length}/${edges.length})</p>
+        ${fullWarning}
+        ${modeButtonsHTML()}
+        ${filtersHTML()}</section>
       <section><h2>${esc(MODE_LABELS[currentMode])}</h2><div id="graphWrap" class="graph-wrap">${visible.nodes.length ? '<svg id="graphSvg"></svg>' : '<div class="empty">아직 표시할 Concept Connections가 없습니다. 자료를 업로드하고 개념 추출을 먼저 진행해 주세요.</div>'}</div></section>
       <section><h2>Details</h2><div id="details" class="detail">노드를 클릭하면 상세 정보가 표시됩니다.</div></section>`;
     restoreFilters();
