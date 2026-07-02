@@ -479,17 +479,11 @@
       .filter(edge => edge.source === node.id || edge.target === node.id)
       .sort((a,b)=>Number(b.weight || b.normalized_weight || 0)-Number(a.weight || a.normalized_weight || 0))
       .slice(0, 8)
-      .map(edge => {
-        const other = byId[edge.source === node.id ? edge.target : edge.source];
-        if(!other) return '';
-        const scoreValue = edge.normalized_weight ?? edge.weight ?? edge.score ?? '';
-        const scoreText = scoreValue === '' ? '' : ` · ${esc(scoreValue)}`;
-        const reason = edge.reason || edge.edge_type || '저장된 개념 연결';
-        return `<div class="connected-item"><strong>${esc(nodeLabel(other) || other.id)}</strong><span class="search-meta">${esc(edge.edge_type || 'edge')}${scoreText}</span>${esc(reason)}</div>`;
-      })
+      .map(edge => byId[edge.source === node.id ? edge.target : edge.source])
       .filter(Boolean)
+      .map(other => `<button class="btn" onclick="centerNodeById('${esc(other.id)}')">${esc(nodeLabel(other) || other.id)}</button>`)
       .join('');
-    return `<div class="connected-list"><h3>Concept Connections</h3>${rows || '<div class="search-item">현재 표시된 연결 개념이 없습니다. 이 개념 중심으로 보기를 눌러 주변 연결을 확인해보세요.</div>'}</div>`;
+    return `<div class="connected-list"><h3>Concept Connections</h3>${rows ? `<div class="detail-actions">${rows}</div>` : '<div class="search-item">현재 표시된 연결 개념이 없습니다. 이 개념 중심으로 보기를 눌러 주변 연결을 확인해보세요.</div>'}</div>`;
   }
   function searchResultsHTML(d){
     const list = (items, empty, renderItem) => items && items.length ? items.map(renderItem).join('') : `<div class="search-item">${esc(empty)}</div>`;
@@ -529,9 +523,6 @@
   }
   function showDetails(node, notice=''){
     if(!node) return;
-    const badges = (node.badges || []).length ? `<div class="badges">${node.badges.map(b=>`<span class="badge">${esc(b)}</span>`).join('')}</div>` : '<div class="sub">분류 badge가 아직 없습니다.</div>';
-    const reviewReasons = Array.isArray(node.review_reason) && node.review_reason.length ? node.review_reason : (Array.isArray(node.why_shown) ? node.why_shown : []);
-    const why = reviewReasons.length ? `<ul>${reviewReasons.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>` : '-';
     const concept = encodeURIComponent(nodeLabel(node));
     const course = encodeURIComponent(node.course || '');
     const unit = encodeURIComponent(node.unit || '');
@@ -539,16 +530,9 @@
     const recallUrl = `/?course=${course}&unit=${unit}&concept=${concept}&action=recall`;
     document.getElementById('details').innerHTML = `<dl>
       <dt>Concept</dt><dd>${esc(node.label || '')}</dd>
-      <dt>Type</dt><dd>${badges}</dd>
       <dt>Course / Unit</dt><dd>${esc(node.course || '-')} · ${esc(node.unit || '-')}</dd>
       <dt>Learning State</dt><dd>${esc(learningState(node))}</dd>
-      <dt>Review Priority</dt><dd>${esc(node.review_priority ?? reviewPriority(node))}</dd>
-      <dt>Why?</dt><dd>${why}</dd>
-      <dt>Recall Count</dt><dd>${esc(node.recall_count || 0)}</dd>
-      <dt>Missing Links</dt><dd>${esc(node.missing_links_count || 0)}</dd>
-      <dt>Degree</dt><dd>${esc(node.degree || 0)}</dd>
-      <dt>Last Recalled</dt><dd>${esc(node.last_recalled_at || '-')}</dd>
-      <dt>Recommended Action</dt><dd>${esc(node.recommended_action || '관련 자료를 빠른 검색으로 다시 확인해보세요.')}</dd>
+      <dt>Recommended Action</dt><dd>${esc(node.recommended_action || '처음으로 내 말로 설명해보세요.')}</dd>
     </dl>
     ${notice ? `<div class="warning">${esc(notice)}</div>` : ''}
     <div class="learning-actions">
