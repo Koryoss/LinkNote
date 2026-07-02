@@ -13,13 +13,20 @@
   .btn, button { border:1px solid #d8dee9; background:#fff; color:#2563eb; border-radius:8px; padding:8px 12px; font-size:.84rem; font-weight:700; text-decoration:none; cursor:pointer; }
   .btn.primary { background:#2563eb; border-color:#2563eb; color:#fff; }
   main { width:min(1080px, calc(100vw - 32px)); margin:24px auto 42px; }
-  .hero { margin-bottom:18px; }
+  .hero { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; margin-bottom:18px; flex-wrap:wrap; }
   h1 { font-size:1.5rem; color:#0f172a; }
   .sub { margin-top:6px; color:#64748b; font-size:.9rem; }
+  .snapshot { border:1px solid #e8ebf2; border-radius:12px; background:#fff; box-shadow:0 4px 14px rgba(15,23,42,.05); padding:10px 14px; max-width:420px; font-size:.76rem; color:#475569; }
+  .snapshot h2 { font-size:.78rem; color:#1e293b; margin-bottom:6px; }
+  .snapshot .mini-stats { display:flex; flex-wrap:wrap; gap:4px 10px; margin-top:6px; }
+  .snapshot .mini-stats span { color:#64748b; }
+  .snapshot .mini-stats b { color:#0f172a; font-weight:800; }
+  .snapshot .weekly { color:#64748b; line-height:1.45; }
   .grid { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:16px; }
   section { background:#fff; border:1px solid #e8ebf2; border-radius:14px; padding:18px; box-shadow:0 8px 24px rgba(15,23,42,.06); }
   section.wide { grid-column:1/-1; }
   h2 { font-size:.98rem; margin-bottom:13px; color:#1e293b; }
+  h3 { font-size:.96rem; margin-bottom:5px; color:#0f172a; }
   .kv { display:grid; grid-template-columns:150px 1fr; gap:9px 12px; font-size:.86rem; }
   .k { color:#64748b; }
   .v { font-weight:700; color:#1f2937; overflow-wrap:anywhere; }
@@ -27,9 +34,18 @@
   .stat { border:1px solid #eef1f6; border-radius:12px; padding:12px; background:#f8fafc; }
   .stat small { display:block; color:#64748b; font-size:.74rem; margin-bottom:5px; }
   .stat strong { font-size:1.25rem; color:#0f172a; }
-  .list { display:flex; flex-direction:column; gap:8px; margin-top:12px; }
+  .list { display:flex; flex-direction:column; gap:10px; margin-top:12px; }
   .item { border:1px solid #eef1f6; border-radius:10px; padding:10px 12px; background:#f8fafc; font-size:.84rem; line-height:1.45; }
   .item small { display:block; color:#94a3b8; margin-top:3px; }
+  .memory-card { border:1px solid #e2e8f0; border-radius:12px; padding:14px; background:#fff; box-shadow:0 5px 16px rgba(15,23,42,.04); font-size:.86rem; line-height:1.55; }
+  .memory-meta { color:#94a3b8; font-size:.78rem; margin-top:3px; }
+  .memory-two-col { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:12px; }
+  .memory-pane { border:1px solid #eef1f6; border-radius:10px; padding:12px; background:#f8fafc; }
+  .memory-pane h4 { font-size:.86rem; color:#1e293b; margin-bottom:8px; }
+  .memory-pane p { margin-top:8px; }
+  .feedback-empty { border:1px dashed #cbd5e1; border-radius:10px; padding:12px; background:#fff; color:#64748b; }
+  .chips { display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; }
+  .chip { border:1px solid #bfdbfe; background:#eff6ff; color:#1d4ed8; border-radius:999px; padding:3px 8px; font-size:.74rem; font-weight:700; }
   details.dev { border:1px solid #e8ebf2; border-radius:12px; padding:12px; background:#f8fafc; }
   details.dev summary { cursor:pointer; color:#475569; font-weight:800; }
   details.dev .kv { margin-top:12px; }
@@ -39,7 +55,7 @@
   .empty, .error { border:1px dashed #d8dee9; border-radius:12px; padding:18px; color:#64748b; background:#fff; }
   .error { border-color:#fecaca; color:#b91c1c; background:#fff7f7; }
   .actions { display:flex; flex-wrap:wrap; gap:8px; }
-  @media (max-width:760px){ .grid{grid-template-columns:1fr;} .kv{grid-template-columns:1fr;} .stats{grid-template-columns:1fr 1fr;} }
+  @media (max-width:760px){ .grid,.memory-two-col{grid-template-columns:1fr;} .kv{grid-template-columns:1fr;} .stats{grid-template-columns:1fr 1fr;} .hero{flex-direction:column;} .snapshot{max-width:100%;} }
 </style>
 </head>
 <body>
@@ -47,13 +63,15 @@
     <a class="brand" href="/">LinkNote</a>
     <span id="userLabel" class="sub"></span>
     <span class="spacer"></span>
-    <a class="btn" href="/">My Library</a>
     <button onclick="logout()">Logout</button>
   </div>
   <main>
     <div class="hero">
-      <h1>My Page</h1>
-      <p class="sub">내 자료와 설명해보기 활동을 복습 중심으로 요약합니다.</p>
+      <div>
+        <h1>My Page</h1>
+        <p class="sub">내 자료와 설명해보기 활동을 복습 중심으로 요약합니다.</p>
+      </div>
+      <div id="snapshot" class="snapshot" hidden></div>
     </div>
     <div id="app" class="empty">불러오는 중...</div>
   </main>
@@ -76,21 +94,83 @@
     if(!r.ok) throw new Error(`${path} returned ${r.status} ${d.detail || r.statusText}`);
     return d;
   }
+  async function postJSON(path, body){
+    const r = await fetch(API + path, {
+      method:'POST',
+      headers:{ ...headers(), 'Content-Type':'application/json' },
+      body:JSON.stringify(body || {})
+    });
+    const d = await r.json().catch(()=>({}));
+    if(!r.ok) throw new Error(`${path} returned ${r.status} ${d.detail || r.statusText}`);
+    return d;
+  }
   function logout(){ localStorage.removeItem('ln_token'); location.href='/'; }
   function stat(label, value){ return `<div class="stat"><small>${esc(label)}</small><strong>${esc(value)}</strong></div>`; }
   function row(k,v){ return `<div class="k">${esc(k)}</div><div class="v">${esc(v || '-')}</div>`; }
   function compactItem(title, body, meta){
     return `<div class="item"><strong>${esc(title || '-')}</strong>${body ? `<div>${esc(String(body)).slice(0,180)}</div>` : ''}<small>${esc(meta || '')}</small></div>`;
   }
-  function recentLearningHTML(learning, memorySummary, aiSummaries){
+  const chips = (items) => Array.isArray(items) && items.length
+    ? `<div class="chips">${items.map(item => `<span class="chip">${esc(item.name || item.concept || item)}</span>`).join('')}</div>`
+    : '';
+  let currentMemories = [];
+  function snapshotHTML(library, learning, memorySummary){
+    const mini = (label, value) => `<span>${esc(label)} <b>${esc(value)}</b></span>`;
+    return `<h2>Learning Snapshot</h2>
+      <div class="weekly">${esc(memorySummary.weekly_summary || '설명해보기를 사용하면 복습 메모리가 쌓입니다.')}</div>
+      <div class="mini-stats">
+        ${mini('PDF', library.pdf_count || 0)}
+        ${mini('과목', library.course_count || 0)}
+        ${mini('단원', library.unit_count || 0)}
+        ${mini('개념', learning.concept_count || 0)}
+        ${mini('메모리', memorySummary.total_memories || 0)}
+        ${mini('설명', learning.explanation_feedback_count || 0)}
+        ${mini('최근 학습', dateText(learning.last_studied_at || memorySummary.last_memory_created_at))}
+      </div>`;
+  }
+  function feedbackSection(item, index){
+    const missing = Array.isArray(item.missing_links) ? item.missing_links : [];
+    const good = Array.isArray(item.good_points) ? item.good_points : [];
+    if(!item.has_ai_feedback){
+      return `<div class="feedback-empty">
+        아직 AI 피드백이 없습니다.
+        <div class="actions" style="margin-top:10px">
+          <button onclick="generateMemoryFeedback(${index})">AI 피드백 생성</button>
+          <span id="feedbackStatus${index}" class="sub"></span>
+        </div>
+      </div>`;
+    }
+    return `
+      ${item.feedback_text ? `<p><strong>요약 피드백</strong><br>${esc(item.feedback_text)}</p>` : ''}
+      ${good.length ? `<p><strong>좋았던 점</strong></p>${chips(good)}` : ''}
+      ${missing.length ? `<p><strong>더 연결해볼 점</strong></p>${chips(missing)}` : ''}
+      ${item.followup_question ? `<p><strong>다시 생각해볼 질문</strong><br>${esc(item.followup_question)}</p>` : ''}
+      ${item.improved_summary ? `<p><strong>개선 요약</strong><br>${esc(item.improved_summary)}</p>` : ''}
+      ${item.review_hint ? `<p><strong>복습 힌트</strong><br>${esc(item.review_hint)}</p>` : ''}
+      ${item.source_hint ? `<p><strong>다시 볼 자료</strong><br>${esc(item.source_hint)}</p>` : ''}`;
+  }
+  function memoryCard(item, index){
+    const graphUrl = `/concept-graph.html?mode=connection&concept=${encodeURIComponent(item.concept || '')}&course=${encodeURIComponent(item.course || '')}&unit=${encodeURIComponent(item.unit || '')}`;
+    return `<div class="memory-card">
+      <h3>${esc(item.concept || '개념 미지정')}</h3>
+      <div class="memory-meta">${esc(item.course)} · ${esc(item.unit)} · ${esc(dateText(item.created_at))}</div>
+      <div class="memory-two-col">
+        <section class="memory-pane">
+          <h4>내 설명</h4>
+          <p>${esc(item.answer_text || '')}</p>
+        </section>
+        <section class="memory-pane">
+          <h4>AI 피드백</h4>
+          ${feedbackSection(item, index)}
+        </section>
+      </div>
+      <div class="actions" style="margin-top:10px"><a class="btn" href="${graphUrl}">개념 연결 보기</a></div>
+    </div>`;
+  }
+  function recentActivityHTML(learning, aiSummaries){
     const items = [];
-    const recentMemories = Array.isArray(memorySummary.recent_memories) ? memorySummary.recent_memories : [];
     const recentExplanations = Array.isArray(learning.recent_explanations) ? learning.recent_explanations : [];
     const summaries = Array.isArray(aiSummaries?.items) ? aiSummaries.items : [];
-    if(recentMemories[0]){
-      const x = recentMemories[0];
-      items.push(compactItem(`Recent Learning Memory · ${x.concept || '개념'}`, x.improved_summary || x.answer_text || x.answer_preview || '', `${x.course || ''} · ${x.unit || ''} · ${dateText(x.created_at)}`));
-    }
     if(recentExplanations[0]){
       const x = recentExplanations[0];
       items.push(compactItem(`Recent explanation · ${x.concept || '개념'}`, x.feedback_text || x.answer_text || '', `${x.course || ''} · ${x.unit || ''} · ${dateText(x.created_at)}`));
@@ -99,39 +179,37 @@
       const x = summaries[0];
       items.push(compactItem(`Recent AI summary · ${x.title || 'AI Summary'}`, x.summary || '', `${x.summary_type || ''} · ${dateText(x.created_at)}`));
     }
-    if(!items.length && learning.last_studied_at){
-      items.push(compactItem('Recently studied', '최근 학습 시간이 기록되어 있습니다.', dateText(learning.last_studied_at)));
-    }
-    return items.slice(0,3).join('') || '<div class="item">아직 표시할 최근 학습 활동이 없습니다.</div>';
+    return items.join('');
   }
-  function render(summary, me, memory, clinical, aiSummaries){
+  function render(summary, me, memory, clinical, aiSummaries, memories){
     const account = summary.account || me.user || {};
     const library = summary.library || {};
     const learning = summary.learning || {};
     const memorySummary = memory || {};
     const isNursing = (account.student_track || 'general') === 'nursing';
     const clinicalItems = Array.isArray(clinical?.items) ? clinical.items : [];
+    currentMemories = Array.isArray(memories?.items) ? memories.items : [];
     document.getElementById('userLabel').textContent = account.display_name || account.email || '';
+    const snapshot = document.getElementById('snapshot');
+    snapshot.hidden = false;
+    snapshot.innerHTML = snapshotHTML(library, learning, memorySummary);
+    const activity = recentActivityHTML(learning, aiSummaries);
     document.getElementById('app').className = 'grid';
     document.getElementById('app').innerHTML = `
-      <section><h2>Account</h2><div class="kv">
+      <section class="wide"><h2>Learning Memory</h2>
+        <div class="list">${currentMemories.length ? currentMemories.map(memoryCard).join('') : '<div class="item">아직 저장된 Learning Memory가 없습니다. 설명해보기를 사용하면 여기에 쌓입니다.</div>'}</div>
+        <div class="actions" style="margin-top:12px">
+          <a class="btn" href="/learning-memory.html">전체 Learning Memory · AI Summary 보기</a>
+        </div>
+      </section>
+      ${activity ? `<section class="wide"><h2>Recent Activity</h2><div class="list">${activity}</div></section>` : ''}
+      <section class="wide"><h2>Account</h2><div class="kv">
         ${row('Email', account.email)}
         ${row('Display name', account.display_name)}
         ${row('Login method', account.login_method || account.auth_provider)}
         ${row('Student track', account.student_track || 'general')}
         ${row('Joined date', dateText(account.joined_at || account.created_at || account.created))}
       </div></section>
-      <section><h2>Learning Snapshot</h2><p class="sub">${esc(memorySummary.weekly_summary || '설명해보기를 사용하면 복습 메모리가 쌓입니다.')}</p></section>
-      <section class="wide"><h2>Learning Dashboard</h2><div class="stats">
-        ${stat('Uploaded PDFs', library.pdf_count || 0)}
-        ${stat('Courses', library.course_count || 0)}
-        ${stat('Units', library.unit_count || 0)}
-        ${stat('Concepts', learning.concept_count || 0)}
-        ${stat('Learning Memory', memorySummary.total_memories || 0)}
-        ${stat('Explanation count', learning.explanation_feedback_count || 0)}
-        ${stat('Last learning time', dateText(learning.last_studied_at || memorySummary.last_memory_created_at))}
-      </div></section>
-      <section class="wide"><h2>Recent Learning</h2><div class="list">${recentLearningHTML(learning, memorySummary, aiSummaries)}</div></section>
       <section class="wide nursing-card ${isNursing ? 'on' : ''}"><h2>Nursing Practice Mode: Clinical Reflection</h2>
         <div class="stats">
           ${stat('saved reflections', clinicalItems.length)}
@@ -141,12 +219,7 @@
         <p class="sub" style="margin-top:10px">환자 식별 정보 없이 실습 상황을 학습 자료, 개념 연결, 복습 포인트와 연결하는 교육용 회고 기능입니다.</p>
         <div class="actions" style="margin-top:12px"><a class="btn primary" href="/clinical-reflection.html">실습 회고 / Clinical Reflection</a></div>
       </section>
-      <section class="wide"><h2>Actions</h2><div class="actions">
-        <a class="btn primary" href="/">My Library</a>
-        <a class="btn" href="/learning-memory.html">Learning Memory</a>
-        <button onclick="logout()">Logout</button>
-      </div></section>
-      <section class="wide">
+      ${account.is_maintainer ? `<section class="wide">
         <details class="dev">
           <summary>Developer Information</summary>
           <div class="kv">
@@ -158,21 +231,44 @@
             ${row('migration status', account.migration_status)}
           </div>
         </details>
-      </section>`;
+      </section>` : ''}`;
+  }
+  async function generateMemoryFeedback(index){
+    const item = currentMemories[index];
+    const status = document.getElementById('feedbackStatus' + index);
+    if(!item) return;
+    if(status) status.textContent = 'AI 피드백 생성 중... API 비용이 발생할 수 있습니다.';
+    try {
+      await postJSON('/recall-feedback', {
+        semester:item.semester,
+        course:item.course,
+        unit:item.unit,
+        concept:item.concept,
+        answer_text:item.answer_text,
+        trace_id:item.id
+      });
+      if(status) status.textContent = 'AI 피드백을 저장했습니다.';
+      await init();
+    } catch(e) {
+      if(status) status.textContent = 'AI 피드백을 생성하지 못했습니다: ' + e.message;
+    }
   }
   async function init(){
     const app = document.getElementById('app');
     if(!token()) { app.className='error'; app.textContent='로그인이 필요합니다. Gallery에서 먼저 로그인해주세요.'; return; }
     try {
       const me = await getJSON('/auth/me');
-      const summary = await getJSON('/me/summary');
-      const memory = await getJSON('/learning-memory/summary');
-      const aiSummaries = await getJSON('/learning-memory/ai-summaries?limit=1').catch(()=>({ items: [] }));
+      const [summary, memory, memories, aiSummaries] = await Promise.all([
+        getJSON('/me/summary'),
+        getJSON('/learning-memory/summary'),
+        getJSON('/learning-memory?limit=5').catch(()=>({ items: [] })),
+        getJSON('/learning-memory/ai-summaries?limit=1').catch(()=>({ items: [] })),
+      ]);
       let clinical = { items: [] };
       if(((me.user || {}).student_track || 'general') === 'nursing'){
         clinical = await getJSON('/clinical-reflections?limit=5').catch(()=>({ items: [] }));
       }
-      render(summary, me, memory, clinical, aiSummaries);
+      render(summary, me, memory, clinical, aiSummaries, memories);
     } catch(e) {
       app.className='error';
       app.textContent = 'My Page를 불러오지 못했습니다: ' + e.message;
