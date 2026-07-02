@@ -69,9 +69,7 @@
     <div class="hero">
       <div>
         <h1>My Page</h1>
-        <p class="sub">내 자료와 설명해보기 활동을 복습 중심으로 요약합니다.</p>
       </div>
-      <div id="snapshot" class="snapshot" hidden></div>
     </div>
     <div id="app" class="empty">불러오는 중...</div>
   </main>
@@ -114,20 +112,6 @@
     ? `<div class="chips">${items.map(item => `<span class="chip">${esc(item.name || item.concept || item)}</span>`).join('')}</div>`
     : '';
   let currentMemories = [];
-  function snapshotHTML(library, learning, memorySummary){
-    const mini = (label, value) => `<span>${esc(label)} <b>${esc(value)}</b></span>`;
-    return `<h2>Learning Snapshot</h2>
-      <div class="weekly">${esc(memorySummary.weekly_summary || '설명해보기를 사용하면 복습 메모리가 쌓입니다.')}</div>
-      <div class="mini-stats">
-        ${mini('PDF', library.pdf_count || 0)}
-        ${mini('과목', library.course_count || 0)}
-        ${mini('단원', library.unit_count || 0)}
-        ${mini('개념', learning.concept_count || 0)}
-        ${mini('메모리', memorySummary.total_memories || 0)}
-        ${mini('설명', learning.explanation_feedback_count || 0)}
-        ${mini('최근 학습', dateText(learning.last_studied_at || memorySummary.last_memory_created_at))}
-      </div>`;
-  }
   function feedbackSection(item, index){
     const missing = Array.isArray(item.missing_links) ? item.missing_links : [];
     const good = Array.isArray(item.good_points) ? item.good_points : [];
@@ -190,9 +174,6 @@
     const clinicalItems = Array.isArray(clinical?.items) ? clinical.items : [];
     currentMemories = Array.isArray(memories?.items) ? memories.items : [];
     document.getElementById('userLabel').textContent = account.display_name || account.email || '';
-    const snapshot = document.getElementById('snapshot');
-    snapshot.hidden = false;
-    snapshot.innerHTML = snapshotHTML(library, learning, memorySummary);
     const activity = recentActivityHTML(learning, aiSummaries);
     document.getElementById('app').className = 'grid';
     document.getElementById('app').innerHTML = `
@@ -203,13 +184,6 @@
         </div>
       </section>
       ${activity ? `<section class="wide"><h2>Recent Activity</h2><div class="list">${activity}</div></section>` : ''}
-      <section class="wide"><h2>Account</h2><div class="kv">
-        ${row('Email', account.email)}
-        ${row('Display name', account.display_name)}
-        ${row('Login method', account.login_method || account.auth_provider)}
-        ${row('Student track', account.student_track || 'general')}
-        ${row('Joined date', dateText(account.joined_at || account.created_at || account.created))}
-      </div></section>
       <section class="wide nursing-card ${isNursing ? 'on' : ''}"><h2>Nursing Practice Mode: Clinical Reflection</h2>
         <div class="stats">
           ${stat('saved reflections', clinicalItems.length)}
@@ -219,24 +193,29 @@
         <p class="sub" style="margin-top:10px">환자 식별 정보 없이 실습 상황을 학습 자료, 개념 연결, 복습 포인트와 연결하는 교육용 회고 기능입니다.</p>
         <div class="actions" style="margin-top:12px"><a class="btn primary" href="/clinical-reflection.html">실습 회고 / Clinical Reflection</a></div>
       </section>
-      ${account.is_maintainer ? `<section class="wide">
+      <section class="wide"><h2>Learning Snapshot</h2>
+        <div class="weekly" style="color:#475569;font-size:.9rem;line-height:1.5">${esc(memorySummary.weekly_summary || '설명해보기를 사용하면 복습 메모리가 쌓입니다.')}</div>
+        <p class="sub" style="margin-top:8px">최근 학습 <b>${esc(dateText(learning.last_studied_at || memorySummary.last_memory_created_at))}</b></p>
+      </section>
+      <section class="wide">
         <details class="dev">
-          <summary>Developer Information</summary>
+          <summary>계정 정보</summary>
           <div class="kv">
-            ${row('account_id', short(account.account_id || account.id))}
-            ${row('data_user_id', account.data_user_id)}
-            ${row('maintainer', account.is_maintainer ? 'yes' : 'no')}
-            ${row('legacy namespace', account.is_legacy_namespace ? 'yes' : 'no')}
-            ${row('namespace label', account.namespace_label)}
-            ${row('migration status', account.migration_status)}
+            ${row('Email', account.email)}
+            ${row('Display name', account.display_name)}
+            ${row('Login method', account.login_method || account.auth_provider)}
+            ${row('Student track', account.student_track || 'general')}
+            ${row('Joined date', dateText(account.joined_at || account.created_at || account.created))}
+            ${account.is_maintainer ? `${row('account_id', short(account.account_id || account.id))}${row('data_user_id', account.data_user_id)}${row('maintainer', 'yes')}${row('migration status', account.migration_status)}` : ''}
           </div>
         </details>
-      </section>` : ''}`;
+      </section>`;
   }
   async function generateMemoryFeedback(index){
     const item = currentMemories[index];
     const status = document.getElementById('feedbackStatus' + index);
     if(!item) return;
+    if(!confirm('AI 피드백 생성은 GPT API 호출로 비용이 발생할 수 있습니다.\n계속할까요?')) return;
     if(status) status.textContent = 'AI 피드백 생성 중... API 비용이 발생할 수 있습니다.';
     try {
       await postJSON('/recall-feedback', {
