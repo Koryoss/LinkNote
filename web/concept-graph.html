@@ -45,7 +45,10 @@
   .node { cursor:pointer; }
   .node circle { fill:#eff6ff; stroke:#93c5fd; stroke-width:2; }
   .node.recalled circle { fill:#dbeafe; stroke:#2563eb; }
-  .node.weak circle { fill:#fff7ed; stroke:#f97316; }
+  .node.weak circle, .node.review circle { fill:#fff7ed; stroke:#f97316; }
+  .node.new circle { fill:#f8fafc; stroke:#94a3b8; }
+  .node.learning circle { fill:#eff6ff; stroke:#3b82f6; }
+  .node.mastered circle { fill:#ecfdf5; stroke:#10b981; }
   .node.core circle { stroke:#7c3aed; }
   .node.bridge circle { stroke:#059669; }
   .node.recent circle { fill:#ecfeff; stroke:#0891b2; }
@@ -102,7 +105,7 @@
     full:'Full Knowledge Map'
   };
   const MODE_DESCRIPTIONS = {
-    review:'지금 복습하면 좋은 개념을 우선 보여줍니다. weak score, missing links, recall 기록을 반영합니다.',
+    review:'지금 복습하면 좋은 개념을 Review Priority 기준으로 우선 보여줍니다. Learning State, Missing Links, Recall 기록을 함께 설명합니다.',
     core:'여러 개념과 연결된 중심 개념을 보여줍니다.',
     connection:'선택한 개념 주변의 직접 연결을 보여줍니다.',
     memory:'내가 설명해본 개념과 AI 피드백이 있는 개념을 보여줍니다.',
@@ -121,9 +124,12 @@
     return d;
   }
   const stat = (label, value) => `<div class="stat"><small>${esc(label)}</small><strong>${esc(value)}</strong></div>`;
-  const TYPE_LABELS = { weak:'Weak', core:'Core', bridge:'Bridge', recent:'Recent', recalled:'Recalled', new:'New', normal:'Normal' };
-  const badgeLabel = value => TYPE_LABELS[value] || value;
+  const STATE_LABELS = { NEW:'NEW', LEARNING:'LEARNING', REVIEW:'REVIEW', MASTERED:'MASTERED' };
+  const TYPE_LABELS = { core:'CORE', bridge:'BRIDGE' };
   const hasType = (node, type) => Array.isArray(node.node_types) && node.node_types.includes(type);
+  const learningState = node => String(node?.learning_state || (Number(node?.recall_count || 0) === 0 ? 'NEW' : (hasType(node, 'weak') ? 'REVIEW' : 'LEARNING'))).toUpperCase();
+  const stateBadge = node => STATE_LABELS[learningState(node)] || 'LEARNING';
+  const secondaryBadges = node => ['core','bridge'].filter(type => hasType(node, type)).map(type => TYPE_LABELS[type]);
   const nodeLabel = node => String(node?.label || node?.name || '').trim();
   const score = (node, key) => Number(node?.[key] || 0);
   const topNames = (items) => items.slice(0,3).map(nodeLabel).filter(Boolean).join(' · ') || '아직 없음';
@@ -152,42 +158,27 @@
       const courseSet = new Set(neighborMeta.map(n => n.course || ''));
       const weightedDegree = nodeNeighbors.reduce((sum,n)=>sum + Number(n.weight || 0), 0);
       const backendTypes = Array.isArray(node.node_types) ? node.node_types : [];
-      const isWeak = backendTypes.includes('weak') || Number(node.weak_score || 0) >= 50 || Number(node.missing_links_count || 0) > 0;
+      const state = learningState(node);
+      const isReview = state === 'REVIEW' || backendTypes.includes('review') || (backendTypes.includes('weak') && Number(node.recall_count || 0) > 0);
       const isCore = backendTypes.includes('core') || (degree > 0 && degree >= coreThreshold);
       const isBridge = backendTypes.includes('bridge') || (degree >= 2 && (unitSet.size >= 2 || courseSet.size >= 2));
       const isRecalled = backendTypes.includes('recalled') || Number(node.recall_count || 0) > 0;
       const isRecent = backendTypes.includes('recent') || daysSince(node.last_recalled_at) <= 14;
-      const nodeTypes = backendTypes.length ? backendTypes : [
-        isWeak ? 'weak' : '',
-        isCore ? 'core' : '',
-        isBridge ? 'bridge' : '',
-        isRecent ? 'recent' : '',
-        isRecalled ? 'recalled' : '',
-      ].filter(Boolean);
-      const badges = nodeTypes.map(badgeLabel);
-      return {...node, degree:node.degree ?? degree, weighted_degree:node.weighted_degree ?? weightedDegree, node_types:nodeTypes, is_weak:isWeak, is_core:isCore, is_bridge:isBridge, is_recent:isRecent, is_recalled:isRecalled, badges};
+      const nodeTypes = backendTypes.length ? backendTypes : [state.toLowerCase(), isCore ? 'core' : '', isBridge ? 'bridge' : '', isRecent ? 'recent' : '', isRecalled ? 'recalled' : ''].filter(Boolean);
+      const badges = [stateBadge(node), ...secondaryBadges({...node, node_types:nodeTypes})];
+      return {...node, degree:node.degree ?? degree, weighted_degree:node.weighted_degree ?? weightedDegree, node_types:nodeTypes, is_review:isReview, is_weak:isReview, is_core:isCore, is_bridge:isBridge, is_recent:isRecent, is_recalled:isRecalled, badges};
     });
   }
   function graphPriority(node){
     if(Number.isFinite(Number(node.priority_score))) return Number(node.priority_score);
-    return (node.badges || []).length * 18
-      + (node.is_weak ? 24 : 0)
-      + (node.is_core ? 18 : 0)
-      + (node.is_bridge ? 16 : 0)
-      + (node.is_recent ? 14 : 0)
-      + Number(node.weak_score || 0) * 0.35
-      + Number(node.missing_links_count || 0) * 12
-      + (Number(node.recall_count || 0) === 0 ? 20 : 0)
-      + Number(node.degree || 0) * 5
-      + Number(node.weight || 0) * 2;
+    return reviewPriority(node) + (node.is_core ? 18 : 0) + (node.is_bridge ? 16 : 0) + Number(node.degree || 0) * 5 + Number(node.weight || 0) * 2;
   }
   function reviewPriority(node){
-    return score(node,'review_score') * 2
-      + Number(node.weak_score || 0)
-      + Number(node.missing_links_count || 0) * 18
-      + (Number(node.recall_count || 0) === 0 ? 20 : 0)
-      + score(node,'centrality_score') * 0.15
-      + score(node,'bridge_score') * 0.1;
+    if(Number.isFinite(Number(node.review_priority))) return Number(node.review_priority);
+    const state = learningState(node);
+    if(state === 'NEW') return 70 + score(node,'centrality_score') * 0.06;
+    if(state === 'MASTERED') return Math.max(0, 25 - (node.is_recent ? 8 : 0));
+    return score(node,'review_score') || (45 + Number(node.missing_links_count || 0) * 12);
   }
   function corePriority(node){
     return score(node,'centrality_score') * 2 + Number(node.degree || 0) * 12 + score(node,'priority_score') * 0.25;
@@ -277,7 +268,7 @@
     } else if(currentMode === 'full'){
       sorted = [...enriched].sort((a,b)=>graphPriority(b)-graphPriority(a));
     } else {
-      sorted = enriched.filter(node => hasType(node,'weak') || Number(node.review_score || 0) > 0 || Number(node.weak_score || 0) >= 35 || Number(node.recall_count || 0) === 0)
+      sorted = enriched.filter(node => learningState(node) !== 'MASTERED' || reviewPriority(node) >= 30)
         .sort((a,b)=>reviewPriority(b)-reviewPriority(a));
     }
     if(!sorted.length) sorted = [...enriched].sort((a,b)=>graphPriority(b)-graphPriority(a));
@@ -289,7 +280,7 @@
   function learningSummary(nodes){
     const enriched = enrichNodes(nodes, []);
     return {
-      review: enriched.filter(node => hasType(node,'weak') || Number(node.review_score || 0) > 0 || Number(node.weak_score || 0) >= 35).sort((a,b)=>reviewPriority(b)-reviewPriority(a)),
+      review: enriched.filter(node => learningState(node) !== 'MASTERED' || reviewPriority(node) >= 30).sort((a,b)=>reviewPriority(b)-reviewPriority(a)),
       core: enriched.filter(node => hasType(node,'core') || Number(node.centrality_score || 0) >= 60).sort((a,b)=>corePriority(b)-corePriority(a)),
       recent: enriched.filter(node => hasType(node,'recent') || Number(node.recall_count || 0) > 0).sort((a,b)=>memoryPriority(b)-memoryPriority(a)),
       fresh: enriched.filter(node => Number(node.recall_count || 0) === 0 || hasType(node,'new')).sort((a,b)=>newPriority(b)-newPriority(a)),
@@ -318,7 +309,7 @@
     return `<div class="filters">
       <label>Course<select id="course" onchange="updateUnitOptions()">${optionHTML(courses, params.course || '', 'All courses')}</select></label>
       <label>Unit<select id="unit">${optionHTML(units, params.unit || '', 'All units')}</select></label>
-      <label class="check"><input id="weakOnly" type="checkbox"> weak concepts only</label>
+      <label class="check"><input id="weakOnly" type="checkbox"> Review needed only</label>
       <button onclick="loadGraph()">적용</button>
       <button onclick="clearGraphFilters()">Clear</button>
     </div>`;
@@ -340,7 +331,7 @@
   }
   function layout(nodes, width, height){
     const cx = width / 2, cy = height / 2;
-    const sorted = [...nodes].sort((a,b)=>(Number(b.weak_score||0)-Number(a.weak_score||0)) || (Number(b.weight||0)-Number(a.weight||0)));
+    const sorted = [...nodes].sort((a,b)=>reviewPriority(b)-reviewPriority(a) || (Number(b.weight||0)-Number(a.weight||0)));
     const radius = Math.max(120, Math.min(width, height) * 0.36);
     const pos = {};
     sorted.forEach((node, i) => {
@@ -380,12 +371,12 @@
       <section class="wide"><h2>Summary</h2><div class="stats">
         ${stat('total concepts', stats.node_count || 0)}
         ${stat('total links', stats.edge_count || 0)}
-        ${stat('weak concepts', stats.weak_concept_count || 0)}
+        ${stat('review concepts', stats.review_concept_count || stats.weak_concept_count || 0)}
         ${stat('recalled concepts', stats.recalled_concept_count || 0)}
       </div>
       ${modeButtonsHTML()}
       <p class="sub">${esc(MODE_LABELS[currentMode])}: ${esc(modeDescription)}</p>
-      <p class="sub">처음에는 전체 지도를 모두 보여주지 않습니다. 복습에 도움이 되는 Weak · Core · Bridge · Recent 개념을 우선 표시합니다.</p>
+      <p class="sub">처음에는 전체 지도를 모두 보여주지 않습니다. Learning State와 Review Priority를 기준으로 복습에 도움이 되는 개념을 우선 표시합니다.</p>
       <p class="sub">현재 node ${visible.nodes.length}개 / 전체 ${nodes.length}개, edge ${visible.edges.length}개 / 전체 ${edges.length}개를 표시합니다.</p>
       ${fullWarning}
       ${filtersHTML()}</section>
@@ -445,7 +436,7 @@
       const isSelected = selectedNodeId && node.id === selectedNodeId;
       const isConnected = selectedNodeId && connectedIds.has(node.id);
       const isDimmed = selectedNodeId && !isSelected && !isConnected;
-      const cls = ['node', node.is_weak ? 'weak' : '', node.is_recalled ? 'recalled' : '', node.is_core ? 'core' : '', node.is_bridge ? 'bridge' : '', node.is_recent ? 'recent' : '', isSelected ? 'selected' : '', isConnected && !isSelected ? 'connected' : '', isDimmed ? 'dimmed' : ''].filter(Boolean).join(' ');
+      const cls = ['node', learningState(node).toLowerCase(), node.is_review ? 'review' : '', node.is_recalled ? 'recalled' : '', node.is_core ? 'core' : '', node.is_bridge ? 'bridge' : '', node.is_recent ? 'recent' : '', isSelected ? 'selected' : '', isConnected && !isSelected ? 'connected' : '', isDimmed ? 'dimmed' : ''].filter(Boolean).join(' ');
       const r = Math.max(18, Math.min(38, 18 + Number(node.weight || 1) * 2));
       const label = labelVisibleIds.has(node.id) ? `<text text-anchor="middle" y="4">${esc(String(node.label || '').slice(0, 14))}</text>` : '';
       return `<g class="${cls}" data-id="${esc(node.id)}" transform="translate(${p.x},${p.y})"><title>${esc(nodeLabel(node) || node.id)}</title><circle r="${r}"></circle>${label}</g>`;
@@ -548,7 +539,8 @@
   function showDetails(node, notice=''){
     if(!node) return;
     const badges = (node.badges || []).length ? `<div class="badges">${node.badges.map(b=>`<span class="badge">${esc(b)}</span>`).join('')}</div>` : '<div class="sub">분류 badge가 아직 없습니다.</div>';
-    const why = Array.isArray(node.why_shown) && node.why_shown.length ? `<ul>${node.why_shown.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>` : '-';
+    const reviewReasons = Array.isArray(node.review_reason) && node.review_reason.length ? node.review_reason : (Array.isArray(node.why_shown) ? node.why_shown : []);
+    const why = reviewReasons.length ? `<ul>${reviewReasons.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>` : '-';
     const concept = encodeURIComponent(nodeLabel(node));
     const course = encodeURIComponent(node.course || '');
     const unit = encodeURIComponent(node.unit || '');
@@ -558,13 +550,13 @@
       <dt>Concept</dt><dd>${esc(node.label || '')}</dd>
       <dt>Type</dt><dd>${badges}</dd>
       <dt>Course / Unit</dt><dd>${esc(node.course || '-')} · ${esc(node.unit || '-')}</dd>
+      <dt>Learning State</dt><dd>${esc(learningState(node))}</dd>
+      <dt>Review Priority</dt><dd>${esc(node.review_priority ?? reviewPriority(node))}</dd>
+      <dt>Why?</dt><dd>${why}</dd>
       <dt>Recall Count</dt><dd>${esc(node.recall_count || 0)}</dd>
       <dt>Missing Links</dt><dd>${esc(node.missing_links_count || 0)}</dd>
-      <dt>Weak Score</dt><dd>${esc(node.weak_score || 0)}</dd>
-      <dt>Priority Score</dt><dd>${esc(node.priority_score || 0)}</dd>
       <dt>Degree</dt><dd>${esc(node.degree || 0)}</dd>
       <dt>Last Recalled</dt><dd>${esc(node.last_recalled_at || '-')}</dd>
-      <dt>Why Shown</dt><dd>${why}</dd>
       <dt>Recommended Action</dt><dd>${esc(node.recommended_action || '관련 자료를 빠른 검색으로 다시 확인해보세요.')}</dd>
     </dl>
     ${notice ? `<div class="warning">${esc(notice)}</div>` : ''}

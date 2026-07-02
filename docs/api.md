@@ -81,11 +81,14 @@ Concept responses may include these recall metadata fields per node/concept:
 - `recall_count`: number of saved recall traces for that concept in the same user/semester/course/unit scope.
 - `last_recalled_at`: most recent saved recall timestamp, or `null`.
 - `missing_links_count`: count of missing links from stored AI feedback attached to matching traces.
-- `weak_score`: local rule-based score from 0-100 for internal prioritization. The UI should prefer state labels such as `미설명` or `설명 N회` instead of exposing the raw score.
+- `learning_state`: one of `NEW`, `LEARNING`, `REVIEW`, `MASTERED`. NEW means not yet assessed, not weak.
+- `review_priority`: local 0-100 recommendation for what to review now. It is not a grade.
+- `review_reason`: array of human-readable reasons explaining why the concept appears.
+- `weak_score`: backward-compatible internal metadata for studied concepts that need review; user-facing UI should not expose it.
 - `feedback` and `feedback_created_at`: optional saved AI feedback attached to the trace after `/recall-feedback` is generated.
 - `/recall-feedback` may receive optional `trace_id`; when present, feedback is persisted directly to that recall trace.
 
-Concept Graph overview nodes may additionally include `degree`, `weighted_degree`, `connected_count`, `centrality_score`, `bridge_score`, `memory_score`, `review_score`, `priority_score`, `node_types`, `why_shown`, and `recommended_action`. Overview edges may include `normalized_weight`, `edge_type`, and `reason`. These fields are deterministic read-only metadata derived from existing graph and Learning Memory records.
+Concept Graph overview nodes may additionally include `learning_state`, `review_priority`, `review_reason`, `degree`, `weighted_degree`, `connected_count`, `centrality_score`, `bridge_score`, `memory_score`, `review_score`, `priority_score`, `node_types`, `why_shown`, and `recommended_action`. Overview edges may include `normalized_weight`, `edge_type`, and `reason`. These fields are deterministic read-only metadata derived from existing graph and Learning Memory records.
 
 ## Auth Endpoints
 
@@ -113,4 +116,4 @@ Some older docs mention `web/index.html`; update those references when the web e
 
 ## SCiyl Boundary
 
-Phase 1 recall trace storage/query is implemented as a local JSON-backed layer only. Phase 2 adds directional recall feedback through `/recall-feedback`. The graph now includes lightweight local recall metadata (`recall_count`, `last_recalled_at`, `weak_score`) without adding auth/user DB expansion. `weak_score` is treated as internal prioritization metadata, while the UI uses learner-friendly state labels.
+Phase 1 recall trace storage/query is implemented as a local JSON-backed layer only. Phase 2 adds directional recall feedback through `/recall-feedback`. The graph now includes lightweight local recall metadata (`recall_count`, `last_recalled_at`, `learning_state`, `review_priority`, `review_reason`, and compatibility `weak_score`) without adding auth/user DB expansion. The UI uses learner-friendly Learning State and Review Priority labels.

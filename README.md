@@ -153,7 +153,7 @@ Initial implementation added in the recall feedback PR.
 AI feedback is directional, not a strict grading system. It identifies:
 
 - what was explained well
-- missing or weakly connected concepts
+- missing links or loosely connected concepts
 - questions worth reconsidering
 - source locations worth reviewing
 
@@ -167,18 +167,34 @@ Concept connection metadata now includes:
 
 - `recall_count`
 - `last_recalled_at`
-- `weak_score`
+- `learning_state` (`NEW`, `LEARNING`, `REVIEW`, `MASTERED`)
+- `review_priority` (0-100 recommendation, not a grade)
+- `review_reason`
+- `weak_score` as backward-compatible internal metadata only
 - `missing_links`
 
 Concept Connections now live inside Learning Memory as a compact Review Map. The full map remains available through `web/concept-graph.html` as an advanced Full Knowledge Map. Both views read existing graph metadata only and do not call GPT/OpenAI or rebuild graph data.
 
 Clicking a Concept Connections node in Learning Memory opens a learning action panel: Concept, My explanation, AI feedback, Learning Memory, Fast Search, and Explain Again. The quick search action uses `POST /ask/search` and does not generate a GPT answer.
 
+### Learning State and Review Priority
+
+LinkNote is a learning system, not a grading system. Concept Graph now separates two ideas:
+
+- `learning_state`: the learner-centered status of a concept.
+  - `NEW`: no explanation or recall trace yet. Not weak, just not assessed.
+  - `LEARNING`: explained at least once and still being connected through feedback.
+  - `REVIEW`: already studied and worth revisiting because of missing links, old recall, or repeated AI suggestions.
+  - `MASTERED`: recently explained with few or no missing links.
+- `review_priority`: a 0-100 heuristic recommendation for what to review now. It is not a score, grade, or correctness judgment.
+
+The Concept Graph, Learning Memory Review Map, and desktop Gallery use Learning State, Review Priority, Recall, and Missing Links from existing local metadata. They do not call GPT, reindex ChromaDB, change ownership/auth, or rebuild concept extraction.
+
 ### Phase 4: Learning Memory
 
 Learning Memory is the primary learning hub. It turns saved `설명해보기` recall traces and feedback into reusable review material for lectures, weekly review, concept connections, and exam preparation.
 
-The page at `web/learning-memory.html` loads without GPT/OpenAI calls. It now organizes the flow as Upload -> Explain -> AI Feedback -> Learning Memory -> Concept Connections -> Review. Current summaries are rule-based from local recall data: recent memories, frequent missing links, weak concepts, compact Review Map, and suggested review order. Optional AI Summary generation is available only when the learner explicitly clicks an AI Summary button; generated summaries are saved and can be viewed later without another GPT call.
+The page at `web/learning-memory.html` loads without GPT/OpenAI calls. It now organizes the flow as Upload -> Explain -> AI Feedback -> Learning Memory -> Concept Connections -> Review. Current summaries are rule-based from local recall data: recent memories, frequent missing links, learning states, compact Review Map, and suggested review order. Optional AI Summary generation is available only when the learner explicitly clicks an AI Summary button; generated summaries are saved and can be viewed later without another GPT call.
 
 See [Recall and Learning Memory](docs/recall-learning-memory.md).
 
@@ -198,7 +214,7 @@ See [Recall and Learning Memory](docs/recall-learning-memory.md).
 - Keep `user_id` lightweight until real authentication is needed.
 - Avoid building a full account system too early.
 - Keep SCiyl-inspired recall work lightweight and local-first until the knowledge infrastructure is stable.
-- Recall trace storage/query remains limited to JSON-backed `user_id` records. AI feedback and weak concept graph metadata are local-first extensions; full account-based multi-user storage remains later work.
+- Recall trace storage/query remains limited to JSON-backed `user_id` records. AI feedback and review-focused concept graph metadata are local-first extensions; full account-based multi-user storage remains later work.
 
 ## Maintainer Docs
 
@@ -255,7 +271,7 @@ Each explanation becomes a **Recall Trace**, representing the learner's evolving
 
 Initially, recall traces will be stored using the existing lightweight storage mechanism (JSON/local database), allowing rapid iteration before migrating to a production database.
 
-This phase now has an initial local implementation for saving and listing recall traces. It intentionally does not add AI feedback, weak concept scoring, or a new auth/user database.
+This phase now has an initial local implementation for saving and listing recall traces. It intentionally does not add AI feedback, grading, or a new auth/user database.
 
 ---
 
@@ -282,10 +298,12 @@ Each concept connection node can contain learning metadata such as:
 
 * recall count
 * last recalled date
-* weak concept score
+* Learning State: `NEW`, `LEARNING`, `REVIEW`, `MASTERED`
+* Review Priority: a 0-100 recommendation for what to review now, not a grade
+* review reasons explaining why the concept appears
 * missing conceptual links
 
-This lets Learning Memory represent the learner's understanding while keeping the current local `user_id` structure. The UI should avoid raw score labels and show softer states such as `미설명` or `설명 N회`.
+This lets Learning Memory represent the learner's understanding while keeping the current local `user_id` structure. NEW concepts are not called weak; they are simply not yet assessed.
 
 ---
 

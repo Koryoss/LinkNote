@@ -85,10 +85,10 @@ The first version does not call GPT/OpenAI for page load.
 
 - total memories from recall records
 - concepts explained from unique concept names
-- weak concepts from repeated missing links
+- review concepts from repeated missing links
 - frequent missing links by count
 - weekly summary from recent memories
-- exam review focus from missing links and weak concepts
+- exam review focus from missing links and REVIEW-state concepts
 
 ## Optional AI Summary
 
@@ -104,14 +104,14 @@ GPT is called only when the user explicitly clicks one of these buttons:
 - 이번 주 요약 생성
 - 과목 요약 생성
 - 시험 대비 요약 생성
-- 약한 개념 요약 생성
+- 복습 개념 요약 생성
 - AI 피드백 생성
 
 Generated summaries are appended to `data/learning_memory_summaries.json` for reuse.
 
 The AI Summary request can filter by:
 
-- `summary_type`: `weekly`, `course`, `exam`, or `weak_concepts`
+- `summary_type`: `weekly`, `course`, `exam`, or `weak_concepts` (legacy wire value for review concepts)
 - `course`
 - `unit`
 - `date_from` / `date_to`

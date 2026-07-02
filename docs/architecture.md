@@ -49,9 +49,9 @@ My Page links to Learning Memory as the primary hub. Learning Memory embeds comp
 
 The Full Knowledge Map destination is read-only. It uses existing `data/concept_index.json`, `data/concept_links.json`, and recall metadata. Viewing the graph does not call GPT, OpenAI embeddings, reindex ChromaDB, or rebuild concept graph data.
 
-The default Full Knowledge Map view caps visible nodes and prioritizes learner-useful node types: Weak, Core, Bridge, Recent, Recalled, and New. `GET /concept-graph/overview` computes the ranking metadata on the backend from existing graph files and Learning Memory metadata, then the frontend renders that read-only result.
+The default Full Knowledge Map view caps visible nodes and prioritizes learner-useful Learning States (`NEW`, `LEARNING`, `REVIEW`, `MASTERED`) with Core and Bridge shown as secondary graph roles. `GET /concept-graph/overview` computes the ranking metadata on the backend from existing graph files and Learning Memory metadata, then the frontend renders that read-only result.
 
-Each overview node may include deterministic learning metadata such as `degree`, `weighted_degree`, `connected_count`, `centrality_score`, `bridge_score`, `memory_score`, `review_score`, `priority_score`, `node_types`, `why_shown`, and `recommended_action`. Each overview edge may include `normalized_weight`, `edge_type`, and a human-readable `reason`. These fields are computed without GPT/OpenAI calls and without rebuilding or reindexing stored graph data.
+Each overview node may include deterministic learning metadata such as `learning_state`, `review_priority`, `review_reason`, `degree`, `weighted_degree`, `connected_count`, `centrality_score`, `bridge_score`, `memory_score`, `review_score`, `priority_score`, `node_types`, `why_shown`, and `recommended_action`. Each overview edge may include `normalized_weight`, `edge_type`, and a human-readable `reason`. These fields are computed without GPT/OpenAI calls and without rebuilding or reindexing stored graph data.
 
 ### Concept Connections Learning Actions
 
@@ -69,7 +69,7 @@ Selected nodes are highlighted locally in the SVG. Connected edges and neighbori
 
 ### Concept Connections Progressive Disclosure
 
-Learning Memory does not show the full map first. The default mode is `Review Map`, a small learning map focused on what the learner should review now. It prioritizes `review_score`, `weak_score`, missing links, recall history, and not-yet-explained concepts, with core/bridge metadata used as tie-breakers.
+Learning Memory does not show the full map first. The default mode is `Review Map`, a small learning map focused on what the learner should review now. It ranks primarily by `review_priority`, then uses Core/Bridge metadata as tie-breakers. `review_priority` is a recommendation, not a grade.
 
 Primary modes are Review Map, Core Map, Connection Map, Learning Memory Map, and New Concepts. Full Knowledge Map is an advanced action and remains capped so the page stays readable. The purpose is learning navigation, not complete visualization. Viewing or switching graph modes does not call GPT/OpenAI.
 

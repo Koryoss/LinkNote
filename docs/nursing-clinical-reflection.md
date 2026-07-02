@@ -107,7 +107,7 @@ My Page shows a nursing-only Clinical Reflection card with:
 - latest reflection date
 - link to `web/clinical-reflection.html`
 
-Future versions may add deeper summaries such as frequently linked concepts and weak clinical concepts.
+Future versions may add deeper summaries such as frequently linked concepts and review-needed clinical concepts.
 
 ## Safety / Privacy Notice
 

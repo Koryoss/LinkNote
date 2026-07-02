@@ -480,23 +480,27 @@ def _trace_matches(item: Dict[str, Any], user_id: str, semester: str, course: st
 
 
 def _score_recall_weakness(recall_count: int, last_recalled_at: Optional[str], missing_links_count: int) -> int:
-    if recall_count <= 0:
-        return 90
+    """Backward-compatible internal score for studied concepts that need review.
 
-    score = 15
+    A never-tested concept is NEW, not weak, so it no longer receives a high weak score.
+    """
+    if recall_count <= 0:
+        return 0
+
+    score = 10
     last_dt = _parse_iso_datetime(last_recalled_at)
     if last_dt is None:
-        score += 35
+        score += 25
     else:
         age_days = (datetime.now(timezone.utc) - last_dt).days
         if age_days >= 21:
             score += 45
         elif age_days >= 14:
-            score += 35
+            score += 30
         elif age_days >= 7:
-            score += 20
+            score += 15
 
-    score += min(40, max(0, missing_links_count) * 15)
+    score += min(50, max(0, missing_links_count) * 15)
     return max(0, min(100, score))
 
 
@@ -552,6 +556,10 @@ def _augment_concepts_with_recall(
         item["last_recalled_at"] = last_recalled_at
         item["missing_links_count"] = missing_links_count
         item["weak_score"] = _score_recall_weakness(recall_count, last_recalled_at, missing_links_count)
+        learning_state = _learning_state_from_recall(recall_count, last_recalled_at, missing_links_count)
+        item["learning_state"] = learning_state
+        item["review_priority"] = _review_priority_for_state(learning_state, recall_count, last_recalled_at, missing_links_count)
+        item["review_reason"] = _review_reason_for_state(learning_state, recall_count, last_recalled_at, missing_links_count)
         augmented.append(item)
 
     return augmented
@@ -1206,11 +1214,110 @@ def _age_days(value: Optional[str]) -> Optional[int]:
     return max(0, (datetime.now(timezone.utc) - parsed).days)
 
 
+def _learning_state_from_recall(recall_count: int, last_recalled_at: Optional[str], missing_links_count: int) -> str:
+    missing = max(0, int(missing_links_count or 0))
+    age = _age_days(last_recalled_at)
+    if recall_count <= 0:
+        return "NEW"
+    if missing >= 3 or (age is not None and age >= 21):
+        return "REVIEW"
+    if age is not None and age <= 14 and missing == 0:
+        return "MASTERED"
+    return "LEARNING"
+
+
+def _review_priority_for_state(
+    learning_state: str,
+    recall_count: int,
+    last_recalled_at: Optional[str],
+    missing_links_count: int,
+    centrality_score: int = 0,
+    bridge_score: int = 0,
+) -> int:
+    state = str(learning_state or "NEW").upper()
+    missing = max(0, int(missing_links_count or 0))
+    age = _age_days(last_recalled_at)
+
+    if state == "NEW":
+        score = 70
+    elif state == "LEARNING":
+        score = 45 + min(20, missing * 8)
+        if age is None:
+            score += 5
+        elif age >= 14:
+            score += 10
+        elif age >= 7:
+            score += 5
+    elif state == "REVIEW":
+        score = 72 + min(18, missing * 6)
+        if age is None:
+            score += 6
+        elif age >= 30:
+            score += 10
+        elif age >= 21:
+            score += 8
+        elif age >= 14:
+            score += 5
+    else:
+        score = 20 + min(8, missing * 4)
+        if age is not None and age <= 7:
+            score -= 8
+        elif age is not None and age <= 14:
+            score -= 4
+
+    score += min(6, max(0, centrality_score) * 0.06)
+    score += min(4, max(0, bridge_score) * 0.04)
+    return _clamp_score(score)
+
+
+def _review_reason_for_state(
+    learning_state: str,
+    recall_count: int,
+    last_recalled_at: Optional[str],
+    missing_links_count: int,
+    centrality_score: int = 0,
+    bridge_score: int = 0,
+) -> List[str]:
+    state = str(learning_state or "NEW").upper()
+    missing = max(0, int(missing_links_count or 0))
+    age = _age_days(last_recalled_at)
+    reasons: List[str] = []
+
+    if state == "NEW":
+        reasons.append("아직 설명해본 기록이 없습니다.")
+        reasons.append("처음으로 설명해보기를 권장합니다.")
+    elif state == "LEARNING":
+        reasons.append("설명해본 기록이 있고 학습이 진행 중입니다.")
+        if missing > 0:
+            reasons.append(f"Missing Links {missing}개를 다시 연결해볼 수 있습니다.")
+        else:
+            reasons.append("AI 피드백에서 큰 missing links가 반복되지 않았습니다.")
+        if age is not None:
+            reasons.append(f"마지막 설명 {age}일 전")
+    elif state == "REVIEW":
+        reasons.append("이미 학습한 개념이며 다시 복습할 시점입니다.")
+        if age is not None:
+            reasons.append(f"마지막 설명 {age}일 전")
+        if missing > 0:
+            reasons.append(f"Missing Links {missing}개")
+            reasons.append("AI가 다시 설명을 권장했습니다.")
+    else:
+        reasons.append("최근 설명 완료")
+        reasons.append("Missing Links 없음")
+        reasons.append("Learning Memory 최신")
+
+    if centrality_score >= 70:
+        reasons.append("다른 개념과 많이 연결되는 핵심 개념입니다.")
+    if bridge_score >= 60:
+        reasons.append("다른 단원 또는 과목과 이어지는 연결 개념입니다.")
+    return reasons
+
+
 def _ranking_info() -> Dict[str, Any]:
     return {
-        "algorithm_version": "concept_graph_ranking_v1",
-        "description": "Saved graph metadata, recall traces, missing links, and graph centrality are combined into priority scores.",
-        "score_components": ["review_score", "centrality_score", "bridge_score", "memory_score"],
+        "algorithm_version": "concept_graph_learning_state_v2",
+        "description": "Learning State explains the learner status; Review Priority recommends what to review now. Scores are heuristics, not grades.",
+        "score_components": ["learning_state", "review_priority", "centrality_score", "bridge_score", "memory_score"],
     }
 
 
@@ -1222,6 +1329,9 @@ def _empty_graph_overview() -> Dict[str, Any]:
             "node_count": 0,
             "edge_count": 0,
             "weak_concept_count": 0,
+            "review_concept_count": 0,
+            "learning_concept_count": 0,
+            "mastered_concept_count": 0,
             "recalled_concept_count": 0,
             "bridge_concept_count": 0,
             "core_concept_count": 0,
@@ -2151,6 +2261,10 @@ async def concept_graph(semester: Optional[str] = None, data_user_id: str = Depe
             node["last_recalled_at"] = last_recalled_at
             node["missing_links_count"] = missing_links_count
             node["weak_score"] = _score_recall_weakness(recall_count, last_recalled_at, missing_links_count)
+            learning_state = _learning_state_from_recall(recall_count, last_recalled_at, missing_links_count)
+            node["learning_state"] = learning_state
+            node["review_priority"] = _review_priority_for_state(learning_state, recall_count, last_recalled_at, missing_links_count)
+            node["review_reason"] = _review_reason_for_state(learning_state, recall_count, last_recalled_at, missing_links_count)
 
         # cross-link 노드 ID 검증
         node_ids = set(n["id"] for n in user_nodes)
@@ -2202,7 +2316,9 @@ async def concept_graph_overview(
         meta = _recall_metadata_for_scope(data_user_id, semester, node_course, node_unit).get(_concept_key(label), {})
         recall_count = int(meta.get("recall_count") or 0)
         missing_links_count = int(meta.get("missing_links_count") or 0)
-        weak_score = _score_recall_weakness(recall_count, meta.get("last_recalled_at"), missing_links_count)
+        last_recalled_at = meta.get("last_recalled_at")
+        weak_score = _score_recall_weakness(recall_count, last_recalled_at, missing_links_count)
+        learning_state = _learning_state_from_recall(recall_count, last_recalled_at, missing_links_count)
         base_nodes.append({
             "id": str(item.get("id") or ""),
             "label": label,
@@ -2214,7 +2330,10 @@ async def concept_graph_overview(
             "recall_count": recall_count,
             "missing_links_count": missing_links_count,
             "weak_score": weak_score,
-            "last_recalled_at": meta.get("last_recalled_at"),
+            "learning_state": learning_state,
+            "review_priority": _review_priority_for_state(learning_state, recall_count, last_recalled_at, missing_links_count),
+            "review_reason": _review_reason_for_state(learning_state, recall_count, last_recalled_at, missing_links_count),
+            "last_recalled_at": last_recalled_at,
         })
 
     node_ids = {node["id"] for node in base_nodes if node.get("id")}
@@ -2260,17 +2379,16 @@ async def concept_graph_overview(
         bridge_score = _clamp_score((60 if course_count > 1 else 0) + (30 if unit_count > 1 else 0) + min(10, degree))
         age = _age_days(node.get("last_recalled_at"))
         memory_score = _clamp_score(min(70, int(node.get("recall_count") or 0) * 20) + (30 if age is not None and age <= 14 else 15 if age is not None and age <= 60 else 0))
-        review_score = _clamp_score(
-            int(node.get("weak_score") or 0) * 0.65
-            + int(node.get("missing_links_count") or 0) * 15
-            + (20 if int(node.get("recall_count") or 0) == 0 else 0)
-            + (15 if age is None or age > 30 else 0)
-        )
-        priority_score = _clamp_score(review_score * 0.40 + centrality_score * 0.25 + bridge_score * 0.20 + memory_score * 0.15)
+        learning_state = _learning_state_from_recall(int(node.get("recall_count") or 0), node.get("last_recalled_at"), int(node.get("missing_links_count") or 0))
+        review_score = _review_priority_for_state(learning_state, int(node.get("recall_count") or 0), node.get("last_recalled_at"), int(node.get("missing_links_count") or 0))
+        review_priority = _review_priority_for_state(learning_state, int(node.get("recall_count") or 0), node.get("last_recalled_at"), int(node.get("missing_links_count") or 0), centrality_score, bridge_score)
+        priority_score = _clamp_score(review_priority * 0.55 + centrality_score * 0.25 + bridge_score * 0.15 + memory_score * 0.05)
 
-        node_types = []
-        if int(node.get("weak_score") or 0) >= 50 or int(node.get("missing_links_count") or 0) > 0:
-            node_types.append("weak")
+        node_types = [learning_state.lower()]
+        if learning_state == "REVIEW":
+            node_types.extend(["review", "weak"])
+        if learning_state == "NEW":
+            node_types.append("new")
         if centrality_score >= 70 or (core_degree_threshold and degree >= core_degree_threshold):
             node_types.append("core")
         if bridge_score >= 60:
@@ -2279,37 +2397,22 @@ async def concept_graph_overview(
             node_types.append("recalled")
         if age is not None and age <= 14:
             node_types.append("recent")
-        if int(node.get("recall_count") or 0) == 0:
-            node_types.append("new")
-        if not node_types:
-            node_types.append("normal")
+        node_types = list(dict.fromkeys(node_types))
 
-        why = []
-        if "weak" in node_types:
-            why.append("복습 우선순위가 높습니다.")
-        if int(node.get("missing_links_count") or 0) > 0:
-            why.append("missing links가 반복되었습니다.")
-        if "core" in node_types:
-            why.append("여러 단원과 연결되는 중심 개념입니다.")
-        if "recent" in node_types:
-            why.append("최근 설명해본 개념입니다.")
-        if "new" in node_types:
-            why.append("아직 설명해본 기록이 없습니다.")
-        if "bridge" in node_types:
-            why.append("다른 과목 또는 단원 개념과 연결되는 bridge concept입니다.")
+        why = _review_reason_for_state(learning_state, int(node.get("recall_count") or 0), node.get("last_recalled_at"), int(node.get("missing_links_count") or 0), centrality_score, bridge_score)
 
-        if "weak" in node_types and "recalled" in node_types:
-            recommended_action = "Learning Memory의 AI 피드백을 다시 확인하세요."
-        elif "weak" in node_types:
-            recommended_action = "설명해보기로 다시 복습하세요."
+        if learning_state == "NEW":
+            recommended_action = "처음으로 내 말로 설명해보세요."
+        elif learning_state == "REVIEW":
+            recommended_action = "Learning Memory의 AI 피드백을 다시 확인하고 설명해보세요."
+        elif learning_state == "LEARNING":
+            recommended_action = "남은 missing links를 확인하며 설명을 보완해보세요."
         elif "bridge" in node_types:
             recommended_action = "연결된 개념들을 함께 비교해보세요."
         elif "core" in node_types:
             recommended_action = "이 개념을 중심으로 단원 구조를 정리해보세요."
-        elif "new" in node_types:
-            recommended_action = "처음으로 내 말로 설명해보세요."
         else:
-            recommended_action = "관련 자료를 빠른 검색으로 다시 확인해보세요."
+            recommended_action = "지금은 새 개념이나 REVIEW 상태 개념을 먼저 봐도 좋습니다."
 
         enriched_nodes.append({
             **node,
@@ -2320,14 +2423,17 @@ async def concept_graph_overview(
             "bridge_score": bridge_score,
             "memory_score": memory_score,
             "review_score": review_score,
+            "review_priority": review_priority,
             "priority_score": priority_score,
+            "learning_state": learning_state,
+            "review_reason": why,
             "node_types": node_types,
             "why_shown": why,
             "recommended_action": recommended_action,
         })
 
     if weak_only:
-        enriched_nodes = [node for node in enriched_nodes if "weak" in node.get("node_types", [])]
+        enriched_nodes = [node for node in enriched_nodes if node.get("learning_state") == "REVIEW"]
         node_ids = {node["id"] for node in enriched_nodes}
 
     max_edge_weight = max([float(edge.get("weight") or 0) for edge in raw_edges] or [0]) or 1
@@ -2360,11 +2466,14 @@ async def concept_graph_overview(
         "stats": {
             "node_count": len(enriched_nodes),
             "edge_count": len(edges),
-            "weak_concept_count": len([node for node in enriched_nodes if "weak" in node.get("node_types", [])]),
+            "weak_concept_count": len([node for node in enriched_nodes if node.get("learning_state") == "REVIEW"]),
+            "review_concept_count": len([node for node in enriched_nodes if node.get("learning_state") == "REVIEW"]),
+            "learning_concept_count": len([node for node in enriched_nodes if node.get("learning_state") == "LEARNING"]),
+            "mastered_concept_count": len([node for node in enriched_nodes if node.get("learning_state") == "MASTERED"]),
             "recalled_concept_count": len([node for node in enriched_nodes if "recalled" in node.get("node_types", [])]),
             "bridge_concept_count": len([node for node in enriched_nodes if "bridge" in node.get("node_types", [])]),
             "core_concept_count": len([node for node in enriched_nodes if "core" in node.get("node_types", [])]),
-            "new_concept_count": len([node for node in enriched_nodes if "new" in node.get("node_types", [])]),
+            "new_concept_count": len([node for node in enriched_nodes if node.get("learning_state") == "NEW"]),
         },
         "ranking_info": _ranking_info(),
     }

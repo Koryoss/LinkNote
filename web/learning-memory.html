@@ -58,7 +58,10 @@
   .map-edge { stroke:#cbd5e1; stroke-width:1.4; opacity:.7; }
   .map-node { cursor:pointer; }
   .map-node circle { fill:#eff6ff; stroke:#93c5fd; stroke-width:2; }
-  .map-node.weak circle { fill:#fff7ed; stroke:#f97316; }
+  .map-node.weak circle, .map-node.review circle { fill:#fff7ed; stroke:#f97316; }
+  .map-node.new circle { fill:#f8fafc; stroke:#94a3b8; }
+  .map-node.learning circle { fill:#eff6ff; stroke:#3b82f6; }
+  .map-node.mastered circle { fill:#ecfdf5; stroke:#10b981; }
   .map-node.core circle { stroke:#7c3aed; }
   .map-node.bridge circle { stroke:#059669; }
   .map-node.recent circle { fill:#ecfeff; stroke:#0891b2; }
@@ -174,7 +177,9 @@
 
   const nodeLabel = node => String(node?.label || node?.name || '').trim();
   const hasNodeType = (node, type) => Array.isArray(node?.node_types) && node.node_types.includes(type);
-  const nodeScore = (node) => Number(node?.review_score || 0) * 2 + Number(node?.priority_score || 0) + Number(node?.weak_score || 0) + Number(node?.missing_links_count || 0) * 12;
+  const learningState = node => String(node?.learning_state || (Number(node?.recall_count || 0) === 0 ? 'NEW' : (hasNodeType(node, 'weak') ? 'REVIEW' : 'LEARNING'))).toUpperCase();
+  const reviewPriority = node => Number.isFinite(Number(node?.review_priority)) ? Number(node.review_priority) : (learningState(node) === 'NEW' ? 70 : Number(node?.review_score || 0));
+  const nodeScore = (node) => reviewPriority(node) * 2 + Number(node?.centrality_score || 0) * 0.25 + Number(node?.bridge_score || 0) * 0.15;
   const compactNodes = (graphData) => {
     const nodes = Array.isArray(graphData?.nodes) ? graphData.nodes : [];
     return [...nodes].sort((a,b)=>nodeScore(b)-nodeScore(a)).slice(0, 15);
@@ -196,7 +201,7 @@
   function conceptConnectionsHTML(summary, graphData){
     const nodes = compactNodes(graphData);
     const stats = graphData?.stats || {};
-    const review = nodes.filter(n => hasNodeType(n, 'weak') || Number(n.review_score || 0) > 0);
+    const review = nodes.filter(n => learningState(n) !== 'MASTERED' || reviewPriority(n) >= 30);
     const core = nodes.filter(n => hasNodeType(n, 'core'));
     const bridge = nodes.filter(n => hasNodeType(n, 'bridge'));
     const recent = nodes.filter(n => hasNodeType(n, 'recent') || Number(n.recall_count || 0) > 0);
@@ -246,7 +251,7 @@
     }).join('');
     const nodeEls = nodes.map(node => {
       const p = pos[node.id] || {x:cx,y:cy};
-      const cls = ['map-node', hasNodeType(node,'weak') ? 'weak' : '', hasNodeType(node,'core') ? 'core' : '', hasNodeType(node,'bridge') ? 'bridge' : '', hasNodeType(node,'recent') ? 'recent' : '', selectedConnectionNodeId === node.id ? 'selected' : ''].filter(Boolean).join(' ');
+      const cls = ['map-node', learningState(node).toLowerCase(), learningState(node) === 'REVIEW' ? 'review' : '', hasNodeType(node,'core') ? 'core' : '', hasNodeType(node,'bridge') ? 'bridge' : '', hasNodeType(node,'recent') ? 'recent' : '', selectedConnectionNodeId === node.id ? 'selected' : ''].filter(Boolean).join(' ');
       const r = 17 + Math.min(8, Number(node.weight || 1) * 1.2);
       return `<g class="${cls}" data-id="${esc(node.id)}" onclick="selectConnectionNode('${esc(node.id)}')" transform="translate(${p.x},${p.y})"><circle r="${r}"></circle><text text-anchor="middle" y="4">${esc(nodeLabel(node).slice(0, 12))}</text></g>`;
     }).join('');
@@ -273,8 +278,12 @@
     const concept = encodeURIComponent(nodeLabel(node));
     const course = encodeURIComponent(node.course || '');
     const unit = encodeURIComponent(node.unit || '');
+    const reasons = Array.isArray(node.review_reason) && node.review_reason.length ? `<ul>${node.review_reason.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>` : '<span class="sub">아직 이유 데이터가 없습니다.</span>';
     box.innerHTML = `<h3>${esc(nodeLabel(node) || 'Concept')}</h3><dl>
       <dt>Concept</dt><dd>${esc(nodeLabel(node) || '-')}</dd>
+      <dt>Learning State</dt><dd>${esc(learningState(node))}</dd>
+      <dt>Review Priority</dt><dd>${esc(node.review_priority ?? reviewPriority(node))}</dd>
+      <dt>Why?</dt><dd>${reasons}</dd>
       <dt>My explanation</dt><dd>${esc(memory?.answer_text || '아직 이 개념으로 남긴 설명이 없습니다.')}</dd>
       <dt>AI feedback</dt><dd>${esc(feedbackPreview(memory))}</dd>
       <dt>Learning Memory</dt><dd>${memory ? esc(dateText(memory.created_at)) : '새 설명을 남기면 Learning Memory에 쌓입니다.'}</dd>
@@ -313,7 +322,7 @@
       <small>${esc(item.summary_type || '')} · ${esc(dateText(item.created_at))}</small>
       <p style="margin-top:8px">${esc(item.summary || '')}</p>
       <p class="sub">Review Focus</p>${listItems(item.review_focus || [])}
-      <p class="sub" style="margin-top:8px">Weak Concepts</p>${listItems(item.weak_concepts || [])}
+      <p class="sub" style="margin-top:8px">Review Concepts</p>${listItems(item.weak_concepts || [])}
       <p class="sub" style="margin-top:8px">Suggested Questions</p>${listItems(item.suggested_questions || [])}
     </div>`;
   }
@@ -328,7 +337,7 @@
         <button onclick="generateAiSummary('weekly')">이번 주 요약 생성</button>
         <button onclick="generateAiSummary('course')">과목 요약 생성</button>
         <button onclick="generateAiSummary('exam')">시험 대비 요약 생성</button>
-        <button onclick="generateAiSummary('weak_concepts')">약한 개념 요약 생성</button>
+        <button onclick="generateAiSummary('weak_concepts')">복습 개념 요약 생성</button>
       </div>
       <div id="aiSummaryStatus" class="sub"></div>
       <h3 style="margin-top:12px">Previous AI Summaries</h3>
@@ -345,14 +354,14 @@
       <section class="wide"><h2>Overview</h2><div class="stats">
         ${stat('Total Learning Memories', summary.total_memories || 0)}
         ${stat('Concepts Explained', summary.concepts_explained || 0)}
-        ${stat('Weak Concepts', (summary.weak_concepts || []).length || currentGraphOverview.stats?.weak_concept_count || 0)}
+        ${stat('Review Concepts', (summary.weak_concepts || []).length || currentGraphOverview.stats?.review_concept_count || currentGraphOverview.stats?.weak_concept_count || 0)}
         ${stat('Last Learning', dateText(summary.last_memory_created_at || memories[0]?.created_at))}
         ${stat('Learning Progress', learningProgress(summary, currentGraphOverview))}
       </div><p class="sub" style="margin-top:10px">${esc(summary.weekly_summary || '')}</p></section>
       ${conceptConnectionsHTML(summary, currentGraphOverview)}
       <section class="wide"><h2>Recent Learning Memories</h2><div class="list">${memories.length ? memories.map(memoryCard).join('') : '<div class="item">아직 저장된 Learning Memory가 없습니다.</div>'}</div></section>
       <section><h2>Review Focus</h2>
-        <p class="sub">Weak Concepts</p>${chips(summary.weak_concepts || [])}
+        <p class="sub">Review Concepts</p>${chips(summary.weak_concepts || [])}
         <p class="sub" style="margin-top:12px">Frequent Missing Links</p>${chips(summary.frequent_missing_links || [])}
       </section>
       <section><h2>Suggested Review Order</h2>${chips(summary.exam_review_focus || summary.weak_concepts || [])}</section>

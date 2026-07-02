@@ -1270,8 +1270,13 @@
   let lastNodes = null;
   let lastCore = null;
   let drillVisible = null;
+  function graphReviewPriority(node){
+    if(Number.isFinite(Number(node?.review_priority))) return Number(node.review_priority);
+    if(String(node?.learning_state || '').toUpperCase() === 'NEW') return 70;
+    return Number(node?.review_score || node?.weak_score || 0);
+  }
   function initDrill(nodes){
-    const sorted=[...nodes].sort((a,b)=>((b.weak_score||0)-(a.weak_score||0)) || ((b.weight||0)-(a.weight||0)));
+    const sorted=[...nodes].sort((a,b)=>graphReviewPriority(b)-graphReviewPriority(a) || ((b.weight||0)-(a.weight||0)));
     drillVisible = new Set(sorted.slice(0, Math.min(12, sorted.length)).map(n=>n.name));
   }
   function drillReset(){ drillVisible=null; if(lastNodes) layoutNodes(lastNodes); }
