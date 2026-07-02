@@ -48,19 +48,42 @@
   .empty, .error { border:1px dashed #d8dee9; border-radius:12px; padding:18px; color:#64748b; background:#fff; margin-top:18px; }
   .error { border-color:#fecaca; color:#b91c1c; background:#fff7f7; }
   .actions { display:flex; flex-wrap:wrap; gap:8px; }
-  @media (max-width:760px){ .grid,.memory-two-col{grid-template-columns:1fr;} .stats,.filters{grid-template-columns:1fr 1fr;} }
+  .connection-grid { display:grid; grid-template-columns:1.5fr .9fr; gap:14px; align-items:stretch; }
+  .connection-cards { display:grid; grid-template-columns:repeat(4, minmax(0,1fr)); gap:8px; margin:10px 0 12px; }
+  .connection-card { border:1px solid #e2e8f0; background:#fff; border-radius:10px; padding:10px; text-align:left; color:#1f2937; }
+  .connection-card small { display:block; color:#64748b; font-size:.7rem; margin-bottom:4px; }
+  .connection-card strong { display:block; color:#0f172a; font-size:1rem; }
+  .review-map { position:relative; min-height:300px; border:1px solid #eef1f6; border-radius:12px; background:radial-gradient(circle at 50% 45%, #fff, #f8fafc); overflow:hidden; }
+  .review-map svg { width:100%; height:300px; display:block; }
+  .map-edge { stroke:#cbd5e1; stroke-width:1.4; opacity:.7; }
+  .map-node { cursor:pointer; }
+  .map-node circle { fill:#eff6ff; stroke:#93c5fd; stroke-width:2; }
+  .map-node.weak circle { fill:#fff7ed; stroke:#f97316; }
+  .map-node.core circle { stroke:#7c3aed; }
+  .map-node.bridge circle { stroke:#059669; }
+  .map-node.recent circle { fill:#ecfeff; stroke:#0891b2; }
+  .map-node.selected circle { fill:#dbeafe; stroke:#1d4ed8; stroke-width:3; }
+  .map-node text { font-size:11px; fill:#1f2937; font-weight:700; paint-order:stroke; stroke:#fff; stroke-width:3px; }
+  .connection-detail { border:1px solid #eef1f6; border-radius:12px; padding:13px; background:#f8fafc; min-height:300px; font-size:.84rem; line-height:1.55; }
+  .connection-detail h3 { margin-bottom:8px; }
+  .connection-detail dl { display:grid; grid-template-columns:96px 1fr; gap:7px 10px; }
+  .connection-detail dt { color:#64748b; font-size:.72rem; font-weight:800; }
+  .connection-detail dd { color:#111827; overflow-wrap:anywhere; }
+  .search-box { border-top:1px solid #e2e8f0; margin-top:10px; padding-top:10px; }
+  .search-box .item { background:#fff; }
+  @media (max-width:760px){ .grid,.memory-two-col,.connection-grid{grid-template-columns:1fr;} .stats,.filters,.connection-cards{grid-template-columns:1fr 1fr;} }
 </style>
 </head>
 <body>
   <div class="topbar">
     <a class="brand" href="/">LinkNote</a>
     <span class="spacer"></span>
-    <a class="btn" href="/">Gallery</a>
+    <a class="btn" href="/">My Library</a>
     <a class="btn" href="/mypage.html">My Page</a>
   </div>
   <main>
     <h1>Learning Memory</h1>
-    <p class="sub">설명해보기로 남긴 내 설명과 피드백을 강의 복습, 주간 복습, 시험 준비에 다시 쓸 수 있게 모아봅니다.</p>
+    <p class="sub">설명해보기, AI 피드백, 개념 연결, 복습 순서를 한 곳에서 확인하는 학습 허브입니다.</p>
     <div id="app" class="empty">불러오는 중...</div>
   </main>
 <script>
@@ -122,7 +145,7 @@
     return `<div class="memory-card">
       <h3>${esc(item.concept || '개념 미지정')}</h3>
       <div class="memory-meta">${esc(item.course)} · ${esc(item.unit)} · ${esc(dateText(item.created_at))}</div>
-      <div class="actions" style="margin-top:8px"><a class="btn" href="${graphUrl}">이 개념 그래프로 보기</a></div>
+      <div class="actions" style="margin-top:8px"><a class="btn" href="${graphUrl}">개념 연결 보기</a></div>
       <div class="memory-two-col">
         <section class="memory-pane">
           <h4>내 설명</h4>
@@ -146,6 +169,144 @@
   const listItems = (items) => Array.isArray(items) && items.length
     ? `<ul>${items.map(item => `<li>${esc(item)}</li>`).join('')}</ul>`
     : '<p class="sub">아직 표시할 항목이 없습니다.</p>';
+  let currentGraphOverview = { nodes:[], edges:[], stats:{} };
+  let selectedConnectionNodeId = '';
+
+  const nodeLabel = node => String(node?.label || node?.name || '').trim();
+  const hasNodeType = (node, type) => Array.isArray(node?.node_types) && node.node_types.includes(type);
+  const nodeScore = (node) => Number(node?.review_score || 0) * 2 + Number(node?.priority_score || 0) + Number(node?.weak_score || 0) + Number(node?.missing_links_count || 0) * 12;
+  const compactNodes = (graphData) => {
+    const nodes = Array.isArray(graphData?.nodes) ? graphData.nodes : [];
+    return [...nodes].sort((a,b)=>nodeScore(b)-nodeScore(a)).slice(0, 15);
+  };
+  const compactEdges = (graphData, nodes) => {
+    const ids = new Set(nodes.map(n => n.id));
+    return (Array.isArray(graphData?.edges) ? graphData.edges : [])
+      .filter(edge => ids.has(edge.source) && ids.has(edge.target))
+      .sort((a,b)=>Number(b.normalized_weight || b.weight || 0)-Number(a.normalized_weight || a.weight || 0))
+      .slice(0, 22);
+  };
+  const topNames = (items) => items.slice(0,3).map(nodeLabel).filter(Boolean).join(' · ') || '아직 없음';
+  function learningProgress(summary, graphData){
+    const total = Number(graphData?.stats?.node_count || 0);
+    const explained = Number(summary.concepts_explained || 0);
+    if(!total) return explained ? `${explained}개 설명` : '시작 전';
+    return `${Math.min(100, Math.round((explained / total) * 100))}%`;
+  }
+  function conceptConnectionsHTML(summary, graphData){
+    const nodes = compactNodes(graphData);
+    const stats = graphData?.stats || {};
+    const review = nodes.filter(n => hasNodeType(n, 'weak') || Number(n.review_score || 0) > 0);
+    const core = nodes.filter(n => hasNodeType(n, 'core'));
+    const bridge = nodes.filter(n => hasNodeType(n, 'bridge'));
+    const recent = nodes.filter(n => hasNodeType(n, 'recent') || Number(n.recall_count || 0) > 0);
+    return `<section class="wide"><h2>Concept Connections</h2>
+      <p class="sub">전체 지도가 아니라 지금 복습할 개념 연결만 작게 보여줍니다. 데이터는 기존 개념 연결 정보를 읽기만 하며 GPT를 호출하지 않습니다.</p>
+      <div class="connection-cards">
+        <div class="connection-card"><small>Review Map</small><strong>${esc(review.length || stats.weak_concept_count || 0)}</strong><span class="sub">${esc(topNames(review))}</span></div>
+        <div class="connection-card"><small>Core Concepts</small><strong>${esc(core.length || stats.core_concept_count || 0)}</strong><span class="sub">${esc(topNames(core))}</span></div>
+        <div class="connection-card"><small>Bridge Concepts</small><strong>${esc(bridge.length || stats.bridge_concept_count || 0)}</strong><span class="sub">${esc(topNames(bridge))}</span></div>
+        <div class="connection-card"><small>Recent Concepts</small><strong>${esc(recent.length || stats.recalled_concept_count || 0)}</strong><span class="sub">${esc(topNames(recent))}</span></div>
+      </div>
+      <div class="connection-grid">
+        <div><div id="reviewMap" class="review-map">${nodes.length ? '' : '<div class="empty">아직 표시할 개념 연결이 없습니다.</div>'}</div>
+          <div class="actions" style="margin-top:10px"><a class="btn" href="/concept-graph.html?mode=review">Explore Full Knowledge Map</a></div>
+        </div>
+        <div id="connectionDetail" class="connection-detail">노드를 클릭하면 설명, 피드백, 빠른 검색 액션이 표시됩니다.</div>
+      </div>
+    </section>`;
+  }
+  function matchingMemoryForNode(node){
+    const label = nodeLabel(node).toLowerCase();
+    if(!label) return null;
+    return currentMemories.find(item => String(item.concept || '').trim().toLowerCase() === label)
+      || currentMemories.find(item => {
+        const concept = String(item.concept || '').trim().toLowerCase();
+        return concept && (concept.includes(label) || label.includes(concept));
+      });
+  }
+  function drawReviewMap(graphData){
+    const wrap = document.getElementById('reviewMap');
+    if(!wrap) return;
+    const nodes = compactNodes(graphData);
+    if(!nodes.length) return;
+    const edges = compactEdges(graphData, nodes);
+    const width = Math.max(620, wrap.clientWidth || 620), height = 300;
+    const cx = width / 2, cy = height / 2;
+    const radius = Math.min(width, height) * 0.36;
+    const pos = {};
+    nodes.forEach((node, i) => {
+      const angle = (Math.PI * 2 * i) / Math.max(nodes.length, 1) - Math.PI / 2;
+      const inner = i === 0 ? 0 : radius * (0.58 + (i % 3) * 0.15);
+      pos[node.id] = { x: cx + Math.cos(angle) * inner, y: cy + Math.sin(angle) * inner };
+    });
+    const edgeLines = edges.map(edge => {
+      const a = pos[edge.source], b = pos[edge.target];
+      return a && b ? `<line class="map-edge" x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}"></line>` : '';
+    }).join('');
+    const nodeEls = nodes.map(node => {
+      const p = pos[node.id] || {x:cx,y:cy};
+      const cls = ['map-node', hasNodeType(node,'weak') ? 'weak' : '', hasNodeType(node,'core') ? 'core' : '', hasNodeType(node,'bridge') ? 'bridge' : '', hasNodeType(node,'recent') ? 'recent' : '', selectedConnectionNodeId === node.id ? 'selected' : ''].filter(Boolean).join(' ');
+      const r = 17 + Math.min(8, Number(node.weight || 1) * 1.2);
+      return `<g class="${cls}" data-id="${esc(node.id)}" onclick="selectConnectionNode('${esc(node.id)}')" transform="translate(${p.x},${p.y})"><circle r="${r}"></circle><text text-anchor="middle" y="4">${esc(nodeLabel(node).slice(0, 12))}</text></g>`;
+    }).join('');
+    wrap.innerHTML = `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Compact review map">${edgeLines}${nodeEls}</svg>`;
+    if(!selectedConnectionNodeId && nodes[0]) selectedConnectionNodeId = nodes[0].id;
+    if(selectedConnectionNodeId) renderConnectionDetail(selectedConnectionNodeId);
+  }
+  function selectConnectionNode(id){
+    selectedConnectionNodeId = id || '';
+    drawReviewMap(currentGraphOverview);
+    renderConnectionDetail(selectedConnectionNodeId);
+  }
+  function feedbackPreview(memory){
+    if(!memory) return '관련 Learning Memory가 아직 없습니다.';
+    const missing = Array.isArray(memory.missing_links) ? memory.missing_links.slice(0,3).join(' · ') : '';
+    return memory.feedback_text || memory.improved_summary || missing || (memory.has_ai_feedback ? '저장된 AI 피드백이 있습니다.' : 'AI 피드백이 아직 없습니다.');
+  }
+  function renderConnectionDetail(id){
+    const box = document.getElementById('connectionDetail');
+    if(!box) return;
+    const node = (currentGraphOverview.nodes || []).find(n => String(n.id || '') === String(id || '')) || compactNodes(currentGraphOverview)[0];
+    if(!node){ box.textContent = '표시할 개념 연결이 없습니다.'; return; }
+    const memory = matchingMemoryForNode(node);
+    const concept = encodeURIComponent(nodeLabel(node));
+    const course = encodeURIComponent(node.course || '');
+    const unit = encodeURIComponent(node.unit || '');
+    box.innerHTML = `<h3>${esc(nodeLabel(node) || 'Concept')}</h3><dl>
+      <dt>Concept</dt><dd>${esc(nodeLabel(node) || '-')}</dd>
+      <dt>My explanation</dt><dd>${esc(memory?.answer_text || '아직 이 개념으로 남긴 설명이 없습니다.')}</dd>
+      <dt>AI feedback</dt><dd>${esc(feedbackPreview(memory))}</dd>
+      <dt>Learning Memory</dt><dd>${memory ? esc(dateText(memory.created_at)) : '새 설명을 남기면 Learning Memory에 쌓입니다.'}</dd>
+    </dl>
+    <div class="actions" style="margin-top:12px">
+      <a class="btn" href="/learning-memory.html?concept=${concept}&course=${course}&unit=${unit}">Learning Memory</a>
+      <button onclick="quickSearchConnectionNode('${esc(node.id)}')">Fast Search</button>
+      <a class="btn" href="/?course=${course}&unit=${unit}&concept=${concept}&action=recall">Explain Again</a>
+    </div>
+    <div id="connectionSearchResults" class="search-box"></div>`;
+  }
+  async function quickSearchConnectionNode(id){
+    const node = (currentGraphOverview.nodes || []).find(n => String(n.id || '') === String(id || ''));
+    const target = document.getElementById('connectionSearchResults');
+    if(!node || !target) return;
+    target.innerHTML = '<p class="sub">Fast Search 중...</p>';
+    const search_filter = {};
+    if(node.course) search_filter.course = node.course;
+    if(node.unit) search_filter.unit = node.unit;
+    try{
+      const r = await fetch(API + '/ask/search', {
+        method:'POST', headers:{...headers(), 'Content-Type':'application/json'},
+        body:JSON.stringify({ question:`${nodeLabel(node)} 관련 자료 찾아줘`, scope:Object.keys(search_filter).length ? 'single' : 'multi', search_filter, limit:3 })
+      });
+      const d = await r.json().catch(()=>({}));
+      if(!r.ok) throw new Error(d.detail || r.statusText);
+      const sources = Array.isArray(d.sources) ? d.sources : [];
+      const memories = Array.isArray(d.learning_memory_matches) ? d.learning_memory_matches : [];
+      target.innerHTML = `<div class="item"><strong>Related Sources</strong>${sources.slice(0,3).map(x=>`<small>${esc(x.filename || '')} · ${esc(x.course || '')} · p.${esc(x.page || '-')}</small><div>${esc(x.chunk_preview || '')}</div>`).join('') || '<small>관련 자료 없음</small>'}</div><div class="item"><strong>Related Learning Memory</strong>${memories.slice(0,3).map(x=>`<small>${esc(x.concept || '')} · ${esc(x.course || '')}</small><div>${esc(x.improved_summary || x.answer_preview || '')}</div>`).join('') || '<small>관련 Learning Memory 없음</small>'}</div>`;
+    }catch(e){ target.innerHTML = `<div class="error">Fast Search 실패: ${esc(e.message || e)}</div>`; }
+  }
+
   function aiSummaryCard(item){
     return `<div class="ai-result">
       <h3>${esc(item.title || 'AI Summary')}</h3>
@@ -174,32 +335,36 @@
       <div class="list">${items.length ? items.map(aiSummaryCard).join('') : '<div class="item">저장된 AI Summary가 없습니다.</div>'}</div>
     </section>`;
   }
-  function render(summary, data, aiSummaries){
+  function render(summary, data, aiSummaries, graphData){
     const memories = Array.isArray(data.items) ? data.items : [];
     currentMemories = memories;
+    currentGraphOverview = graphData || { nodes:[], edges:[], stats:{} };
     const app = document.getElementById('app');
     app.className = 'grid';
     app.innerHTML = `
       <section class="wide"><h2>Overview</h2><div class="stats">
-        ${stat('total memories', summary.total_memories || 0)}
-        ${stat('concepts explained', summary.concepts_explained || 0)}
-        ${stat('weak concepts', (summary.weak_concepts || []).length)}
-        ${stat('recent activity', (summary.recent_memories || []).length)}
+        ${stat('Total Learning Memories', summary.total_memories || 0)}
+        ${stat('Concepts Explained', summary.concepts_explained || 0)}
+        ${stat('Weak Concepts', (summary.weak_concepts || []).length || currentGraphOverview.stats?.weak_concept_count || 0)}
+        ${stat('Last Learning', dateText(summary.last_memory_created_at || memories[0]?.created_at))}
+        ${stat('Learning Progress', learningProgress(summary, currentGraphOverview))}
       </div><p class="sub" style="margin-top:10px">${esc(summary.weekly_summary || '')}</p></section>
+      ${conceptConnectionsHTML(summary, currentGraphOverview)}
+      <section class="wide"><h2>Recent Learning Memories</h2><div class="list">${memories.length ? memories.map(memoryCard).join('') : '<div class="item">아직 저장된 Learning Memory가 없습니다.</div>'}</div></section>
       <section><h2>Review Focus</h2>
-        <p class="sub">Frequent Missing Links</p>${chips(summary.frequent_missing_links || [])}
-        <p class="sub" style="margin-top:12px">Weak Concepts</p>${chips(summary.weak_concepts || [])}
+        <p class="sub">Weak Concepts</p>${chips(summary.weak_concepts || [])}
+        <p class="sub" style="margin-top:12px">Frequent Missing Links</p>${chips(summary.frequent_missing_links || [])}
       </section>
-      <section><h2>Exam Review Focus</h2>${chips(summary.exam_review_focus || [])}</section>
+      <section><h2>Suggested Review Order</h2>${chips(summary.exam_review_focus || summary.weak_concepts || [])}</section>
       ${filtersHTML()}
       ${aiSummaryHTML(aiSummaries)}
-      <section class="wide"><h2>Recent Learning Memories</h2><div class="list">${memories.length ? memories.map(memoryCard).join('') : '<div class="item">아직 저장된 Learning Memory가 없습니다.</div>'}</div></section>
       <section class="wide"><h2>Actions</h2><div class="actions">
-        <a class="btn primary" href="/">Back to Gallery</a>
+        <a class="btn primary" href="/">Back to My Library</a>
         <a class="btn" href="/mypage.html">My Page</a>
-        <a class="btn" href="/concept-graph.html?mode=review">복습 지도 보기</a>
+        <a class="btn" href="/concept-graph.html?mode=review">Explore Full Knowledge Map</a>
       </div></section>`;
     restoreFilters();
+    drawReviewMap(currentGraphOverview);
   }
   function restoreFilters(){
     for(const id of ['f_course','f_unit','f_concept']){
@@ -217,12 +382,13 @@
     if(course) params.set('course', course);
     if(unit) params.set('unit', unit);
     if(concept) params.set('concept', concept);
-    const [summary, data, aiSummaries] = await Promise.all([
+    const [summary, data, aiSummaries, graphData] = await Promise.all([
       getJSON('/learning-memory/summary'),
       getJSON('/learning-memory?' + params.toString()),
       getJSON('/learning-memory/ai-summaries?limit=10'),
+      getJSON('/concept-graph/overview').catch(()=>({ nodes:[], edges:[], stats:{} })),
     ]);
-    render(summary, data, aiSummaries);
+    render(summary, data, aiSummaries, graphData);
   }
   async function generateAiSummary(type){
     const status = document.getElementById('aiSummaryStatus');

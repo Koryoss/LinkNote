@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>LinkNote · Concept Graph</title>
+<title>LinkNote · Full Knowledge Map</title>
 <style>
   * { box-sizing:border-box; margin:0; padding:0; }
   body { font-family:-apple-system,"Apple SD Gothic Neo","Malgun Gothic",sans-serif; background:#fbfcfe; color:#1f2937; }
@@ -78,11 +78,11 @@
     <a class="brand" href="/">LinkNote</a>
     <span class="spacer"></span>
     <a class="btn" href="/mypage.html">My Page</a>
-    <a class="btn" href="/">Gallery</a>
+    <a class="btn" href="/">My Library</a>
   </div>
   <main>
-    <h1>Concept Graph</h1>
-    <p class="sub">저장된 개념 그래프와 설명해보기 metadata를 읽기 전용으로 확인합니다. 이 화면은 GPT/OpenAI를 호출하지 않습니다.</p>
+    <h1>Full Knowledge Map</h1>
+    <p class="sub">Learning Memory에서 더 깊게 들어가는 고급 개념 연결 지도입니다. 이 화면은 GPT/OpenAI를 호출하지 않습니다.</p>
     <div id="app" class="empty">불러오는 중...</div>
   </main>
 <script>
@@ -99,7 +99,7 @@
     connection:'Connection Map',
     memory:'Learning Memory Map',
     new:'New Concepts',
-    full:'전체 그래프'
+    full:'Full Knowledge Map'
   };
   const MODE_DESCRIPTIONS = {
     review:'지금 복습하면 좋은 개념을 우선 보여줍니다. weak score, missing links, recall 기록을 반영합니다.',
@@ -299,7 +299,7 @@
     const primary = ['review','core','connection','memory','new'].map(mode =>
       `<button class="${currentMode===mode?'active':''}" onclick="setMode('${mode}')">${esc(MODE_LABELS[mode])}</button>`
     ).join('');
-    return `<div class="modebar">${primary}<button class="secondary ${currentMode==='full'?'active':''}" onclick="setMode('full')">Advanced / 전체 그래프</button></div>`;
+    return `<div class="modebar">${primary}<button class="secondary ${currentMode==='full'?'active':''}" onclick="setMode('full')">Explore Full Knowledge Map</button></div>`;
   }
   function uniqueSorted(items){
     return [...new Set(items.map(item => String(item || '').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b, 'ko'));
@@ -363,7 +363,7 @@
     const summary = learningSummary(nodes);
     const modeDescription = MODE_DESCRIPTIONS[currentMode] || MODE_DESCRIPTIONS.review;
     const fullWarning = currentMode === 'full'
-      ? `<div class="warning">전체 그래프는 복잡할 수 있습니다. 과목/단원 필터나 개념 검색을 사용하면 더 읽기 쉽습니다. 전체 ${visible.totalNodes}개 중 상위 ${visible.nodes.length}개만 표시합니다.</div>`
+      ? `<div class="warning">Full Knowledge Map은 복잡할 수 있습니다. 과목/단원 필터나 개념 검색을 사용하면 더 읽기 쉽습니다. 전체 ${visible.totalNodes}개 중 상위 ${visible.nodes.length}개만 표시합니다.</div>`
       : '';
     const app = document.getElementById('app');
     app.className = 'grid';
@@ -389,7 +389,7 @@
       <p class="sub">현재 node ${visible.nodes.length}개 / 전체 ${nodes.length}개, edge ${visible.edges.length}개 / 전체 ${edges.length}개를 표시합니다.</p>
       ${fullWarning}
       ${filtersHTML()}</section>
-      <section><h2>${esc(MODE_LABELS[currentMode])}</h2><div id="graphWrap" class="graph-wrap">${visible.nodes.length ? '<svg id="graphSvg"></svg>' : '<div class="empty">아직 표시할 Concept Graph가 없습니다. 자료를 업로드하고 개념 추출을 먼저 진행해 주세요.</div>'}</div></section>
+      <section><h2>${esc(MODE_LABELS[currentMode])}</h2><div id="graphWrap" class="graph-wrap">${visible.nodes.length ? '<svg id="graphSvg"></svg>' : '<div class="empty">아직 표시할 Concept Connections가 없습니다. 자료를 업로드하고 개념 추출을 먼저 진행해 주세요.</div>'}</div></section>
       <section><h2>Details</h2><div id="details" class="detail">노드를 클릭하면 상세 정보가 표시됩니다.</div></section>`;
     restoreFilters();
     if(visible.nodes.length) {
@@ -502,12 +502,12 @@
         if(!other) return '';
         const scoreValue = edge.normalized_weight ?? edge.weight ?? edge.score ?? '';
         const scoreText = scoreValue === '' ? '' : ` · ${esc(scoreValue)}`;
-        const reason = edge.reason || edge.edge_type || '저장된 그래프 연결';
+        const reason = edge.reason || edge.edge_type || '저장된 개념 연결';
         return `<div class="connected-item"><strong>${esc(nodeLabel(other) || other.id)}</strong><span class="search-meta">${esc(edge.edge_type || 'edge')}${scoreText}</span>${esc(reason)}</div>`;
       })
       .filter(Boolean)
       .join('');
-    return `<div class="connected-list"><h3>Connected Concepts</h3>${rows || '<div class="search-item">현재 표시된 연결 개념이 없습니다. 이 개념 중심으로 보기를 눌러 주변 연결을 확인해보세요.</div>'}</div>`;
+    return `<div class="connected-list"><h3>Concept Connections</h3>${rows || '<div class="search-item">현재 표시된 연결 개념이 없습니다. 이 개념 중심으로 보기를 눌러 주변 연결을 확인해보세요.</div>'}</div>`;
   }
   function searchResultsHTML(d){
     const list = (items, empty, renderItem) => items && items.length ? items.map(renderItem).join('') : `<div class="search-item">${esc(empty)}</div>`;
@@ -603,7 +603,7 @@
     if(!token()) { app.className='error'; app.textContent='로그인이 필요합니다. Gallery에서 먼저 로그인해주세요.'; return; }
     modeFromUrl();
     try { await loadGraph(); }
-    catch(e){ app.className='error'; app.textContent='Concept Graph를 불러오지 못했습니다: ' + e.message; }
+    catch(e){ app.className='error'; app.textContent='Full Knowledge Map을 불러오지 못했습니다: ' + e.message; }
   }
   init();
 </script>

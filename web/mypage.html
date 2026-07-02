@@ -47,7 +47,7 @@
     <a class="brand" href="/">LinkNote</a>
     <span id="userLabel" class="sub"></span>
     <span class="spacer"></span>
-    <a class="btn" href="/">Gallery</a>
+    <a class="btn" href="/">My Library</a>
     <button onclick="logout()">Logout</button>
   </div>
   <main>
@@ -138,12 +138,11 @@
           ${stat('latest reflection', dateText(clinicalItems[0]?.created_at))}
           ${stat('mode', 'educational only')}
         </div>
-        <p class="sub" style="margin-top:10px">환자 식별 정보 없이 실습 상황을 학습 자료, 개념 그래프, 복습 포인트와 연결하는 교육용 회고 기능입니다.</p>
+        <p class="sub" style="margin-top:10px">환자 식별 정보 없이 실습 상황을 학습 자료, 개념 연결, 복습 포인트와 연결하는 교육용 회고 기능입니다.</p>
         <div class="actions" style="margin-top:12px"><a class="btn primary" href="/clinical-reflection.html">실습 회고 / Clinical Reflection</a></div>
       </section>
       <section class="wide"><h2>Actions</h2><div class="actions">
-        <a class="btn primary" href="/">My Library / Gallery</a>
-        <a class="btn" href="/concept-graph.html?mode=review">복습 지도 보기</a>
+        <a class="btn primary" href="/">My Library</a>
         <a class="btn" href="/learning-memory.html">Learning Memory</a>
         <button onclick="logout()">Logout</button>
       </div></section>

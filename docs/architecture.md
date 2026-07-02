@@ -6,7 +6,8 @@ This document records small architecture decisions that affect data ownership an
 
 - `web/gallery.html` is the current main UI served at `/`.
 - `web/mypage.html` is the read-only My Page.
-- `web/concept-graph.html` is the read-only Concept Graph destination.
+- `web/learning-memory.html` is the primary Learning Memory hub.
+- `web/concept-graph.html` is the read-only Full Knowledge Map advanced view.
 - `web/app.js` is a legacy experimental frontend and should not be used for authenticated production flow.
 
 ## Ownership For Protected Data
@@ -42,35 +43,35 @@ Single-document style search uses the selected semester/course/unit/file filter 
 
 Account implementation metadata such as `account_id`, `data_user_id`, maintainer status, legacy namespace status, and migration status is still available for debugging, but it is hidden by default under a collapsed Developer Information section. Backend ownership behavior and response fields are unchanged.
 
-## Concept Graph Destination
+## Concept Connections And Full Knowledge Map
 
-My Page and Learning Memory link to `web/concept-graph.html` instead of the gallery root hash. The page reads `GET /concept-graph/overview`, which derives ownership from `Authorization` -> `current_uid()` -> `data_user_id`.
+My Page links to Learning Memory as the primary hub. Learning Memory embeds compact Concept Connections and links to `web/concept-graph.html` only for the advanced Full Knowledge Map. The page reads `GET /concept-graph/overview`, which derives ownership from `Authorization` -> `current_uid()` -> `data_user_id`.
 
-The graph destination is read-only. It uses existing `data/concept_index.json`, `data/concept_links.json`, and recall metadata. Viewing the graph does not call GPT, OpenAI embeddings, reindex ChromaDB, or rebuild concept graph data.
+The Full Knowledge Map destination is read-only. It uses existing `data/concept_index.json`, `data/concept_links.json`, and recall metadata. Viewing the graph does not call GPT, OpenAI embeddings, reindex ChromaDB, or rebuild concept graph data.
 
-The default Concept Graph view caps visible nodes and prioritizes learner-useful node types: Weak, Core, Bridge, Recent, Recalled, and New. `GET /concept-graph/overview` computes the ranking metadata on the backend from existing graph files and Learning Memory metadata, then the frontend renders that read-only result.
+The default Full Knowledge Map view caps visible nodes and prioritizes learner-useful node types: Weak, Core, Bridge, Recent, Recalled, and New. `GET /concept-graph/overview` computes the ranking metadata on the backend from existing graph files and Learning Memory metadata, then the frontend renders that read-only result.
 
 Each overview node may include deterministic learning metadata such as `degree`, `weighted_degree`, `connected_count`, `centrality_score`, `bridge_score`, `memory_score`, `review_score`, `priority_score`, `node_types`, `why_shown`, and `recommended_action`. Each overview edge may include `normalized_weight`, `edge_type`, and a human-readable `reason`. These fields are computed without GPT/OpenAI calls and without rebuilding or reindexing stored graph data.
 
-### Concept Graph Learning Actions
+### Concept Connections Learning Actions
 
-Clicking a Concept Graph node opens a learning action panel rather than only a metadata detail view. The panel is intended to help the learner decide what to do next from the selected concept:
+Clicking a Concept Connections node opens a learning action panel rather than only a metadata detail view. The panel is intended to help the learner decide what to do next from the selected concept:
 
-- focus the graph around that concept with Connection Map
+- focus the concept connections around that concept with Connection Map
 - open Learning Memory with `concept`, `course`, and `unit` query parameters
 - run related-material quick search through `POST /ask/search`
 - return to Gallery with course/unit context
 - open the future `설명해보기` flow with concept/course/unit query parameters
 
-The quick search action is search-only. It calls `/ask/search`, shows related concepts, chunks, and Learning Memory matches, and does not call `/ask`, GPT, OpenAI chat/completions, graph generation, ChromaDB reindexing, or concept graph rebuilds. Concept Graph page load still only reads existing graph metadata.
+The quick search action is search-only. It calls `/ask/search`, shows related concepts, chunks, and Learning Memory matches, and does not call `/ask`, GPT, OpenAI chat/completions, graph generation, ChromaDB reindexing, or concept graph rebuilds. Full Knowledge Map page load still only reads existing graph metadata.
 
 Selected nodes are highlighted locally in the SVG. Connected edges and neighboring nodes are emphasized using already loaded visible graph data; unrelated visible edges are de-emphasized.
 
-### Concept Graph Progressive Disclosure
+### Concept Connections Progressive Disclosure
 
-The Concept Graph page does not show the full graph first. The default mode is `Review Map`, a small learning map focused on what the learner should review now. It prioritizes `review_score`, `weak_score`, missing links, recall history, and not-yet-explained concepts, with core/bridge metadata used as tie-breakers.
+Learning Memory does not show the full map first. The default mode is `Review Map`, a small learning map focused on what the learner should review now. It prioritizes `review_score`, `weak_score`, missing links, recall history, and not-yet-explained concepts, with core/bridge metadata used as tie-breakers.
 
-Primary graph modes are Review Map, Core Map, Connection Map, Learning Memory Map, and New Concepts. Full Graph is an advanced action and remains capped so the page stays readable. The purpose is learning navigation, not complete visualization. Viewing or switching graph modes does not call GPT/OpenAI.
+Primary modes are Review Map, Core Map, Connection Map, Learning Memory Map, and New Concepts. Full Knowledge Map is an advanced action and remains capped so the page stays readable. The purpose is learning navigation, not complete visualization. Viewing or switching graph modes does not call GPT/OpenAI.
 
 ## PDF Preview Access
 

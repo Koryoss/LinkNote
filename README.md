@@ -2,7 +2,9 @@
 
 LinkNote is a lightweight local-first learning system for PDF-based study workflows.
 
-The current project is focused on stabilizing a single-user/local evaluation flow before building a full multi-user service. It supports the core knowledge infrastructure pieces: PDF upload, chunking, ChromaDB indexing, retrieval-augmented generation, concept extraction, concept graph data, and gallery-style study UI experiments.
+Current learning flow: PDF -> Explain -> AI Feedback -> Learning Memory -> Concept Connections -> Review. Learning Memory is the central learning hub; the Full Knowledge Map remains available as an advanced exploration view.
+
+The current project is focused on stabilizing a single-user/local evaluation flow before building a full multi-user service. It supports the core knowledge infrastructure pieces: PDF upload, chunking, ChromaDB indexing, retrieval-augmented generation, concept extraction, concept connection data, Learning Memory hub flows, and gallery-style study UI experiments.
 
 `user_id` may appear in code or metadata, but it is currently a temporary local identifier. It is not yet a full authentication account, production user database key, or multi-user storage boundary.
 
@@ -14,11 +16,11 @@ LinkNote user accounts include a lightweight `student_track` profile field. Allo
 - `general`: default mode for existing users and ordinary study workflows.
 - `nursing`: additive mode for nursing students who can use nursing-practice learning tools.
 
-Existing users without `student_track` are treated as `general`. New email/password users can choose 일반 or 간호학과 during signup. Google signup currently defaults to `general`; profile editing can be added later. This field does not change `data_user_id`, ChromaDB ownership, PDF upload, RAG, concept extraction, concept graph, My Page, or explanation feedback behavior.
+Existing users without `student_track` are treated as `general`. New email/password users can choose 일반 or 간호학과 during signup. Google signup currently defaults to `general`; profile editing can be added later. This field does not change `data_user_id`, ChromaDB ownership, PDF upload, RAG, concept extraction, concept connections, My Page, or explanation feedback behavior.
 
 ## Nursing Practice Mode
 
-For users with `student_track = "nursing"`, LinkNote includes the first Clinical Reflection mode, a practice-oriented learning mode that connects de-identified clinical situations to previously uploaded study materials and concept graphs.
+For users with `student_track = "nursing"`, LinkNote includes the first Clinical Reflection mode, a practice-oriented learning mode that connects de-identified clinical situations to previously uploaded study materials and concept connections.
 
 This mode is additive to existing LinkNote behavior and does not change general user workflows.
 
@@ -44,8 +46,8 @@ Current frontend entry points:
 - `web/gallery.html` is the main UI served at `/`.
 - `web/mypage.html` is the read-only My Page.
 - `web/clinical-reflection.html` is the nursing-only Clinical Reflection page.
-- `web/concept-graph.html` is the read-only Concept Graph destination.
-- `web/learning-memory.html` is the read-only Learning Memory page for review reuse.
+- `web/learning-memory.html` is the primary Learning Memory hub for review reuse, Concept Connections, and AI summaries.
+- `web/concept-graph.html` is the read-only Full Knowledge Map advanced view.
 - `web/app.js` is a legacy experimental frontend and should not be used for authenticated production flow.
 - Protected APIs derive data ownership from `Authorization` token -> `data_user_id`, not from frontend-provided `user_id`.
 
@@ -157,26 +159,26 @@ AI feedback is directional, not a strict grading system. It identifies:
 
 The app keeps recall trace save/list working even when `OPENAI_API_KEY` is not available; `/recall-feedback` returns a clear error when the key is missing.
 
-### Phase 3: Personalized Concept Graph
+### Phase 3: Personalized Concept Connections
 
 Initial lightweight implementation added after recall feedback.
 
-Concept graph metadata now includes:
+Concept connection metadata now includes:
 
 - `recall_count`
 - `last_recalled_at`
 - `weak_score`
 - `missing_links`
 
-The graph can be opened directly from My Page or Learning Memory through `web/concept-graph.html`. The graph page reads existing graph metadata only and does not call GPT/OpenAI or rebuild graph data.
+Concept Connections now live inside Learning Memory as a compact Review Map. The full map remains available through `web/concept-graph.html` as an advanced Full Knowledge Map. Both views read existing graph metadata only and do not call GPT/OpenAI or rebuild graph data.
 
-Clicking a Concept Graph node opens a learning action panel. From a selected concept, learners can focus the graph around that concept, open Learning Memory, run a search-only related-material lookup, return to Gallery with course/unit context, or open the future `설명해보기` flow with concept context. The quick search action uses `POST /ask/search` and does not generate a GPT answer.
+Clicking a Concept Connections node in Learning Memory opens a learning action panel: Concept, My explanation, AI feedback, Learning Memory, Fast Search, and Explain Again. The quick search action uses `POST /ask/search` and does not generate a GPT answer.
 
 ### Phase 4: Learning Memory
 
-Learning Memory turns saved `설명해보기` recall traces and feedback into reusable review material for lectures, weekly review, and exam preparation.
+Learning Memory is the primary learning hub. It turns saved `설명해보기` recall traces and feedback into reusable review material for lectures, weekly review, concept connections, and exam preparation.
 
-The page at `web/learning-memory.html` loads without GPT/OpenAI calls. Current summaries are rule-based from local recall data: recent memories, frequent missing links, weak concepts, and exam review focus. Optional AI Summary generation is available only when the learner explicitly clicks an AI Summary button; generated summaries are saved and can be viewed later without another GPT call.
+The page at `web/learning-memory.html` loads without GPT/OpenAI calls. It now organizes the flow as Upload -> Explain -> AI Feedback -> Learning Memory -> Concept Connections -> Review. Current summaries are rule-based from local recall data: recent memories, frequent missing links, weak concepts, compact Review Map, and suggested review order. Optional AI Summary generation is available only when the learner explicitly clicks an AI Summary button; generated summaries are saved and can be viewed later without another GPT call.
 
 See [Recall and Learning Memory](docs/recall-learning-memory.md).
 
@@ -272,18 +274,18 @@ The objective is to guide thinking rather than evaluate performance. The current
 
 ---
 
-## Phase 3 — Personalized Concept Graph
+## Phase 3 — Personalized Concept Connections
 
-Recall traces now lightly inform the concept graph without adding a new account database.
+Recall traces now lightly inform Concept Connections inside Learning Memory without adding a new account database.
 
-Each concept node can contain learning metadata such as:
+Each concept connection node can contain learning metadata such as:
 
 * recall count
 * last recalled date
 * weak concept score
 * missing conceptual links
 
-This lets the concept graph begin representing the learner's understanding while keeping the current local `user_id` structure. The UI should avoid raw score labels and show softer states such as `미설명` or `설명 N회`.
+This lets Learning Memory represent the learner's understanding while keeping the current local `user_id` structure. The UI should avoid raw score labels and show softer states such as `미설명` or `설명 N회`.
 
 ---
 
@@ -308,7 +310,7 @@ The long-term vision of LinkNote is to combine:
 
 * Knowledge Management (LinkNote)
 * Active Recall (SCiyl)
-* Concept Graph Learning
+* Learning Memory and Concept Connections
 * Retrieval-Augmented Generation
 
 into a single environment where learners not only organize knowledge, but continuously construct, revisit, and refine their own understanding.
