@@ -72,6 +72,14 @@
   .connection-detail dl { display:grid; grid-template-columns:96px 1fr; gap:7px 10px; }
   .connection-detail dt { color:#64748b; font-size:.72rem; font-weight:800; }
   .connection-detail dd { color:#111827; overflow-wrap:anywhere; }
+  .overview-compact { padding:13px 18px; }
+  .overview-compact h2 { margin-bottom:7px; }
+  .overview-compact .sub { margin-top:0; }
+  .mini-stats { display:flex; flex-wrap:wrap; gap:4px 14px; margin-top:8px; font-size:.78rem; color:#64748b; }
+  .mini-stats b { color:#0f172a; font-weight:800; }
+  details.cc summary { cursor:pointer; color:#1e293b; font-weight:800; font-size:.98rem; }
+  details.cc[open] summary { margin-bottom:12px; }
+  .review-order { margin:10px 0 0 22px; display:flex; flex-direction:column; gap:6px; color:#0f172a; font-size:.92rem; font-weight:600; }
   .search-box { border-top:1px solid #e2e8f0; margin-top:10px; padding-top:10px; }
   .search-box .item { background:#fff; }
   @media (max-width:760px){ .grid,.memory-two-col,.connection-grid{grid-template-columns:1fr;} .stats,.filters,.connection-cards{grid-template-columns:1fr 1fr;} }
@@ -205,7 +213,7 @@
     const core = nodes.filter(n => hasNodeType(n, 'core'));
     const bridge = nodes.filter(n => hasNodeType(n, 'bridge'));
     const recent = nodes.filter(n => hasNodeType(n, 'recent') || Number(n.recall_count || 0) > 0);
-    return `<section class="wide"><h2>Concept Connections</h2>
+    return `<section class="wide"><details class="cc" ontoggle="if(this.open) drawReviewMap(currentGraphOverview)"><summary>Concept Connections 펼쳐 보기</summary>
       <p class="sub">전체 지도가 아니라 지금 복습할 개념 연결만 작게 보여줍니다. 데이터는 기존 개념 연결 정보를 읽기만 하며 GPT를 호출하지 않습니다.</p>
       <div class="connection-cards">
         <div class="connection-card"><small>Review Map</small><strong>${esc(review.length || stats.weak_concept_count || 0)}</strong><span class="sub">${esc(topNames(review))}</span></div>
@@ -219,7 +227,7 @@
         </div>
         <div id="connectionDetail" class="connection-detail">노드를 클릭하면 설명, 피드백, 빠른 검색 액션이 표시됩니다.</div>
       </div>
-    </section>`;
+    </details></section>`;
   }
   function matchingMemoryForNode(node){
     const label = nodeLabel(node).toLowerCase();
@@ -330,9 +338,7 @@
     const items = Array.isArray(aiSummaries?.items) ? aiSummaries.items : [];
     return `<section class="wide">
       <h2>AI Summary</h2>
-      <div class="notice">Learning Memory 조회: GPT 호출 없음</div>
-      <div class="notice cost">AI Summary 생성: GPT 호출 · 버튼을 누를 때만 API 비용이 발생합니다.</div>
-      <div class="notice cost">AI 피드백 생성: GPT 호출 · 피드백 없는 카드에서 버튼을 누를 때만 API 비용이 발생합니다.</div>
+      <div class="notice">조회는 GPT 호출이 없습니다. 요약·피드백 <b>생성 버튼을 누를 때만</b> API 비용이 발생합니다.</div>
       <div class="ai-buttons">
         <button onclick="generateAiSummary('weekly')">이번 주 요약 생성</button>
         <button onclick="generateAiSummary('course')">과목 요약 생성</button>
@@ -344,6 +350,16 @@
       <div class="list">${items.length ? items.map(aiSummaryCard).join('') : '<div class="item">저장된 AI Summary가 없습니다.</div>'}</div>
     </section>`;
   }
+  function reviewGuideHTML(summary){
+    const order = (Array.isArray(summary.exam_review_focus) && summary.exam_review_focus.length ? summary.exam_review_focus : summary.weak_concepts) || [];
+    const missing = Array.isArray(summary.frequent_missing_links) ? summary.frequent_missing_links : [];
+    const steps = order.slice(0, 5).map(c => `<li>${esc(c.name || c.concept || c)}</li>`).join('');
+    return `<section class="wide"><h2>오늘의 복습</h2>
+      <p class="sub">우선순위가 높은 개념부터 최대 5개만 보여줍니다.</p>
+      ${steps ? `<ol class="review-order">${steps}</ol>` : '<p class="sub">아직 복습할 개념이 없습니다. 설명해보기를 사용하면 여기에 쌓입니다.</p>'}
+      ${missing.length ? `<p class="sub" style="margin-top:10px">자주 빠지는 연결</p>${chips(missing.slice(0, 6))}` : ''}
+    </section>`;
+  }
   function render(summary, data, aiSummaries, graphData){
     const memories = Array.isArray(data.items) ? data.items : [];
     currentMemories = memories;
@@ -351,27 +367,20 @@
     const app = document.getElementById('app');
     app.className = 'grid';
     app.innerHTML = `
-      <section class="wide"><h2>Overview</h2><div class="stats">
-        ${stat('Total Learning Memories', summary.total_memories || 0)}
-        ${stat('Concepts Explained', summary.concepts_explained || 0)}
-        ${stat('Review Concepts', (summary.weak_concepts || []).length || currentGraphOverview.stats?.review_concept_count || currentGraphOverview.stats?.weak_concept_count || 0)}
-        ${stat('Last Learning', dateText(summary.last_memory_created_at || memories[0]?.created_at))}
-        ${stat('Learning Progress', learningProgress(summary, currentGraphOverview))}
-      </div><p class="sub" style="margin-top:10px">${esc(summary.weekly_summary || '')}</p></section>
-      ${conceptConnectionsHTML(summary, currentGraphOverview)}
-      <section class="wide"><h2>Recent Learning Memories</h2><div class="list">${memories.length ? memories.map(memoryCard).join('') : '<div class="item">아직 저장된 Learning Memory가 없습니다.</div>'}</div></section>
-      <section><h2>Review Focus</h2>
-        <p class="sub">Review Concepts</p>${chips(summary.weak_concepts || [])}
-        <p class="sub" style="margin-top:12px">Frequent Missing Links</p>${chips(summary.frequent_missing_links || [])}
+      <section class="wide overview-compact"><h2>Overview</h2>
+        <p class="sub">${esc(summary.weekly_summary || '설명해보기를 사용하면 복습 메모리가 쌓입니다.')} 마지막 학습: ${esc(dateText(summary.last_memory_created_at || memories[0]?.created_at))}</p>
+        <div class="mini-stats">
+          <span>메모리 <b>${esc(summary.total_memories || 0)}</b></span>
+          <span>설명한 개념 <b>${esc(summary.concepts_explained || 0)}</b></span>
+          <span>복습 개념 <b>${esc((summary.weak_concepts || []).length || currentGraphOverview.stats?.review_concept_count || currentGraphOverview.stats?.weak_concept_count || 0)}</b></span>
+          <span>진행률 <b>${esc(learningProgress(summary, currentGraphOverview))}</b></span>
+        </div>
       </section>
-      <section><h2>Suggested Review Order</h2>${chips(summary.exam_review_focus || summary.weak_concepts || [])}</section>
+      ${reviewGuideHTML(summary)}
+      <section class="wide"><h2>Recent Learning Memories</h2><div class="list">${memories.length ? memories.map(memoryCard).join('') : '<div class="item">아직 저장된 Learning Memory가 없습니다.</div>'}</div></section>
       ${filtersHTML()}
       ${aiSummaryHTML(aiSummaries)}
-      <section class="wide"><h2>Actions</h2><div class="actions">
-        <a class="btn primary" href="/">Back to My Library</a>
-        <a class="btn" href="/mypage.html">My Page</a>
-        <a class="btn" href="/concept-graph.html?mode=review">Explore Full Knowledge Map</a>
-      </div></section>`;
+      ${conceptConnectionsHTML(summary, currentGraphOverview)}`;
     restoreFilters();
     drawReviewMap(currentGraphOverview);
   }
@@ -400,6 +409,7 @@
     render(summary, data, aiSummaries, graphData);
   }
   async function generateAiSummary(type){
+    if(!confirm('AI Summary 생성은 GPT API 호출로 비용이 발생할 수 있습니다.\n계속할까요?')) return;
     const status = document.getElementById('aiSummaryStatus');
     const course = document.getElementById('f_course')?.value.trim() || '';
     const unit = document.getElementById('f_unit')?.value.trim() || '';
@@ -421,6 +431,7 @@
     const item = currentMemories[index];
     const status = document.getElementById('feedbackStatus' + index);
     if(!item) return;
+    if(!confirm('AI 피드백 생성은 GPT API 호출로 비용이 발생할 수 있습니다.\n계속할까요?')) return;
     if(status) status.textContent = 'AI 피드백 생성 중... API 비용이 발생할 수 있습니다.';
     try {
       await postJSON('/recall-feedback', {
