@@ -2797,22 +2797,10 @@ from fastapi.responses import FileResponse
 _WEB_DIR = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "web")
 
 
-class _NoCacheStaticFiles(StaticFiles):
-    """데스크탑 앱(WKWebView)이 HTML을 캐시해 수정이 반영 안 되는 문제 방지."""
-
-    async def get_response(self, path, scope):
-        response = await super().get_response(path, scope)
-        response.headers["Cache-Control"] = "no-cache, must-revalidate"
-        return response
-
-
 @app.get("/")
 async def _serve_gallery():
-    return FileResponse(
-        _os.path.join(_WEB_DIR, "gallery.html"),
-        headers={"Cache-Control": "no-cache, must-revalidate"},
-    )
+    return FileResponse(_os.path.join(_WEB_DIR, "gallery.html"))
 
 
 # 정적 파일 폴백(맨 마지막에 등록 → API 라우트보다 후순위)
-app.mount("/", _NoCacheStaticFiles(directory=_WEB_DIR, html=True), name="web")
+app.mount("/", StaticFiles(directory=_WEB_DIR, html=True), name="web")
