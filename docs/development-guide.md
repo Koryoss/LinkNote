@@ -539,13 +539,20 @@ Full mode는 복잡도 때문에 visible node를 제한한다. 과목/단원 필
 역할:
 
 - default experience는 Learning Dashboard다.
-- 첫 화면은 `Today's Review`, `Learning Progress`, `Continue Learning`만 즉시 보여준다.
-- primary action은 `Start Review` 하나로 둔다.
+- 대시보드는 "지금 무엇을 해야 하는가"에 3초 안에 답하는 화면이다. summary card는 `Today's Focus`와 `Learning Progress` 두 개만 둔다.
+- `Today's Focus`는 학습 상태에 따라 단 하나의 primary action만 보여준다. 우선순위:
+  1. due 복습 개념이 있으면(`GET /review/due`) → `복습할 개념 N개` + `Start Review`
+  2. 미완료 learning session이 있으면(`GET /learning-session/current`) → `Continue learning` + 다음 개념 + `Continue`
+  3. 그 외 → `Explore new concepts` + `Browse Knowledge Map`
+- 여러 경쟁 action을 동시에 보여주지 않는다. `Continue Learning`, `Central Concept`, `Recently Explained`, `Unexplained Concepts` 같은 개별 card는 두지 않는다.
+- `Learning Progress`는 learned/total/percent만 보여준다. graph 통계나 구현 세부는 노출하지 않는다.
 - node count, edge count, central concept, missing links, learning state, review priority 설명, unexplained concepts 같은 내부 graph/debug 정보는 dashboard에 노출하지 않는다.
-- Review Map은 dashboard 아래의 보조 의사결정 도구다.
+- Review Map은 dashboard 아래의 보조 의사결정 도구다. 설명 문구는 한 문장으로 유지한다("학습 기록을 바탕으로 복습 우선순위가 높은 개념부터 보여줍니다").
 - Review Map에는 Course filter, Unit filter, Review Needed Only를 둔다.
+- `Explore Full Knowledge Map` 링크는 Review Map 아래에 secondary navigation으로 둔다. dashboard의 primary action이 아니다.
 - Full graph, node connections, edge relationships, graph filters는 `web/concept-graph.html`의 Knowledge Exploration으로 보낸다.
 - node click 시 action panel을 열어 Why now, Learning Memory, 빠른 검색, Gallery context 이동을 제공한다.
+- 원칙: dashboard는 학습용, Knowledge Map은 탐색용이다.
 
 ## 12. Recall Trace와 AI Feedback
 
@@ -928,16 +935,14 @@ Learning Dashboard and Learning Memory hub.
 주요 기능:
 
 - default Learning Dashboard
-- Today's Review count
-- Start Review CTA
-- Learning Progress
-- Continue Learning
+- Today's Focus (상태 기반 단일 primary action: Start Review / Continue / Browse Knowledge Map)
+- Learning Progress (learned/total/percent)
 - Review Map with course/unit/review-needed filters
+- Explore Full Knowledge Map secondary link (Review Map 아래)
 - Memory cards
 - AI feedback generation per memory
 - memory deletion
 - AI Summary generation/list
-- Knowledge Exploration handoff
 - Quick Search from selected concept node
 
 ### `web/concept-graph.html`

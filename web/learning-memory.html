@@ -48,7 +48,7 @@
   .empty, .error { border:1px dashed #d8dee9; border-radius:12px; padding:18px; color:#64748b; background:#fff; margin-top:18px; }
   .error { border-color:#fecaca; color:#b91c1c; background:#fff7f7; }
   .actions { display:flex; flex-wrap:wrap; gap:8px; }
-  .dashboard { display:grid; grid-template-columns:1.15fr .9fr .9fr; gap:14px; align-items:stretch; }
+  .dashboard { display:grid; grid-template-columns:1.2fr .9fr; gap:14px; align-items:stretch; }
   .dash-card { border:1px solid #e8ebf2; border-radius:14px; padding:16px; background:#fff; min-height:148px; display:flex; flex-direction:column; justify-content:space-between; }
   .dash-card.primary { border-color:#bfdbfe; background:#f8fbff; }
   .dash-label { color:#64748b; font-size:.76rem; font-weight:800; margin-bottom:8px; }
@@ -235,37 +235,46 @@
     const percent = total ? Math.min(100, Math.round((explained / total) * 100)) : 0;
     return { learned: explained, total, percent };
   }
-  function activeReviewItems(dueData, graphData){
-    const dueItems = Array.isArray(dueData?.items) ? dueData.items : [];
-    const explicitlyDue = dueItems.filter(item => item.is_due);
-    if(explicitlyDue.length) return explicitlyDue;
-    if(dueItems.length) return dueItems.slice(0, 7);
-    const nodes = compactNodes(graphData).filter(node => learningState(node) !== 'MASTERED');
-    return nodes.slice(0, 7).map(node => ({
-      concept_id: node.id,
-      concept: nodeLabel(node),
-      course: node.course || '',
-      unit: node.unit || ''
-    }));
-  }
   function conceptStudyUrl(item){
     const concept = encodeURIComponent(item?.concept || item?.label || '');
     const course = encodeURIComponent(item?.course || '');
     const unit = encodeURIComponent(item?.unit || '');
     return `/?course=${course}&unit=${unit}&concept=${concept}&action=recall`;
   }
-  function dashboardHTML(summary, memories, graphData, dueData){
-    const reviewItems = activeReviewItems(dueData, graphData);
+  function todaysFocusHTML(dueData, sessionData){
+    const dueItems = Array.isArray(dueData?.items) ? dueData.items : [];
+    if(dueItems.length){
+      return `<div>
+          <div class="dash-label">Today's Focus</div>
+          <div class="dash-title">복습할 개념 ${esc(dueItems.length)}개</div>
+          <p class="sub">지금 복습하면 기억이 오래 유지됩니다.</p>
+        </div>
+        <button class="primary" onclick="startReview()">Start Review</button>`;
+    }
+    const session = sessionData?.session;
+    const sessionItems = Array.isArray(session?.items) ? session.items : [];
+    const nextItem = sessionItems[Number(session?.cursor || 0)] || sessionItems[0];
+    if(session && nextItem){
+      const continueUrl = conceptStudyUrl(nextItem) + `&session=${encodeURIComponent(session.id || '')}`;
+      return `<div>
+          <div class="dash-label">Today's Focus</div>
+          <div class="dash-title">Continue learning</div>
+          <p class="sub">${esc(nextItem.concept || '개념')}</p>
+        </div>
+        <a class="btn primary" href="${continueUrl}">Continue</a>`;
+    }
+    return `<div>
+        <div class="dash-label">Today's Focus</div>
+        <div class="dash-title">Explore new concepts</div>
+        <p class="sub">새로운 개념을 살펴보며 학습을 시작해보세요.</p>
+      </div>
+      <a class="btn primary" href="/concept-graph.html?mode=review">Browse Knowledge Map</a>`;
+  }
+  function dashboardHTML(summary, memories, graphData, dueData, sessionData){
     const progress = learningProgressData(summary, graphData);
-    const recent = memories[0] || null;
     return `<section class="wide"><div class="dashboard">
       <div class="dash-card primary">
-        <div>
-          <div class="dash-label">Today's Review</div>
-          <div class="dash-number">${esc(reviewItems.length)}</div>
-          <p class="sub">${reviewItems.length ? '지금 복습할 개념이 준비되어 있습니다.' : '오늘은 새 설명을 남기며 시작해도 좋습니다.'}</p>
-        </div>
-        <button class="primary" onclick="startReview()">Start Review</button>
+        ${todaysFocusHTML(dueData, sessionData)}
       </div>
       <div class="dash-card">
         <div>
@@ -275,14 +284,6 @@
           <div class="progress-line"><span>Learned ${esc(progress.learned)}</span><span>Total ${esc(progress.total)}</span></div>
         </div>
       </div>
-      <div class="dash-card">
-        <div>
-          <div class="dash-label">Continue Learning</div>
-          <div class="dash-title">${esc(recent?.concept || '아직 최근 학습이 없습니다')}</div>
-          <p class="sub">${recent ? esc(dateText(recent.created_at)) : '설명해보기를 시작하면 이어서 학습할 개념이 표시됩니다.'}</p>
-        </div>
-        ${recent ? `<a class="btn" href="${conceptStudyUrl(recent)}">Continue</a>` : '<a class="btn" href="/">My Library</a>'}
-      </div>
     </div></section>`;
   }
   function reviewMapHTML(graphData){
@@ -290,7 +291,7 @@
     return `<section class="wide"><div class="review-map-head">
       <div>
         <h2>Review Map</h2>
-        <p class="sub">복습 결정을 돕는 작은 지도입니다. 전체 탐색은 Knowledge Exploration에서 볼 수 있습니다.</p>
+        <p class="sub">학습 기록을 바탕으로 복습 우선순위가 높은 개념부터 보여줍니다.</p>
       </div>
       <div class="review-map-filters">
         <label>Course<input id="rm_course" type="text" placeholder="과목"></label>
@@ -305,11 +306,8 @@
         <div id="connectionDetail" class="connection-detail">노드를 클릭하면 설명, 피드백, 빠른 검색 액션이 표시됩니다.</div>
       </div>
       <div class="knowledge-link">
-        <div>
-          <strong>Knowledge Exploration</strong>
-          <p class="sub">전체 그래프, 노드 연결, edge 관계, 탐색 필터는 별도 화면에서 확인합니다.</p>
-        </div>
-        <a class="btn" href="/concept-graph.html?mode=review">Open Knowledge Exploration</a>
+        <p class="sub">더 넓게 탐색하고 싶다면 전체 지식 지도를 열어보세요.</p>
+        <a class="btn" href="/concept-graph.html?mode=review">Explore Full Knowledge Map</a>
       </div>
     </section>`;
   }
@@ -429,21 +427,16 @@
       ${missing.length ? `<p class="sub" style="margin-top:10px">자주 빠지는 연결</p>${chips(missing.slice(0, 6))}` : ''}
     </section>`;
   }
-  function render(summary, data, aiSummaries, graphData, dueData){
+  function render(summary, data, aiSummaries, graphData, dueData, sessionData){
     const memories = Array.isArray(data.items) ? data.items : [];
     currentMemories = memories;
     currentGraphOverview = graphData || { nodes:[], edges:[], stats:{} };
     const app = document.getElementById('app');
     app.className = 'grid';
     app.innerHTML = `
-      ${dashboardHTML(summary, memories, currentGraphOverview, dueData)}
+      ${dashboardHTML(summary, memories, currentGraphOverview, dueData, sessionData)}
       ${reviewMapHTML(currentGraphOverview)}
-      ${memoriesHubHTML(memories, aiSummaries)}
-      <section class="wide">
-        <h2>Knowledge Exploration</h2>
-        <p class="sub">전체 지식 그래프, node connections, edge relationships, graph filters는 탐색 전용 화면에서 확인합니다.</p>
-        <div class="actions" style="margin-top:12px"><a class="btn" href="/concept-graph.html?mode=review">Open Knowledge Exploration</a></div>
-      </section>`;
+      ${memoriesHubHTML(memories, aiSummaries)}`;
     restoreFilters();
     drawReviewMap(currentGraphOverview);
   }
@@ -490,14 +483,15 @@
     const reviewUnit = window._reviewMapFilters?.rm_unit || '';
     if(reviewCourse) dueParams.set('course', reviewCourse);
     if(reviewUnit) dueParams.set('unit', reviewUnit);
-    const [summary, data, aiSummaries, graphData, dueData] = await Promise.all([
+    const [summary, data, aiSummaries, graphData, dueData, sessionData] = await Promise.all([
       getJSON('/learning-memory/summary'),
       getJSON('/learning-memory?' + params.toString()),
       getJSON('/learning-memory/ai-summaries?limit=10'),
       getJSON('/concept-graph/overview' + (reviewParams.toString() ? '?' + reviewParams.toString() : '')).catch(()=>({ nodes:[], edges:[], stats:{} })),
       getJSON('/review/due?' + dueParams.toString()).catch(()=>({ items: [] })),
+      getJSON('/learning-session/current').catch(()=>({ session: null })),
     ]);
-    render(summary, data, aiSummaries, graphData, dueData);
+    render(summary, data, aiSummaries, graphData, dueData, sessionData);
   }
   async function startReview(){
     const statusTarget = document.getElementById('app');
