@@ -36,6 +36,12 @@ Search-only results are cached in `data/search_cache.json` by `data_user_id`, no
 
 Single-document style search uses the selected semester/course/unit/file filter when present. Multi-document search ignores the UI course filter and searches across the current user's owned materials.
 
+## My Page Presentation
+
+`web/mypage.html` is learner-oriented. The default view emphasizes a Learning Dashboard, recent learning activity, Learning Memory, explanation count, and next study actions rather than internal storage details.
+
+Account implementation metadata such as `account_id`, `data_user_id`, maintainer status, legacy namespace status, and migration status is still available for debugging, but it is hidden by default under a collapsed Developer Information section. Backend ownership behavior and response fields are unchanged.
+
 ## Concept Graph Destination
 
 My Page and Learning Memory link to `web/concept-graph.html` instead of the gallery root hash. The page reads `GET /concept-graph/overview`, which derives ownership from `Authorization` -> `current_uid()` -> `data_user_id`.
