@@ -33,7 +33,7 @@
   .modebar button.secondary { margin-left:auto; border-color:#cbd5e1; color:#475569; }
   .filters { display:grid; grid-template-columns:repeat(4, minmax(0, 1fr)); gap:8px; align-items:end; margin-top:14px; }
   .filters label { color:#64748b; font-size:.74rem; font-weight:700; }
-  .filters input { width:100%; border:1px solid #d8dee9; border-radius:8px; padding:8px 10px; font-size:.85rem; margin-top:4px; }
+  .filters input, .filters select { width:100%; border:1px solid #d8dee9; border-radius:8px; padding:8px 10px; font-size:.85rem; margin-top:4px; background:#fff; }
   .filters .check { display:flex; align-items:center; gap:8px; margin-top:22px; }
   .filters .check input { width:auto; margin:0; }
   .warning { border:1px solid #fde68a; background:#fffbeb; color:#92400e; border-radius:12px; padding:10px 12px; font-size:.84rem; line-height:1.5; margin-top:12px; }
@@ -233,13 +233,23 @@
     if(!wanted) return null;
     return nodes.find(node => nodeLabel(node).toLowerCase() === wanted || String(node.id || '').toLowerCase() === wanted) || null;
   }
-  function strongestEdges(edges, ids, limitPerNode){
+  function edgeRank(edge, byId){
+    const connectedPriority = Math.max(graphPriority(byId[edge.source] || {}), graphPriority(byId[edge.target] || {}));
+    return Number(edge.normalized_weight || 0) * 100000 + Number(edge.weight || 0) * 1000 + connectedPriority;
+  }
+  function limitEdgesPerNode(edges, visibleNodes, maxPerNode = 2){
+    const ids = new Set(visibleNodes.map(node => node.id));
+    const byId = Object.fromEntries(visibleNodes.map(node => [node.id, node]));
     const counts = {};
-    return [...edges]
-      .sort((a,b)=>Number(b.weight || b.normalized_weight || 0)-Number(a.weight || a.normalized_weight || 0))
+    const seen = new Set();
+    return edges
+      .filter(edge => ids.has(edge.source) && ids.has(edge.target))
+      .sort((a,b)=>edgeRank(b, byId)-edgeRank(a, byId))
       .filter(edge => {
-        if(!ids.has(edge.source) || !ids.has(edge.target)) return false;
+        const key = [edge.source, edge.target].sort().join('::');
+        if(seen.has(key)) return false;
         if((counts[edge.source] || 0) >= limitPerNode || (counts[edge.target] || 0) >= limitPerNode) return false;
+        seen.add(key);
         counts[edge.source] = (counts[edge.source] || 0) + 1;
         counts[edge.target] = (counts[edge.target] || 0) + 1;
         return true;
@@ -273,10 +283,7 @@
     if(!sorted.length) sorted = [...enriched].sort((a,b)=>graphPriority(b)-graphPriority(a));
     const cap = MODE_LIMITS[currentMode] || DEFAULT_NODE_LIMIT;
     const visibleNodes = sorted.slice(0, currentMode === 'full' ? Math.min(cap, 120) : cap);
-    const ids = new Set(visibleNodes.map(node => node.id));
-    visibleEdges = currentMode === 'full'
-      ? strongestEdges(edges, ids, 2)
-      : edges.filter(edge => ids.has(edge.source) && ids.has(edge.target));
+    visibleEdges = limitEdgesPerNode(edges, visibleNodes, currentMode === 'full' ? 3 : 2);
     return { nodes: visibleNodes, edges: visibleEdges, totalNodes:enriched.length };
   }
   function learningSummary(nodes){
@@ -294,13 +301,42 @@
     ).join('');
     return `<div class="modebar">${primary}<button class="secondary ${currentMode==='full'?'active':''}" onclick="setMode('full')">Advanced / 전체 그래프</button></div>`;
   }
+  function uniqueSorted(items){
+    return [...new Set(items.map(item => String(item || '').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b, 'ko'));
+  }
+  function optionHTML(items, selected, emptyLabel){
+    return [`<option value="">${esc(emptyLabel)}</option>`].concat(
+      items.map(item => `<option value="${esc(item)}" ${item === selected ? 'selected' : ''}>${esc(item)}</option>`)
+    ).join('');
+  }
   function filtersHTML(){
+    const params = window._graphFilters || {};
+    const nodes = Array.isArray(currentGraphData?.nodes) ? currentGraphData.nodes : [];
+    const courses = uniqueSorted(nodes.map(node => node.course));
+    const unitNodes = params.course ? nodes.filter(node => String(node.course || '') === params.course) : nodes;
+    const units = uniqueSorted(unitNodes.map(node => node.unit));
     return `<div class="filters">
-      <label>Course<input id="course" placeholder="과목"></label>
-      <label>Unit<input id="unit" placeholder="단원"></label>
+      <label>Course<select id="course" onchange="updateUnitOptions()">${optionHTML(courses, params.course || '', 'All courses')}</select></label>
+      <label>Unit<select id="unit">${optionHTML(units, params.unit || '', 'All units')}</select></label>
       <label class="check"><input id="weakOnly" type="checkbox"> weak concepts only</label>
       <button onclick="loadGraph()">적용</button>
+      <button onclick="clearGraphFilters()">Clear</button>
     </div>`;
+  }
+  function updateUnitOptions(){
+    const nodes = Array.isArray(currentGraphData?.nodes) ? currentGraphData.nodes : [];
+    const course = document.getElementById('course')?.value || '';
+    const unitSelect = document.getElementById('unit');
+    if(!unitSelect) return;
+    const units = uniqueSorted((course ? nodes.filter(node => String(node.course || '') === course) : nodes).map(node => node.unit));
+    unitSelect.innerHTML = optionHTML(units, '', 'All units');
+  }
+  function clearGraphFilters(){
+    window._graphFilters = { course:'', unit:'', weakOnly:false };
+    if(document.getElementById('course')) document.getElementById('course').value = '';
+    if(document.getElementById('unit')) document.getElementById('unit').value = '';
+    if(document.getElementById('weakOnly')) document.getElementById('weakOnly').checked = false;
+    loadGraph();
   }
   function layout(nodes, width, height){
     const cx = width / 2, cy = height / 2;
@@ -349,7 +385,8 @@
       </div>
       ${modeButtonsHTML()}
       <p class="sub">${esc(MODE_LABELS[currentMode])}: ${esc(modeDescription)}</p>
-      <p class="sub">현재 ${visible.nodes.length}개 / 전체 ${nodes.length}개 concept를 표시합니다.</p>
+      <p class="sub">처음에는 전체 지도를 모두 보여주지 않습니다. 복습에 도움이 되는 Weak · Core · Bridge · Recent 개념을 우선 표시합니다.</p>
+      <p class="sub">현재 node ${visible.nodes.length}개 / 전체 ${nodes.length}개, edge ${visible.edges.length}개 / 전체 ${edges.length}개를 표시합니다.</p>
       ${fullWarning}
       ${filtersHTML()}</section>
       <section><h2>${esc(MODE_LABELS[currentMode])}</h2><div id="graphWrap" class="graph-wrap">${visible.nodes.length ? '<svg id="graphSvg"></svg>' : '<div class="empty">아직 표시할 Concept Graph가 없습니다. 자료를 업로드하고 개념 추출을 먼저 진행해 주세요.</div>'}</div></section>
@@ -378,6 +415,13 @@
     svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
     const pos = layout(nodes, width, height);
     const byId = Object.fromEntries(nodes.map(node => [node.id, node]));
+    const labelVisibleIds = new Set(
+      [...nodes]
+        .sort((a,b)=>graphPriority(b)-graphPriority(a))
+        .slice(0, currentMode === 'full' ? 10 : 8)
+        .map(node => node.id)
+    );
+    if(selectedNodeId) labelVisibleIds.add(selectedNodeId);
     const connectedIds = new Set();
     if(selectedNodeId) {
       edges.forEach(edge => {
@@ -403,11 +447,39 @@
       const isDimmed = selectedNodeId && !isSelected && !isConnected;
       const cls = ['node', node.is_weak ? 'weak' : '', node.is_recalled ? 'recalled' : '', node.is_core ? 'core' : '', node.is_bridge ? 'bridge' : '', node.is_recent ? 'recent' : '', isSelected ? 'selected' : '', isConnected && !isSelected ? 'connected' : '', isDimmed ? 'dimmed' : ''].filter(Boolean).join(' ');
       const r = Math.max(18, Math.min(38, 18 + Number(node.weight || 1) * 2));
-      return `<g class="${cls}" data-id="${esc(node.id)}" transform="translate(${p.x},${p.y})"><circle r="${r}"></circle><text text-anchor="middle" y="4">${esc(String(node.label || '').slice(0, 14))}</text></g>`;
+      const label = labelVisibleIds.has(node.id) ? `<text text-anchor="middle" y="4">${esc(String(node.label || '').slice(0, 14))}</text>` : '';
+      return `<g class="${cls}" data-id="${esc(node.id)}" transform="translate(${p.x},${p.y})"><title>${esc(nodeLabel(node) || node.id)}</title><circle r="${r}"></circle>${label}</g>`;
     }).join('');
     svg.innerHTML = edgeLines + nodeEls;
     svg.querySelectorAll('.node').forEach(el => {
+      el.addEventListener('mouseenter', () => markGraphFocus(el.dataset.id));
+      el.addEventListener('mouseleave', () => markGraphFocus(selectedNodeId));
       el.addEventListener('click', () => selectNode(byId[el.dataset.id]));
+    });
+    markGraphFocus(selectedNodeId);
+  }
+  function markGraphFocus(nodeId){
+    const svg = document.getElementById('graphSvg');
+    if(!svg) return;
+    const focused = String(nodeId || '');
+    const connectedIds = new Set();
+    svg.querySelectorAll('.edge').forEach(el => {
+      if(focused && (el.dataset.source === focused || el.dataset.target === focused)){
+        connectedIds.add(el.dataset.source);
+        connectedIds.add(el.dataset.target);
+      }
+    });
+    svg.querySelectorAll('.node').forEach(el => {
+      const id = el.dataset.id;
+      const connected = !!focused && connectedIds.has(id);
+      el.classList.toggle('connected', !!focused && connected && id !== focused);
+      el.classList.toggle('selected', !!focused && id === focused);
+      el.classList.toggle('dimmed', !!focused && id !== focused && !connected);
+    });
+    svg.querySelectorAll('.edge').forEach(el => {
+      const connected = !!focused && (el.dataset.source === focused || el.dataset.target === focused);
+      el.classList.toggle('connected', connected);
+      el.classList.toggle('dimmed', !!focused && !connected);
     });
   }
   function selectNode(node){
