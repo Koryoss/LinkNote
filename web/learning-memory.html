@@ -48,6 +48,21 @@
   .empty, .error { border:1px dashed #d8dee9; border-radius:12px; padding:18px; color:#64748b; background:#fff; margin-top:18px; }
   .error { border-color:#fecaca; color:#b91c1c; background:#fff7f7; }
   .actions { display:flex; flex-wrap:wrap; gap:8px; }
+  .dashboard { display:grid; grid-template-columns:1.15fr .9fr .9fr; gap:14px; align-items:stretch; }
+  .dash-card { border:1px solid #e8ebf2; border-radius:14px; padding:16px; background:#fff; min-height:148px; display:flex; flex-direction:column; justify-content:space-between; }
+  .dash-card.primary { border-color:#bfdbfe; background:#f8fbff; }
+  .dash-label { color:#64748b; font-size:.76rem; font-weight:800; margin-bottom:8px; }
+  .dash-number { color:#0f172a; font-size:2rem; font-weight:850; line-height:1; }
+  .dash-title { color:#0f172a; font-size:1.08rem; font-weight:850; line-height:1.25; word-break:keep-all; }
+  .progress-track { height:10px; border-radius:999px; background:#eef2f7; overflow:hidden; margin:12px 0 8px; }
+  .progress-fill { height:100%; border-radius:999px; background:#2563eb; }
+  .progress-line { display:flex; justify-content:space-between; gap:8px; color:#64748b; font-size:.82rem; }
+  .review-map-head { display:flex; justify-content:space-between; gap:12px; align-items:flex-start; flex-wrap:wrap; }
+  .review-map-filters { display:flex; gap:8px; align-items:end; flex-wrap:wrap; }
+  .review-map-filters label { color:#64748b; font-size:.74rem; font-weight:700; }
+  .review-map-filters input[type="text"] { width:150px; border:1px solid #d8dee9; border-radius:8px; padding:8px 10px; font-size:.85rem; margin-top:4px; }
+  .review-toggle { display:flex; align-items:center; gap:6px; border:1px solid #d8dee9; border-radius:8px; padding:8px 10px; background:#fff; color:#475569; font-size:.82rem; font-weight:800; }
+  .knowledge-link { border:1px solid #eef1f6; border-radius:12px; padding:13px; background:#f8fafc; margin-top:12px; display:flex; justify-content:space-between; gap:12px; align-items:center; flex-wrap:wrap; }
   .connection-grid { display:grid; grid-template-columns:1.5fr .9fr; gap:14px; align-items:stretch; }
   .connection-cards { display:grid; grid-template-columns:repeat(4, minmax(0,1fr)); gap:8px; margin:10px 0 12px; }
   .connection-card { border:1px solid #e2e8f0; background:#fff; border-radius:10px; padding:10px; text-align:left; color:#1f2937; }
@@ -82,7 +97,7 @@
   .review-order { margin:10px 0 0 22px; display:flex; flex-direction:column; gap:6px; color:#0f172a; font-size:.92rem; font-weight:600; }
   .search-box { border-top:1px solid #e2e8f0; margin-top:10px; padding-top:10px; }
   .search-box .item { background:#fff; }
-  @media (max-width:760px){ .grid,.memory-two-col,.connection-grid{grid-template-columns:1fr;} .stats,.filters,.connection-cards{grid-template-columns:1fr 1fr;} }
+  @media (max-width:760px){ .grid,.memory-two-col,.connection-grid,.dashboard{grid-template-columns:1fr;} .stats,.filters,.connection-cards{grid-template-columns:1fr 1fr;} .review-map-filters input[type="text"]{width:100%;} }
 </style>
 </head>
 <body>
@@ -93,8 +108,8 @@
     <a class="btn" href="/mypage.html">My Page</a>
   </div>
   <main>
-    <h1>Learning Memory</h1>
-    <p class="sub">설명해보기, AI 피드백, 개념 연결, 복습 순서를 한 곳에서 확인하는 학습 허브입니다.</p>
+    <h1>Learning Dashboard</h1>
+    <p class="sub">지금 복습할 개념, 이어서 볼 개념, 전체 진행률을 먼저 보여주는 학습 시작 화면입니다.</p>
     <div id="app" class="empty">불러오는 중...</div>
   </main>
 <script>
@@ -214,35 +229,89 @@
       .sort((a,b)=>Number(b.normalized_weight || b.weight || 0)-Number(a.normalized_weight || a.weight || 0))
       .slice(0, 22);
   };
-  const topNames = (items) => items.slice(0,3).map(nodeLabel).filter(Boolean).join(' · ') || '아직 없음';
-  function learningProgress(summary, graphData){
+  function learningProgressData(summary, graphData){
     const total = Number(graphData?.stats?.node_count || 0);
     const explained = Number(summary.concepts_explained || 0);
-    if(!total) return explained ? `${explained}개 설명` : '시작 전';
-    return `${Math.min(100, Math.round((explained / total) * 100))}%`;
+    const percent = total ? Math.min(100, Math.round((explained / total) * 100)) : 0;
+    return { learned: explained, total, percent };
   }
-  function conceptConnectionsHTML(summary, graphData){
-    const nodes = compactNodes(graphData);
-    const stats = graphData?.stats || {};
-    const review = nodes.filter(n => learningState(n) !== 'MASTERED' || reviewPriority(n) >= 30);
-    const core = nodes.filter(n => hasNodeType(n, 'core'));
-    const bridge = nodes.filter(n => hasNodeType(n, 'bridge'));
-    const recent = nodes.filter(n => hasNodeType(n, 'recent') || Number(n.recall_count || 0) > 0);
-    return `<section class="wide"><details class="cc" ontoggle="if(this.open) drawReviewMap(currentGraphOverview)"><summary>Concept Connections 펼쳐 보기</summary>
-      <p class="sub">전체 지도가 아니라 지금 복습할 개념 연결만 작게 보여줍니다. 데이터는 기존 개념 연결 정보를 읽기만 하며 GPT를 호출하지 않습니다.</p>
-      <div class="connection-cards">
-        <div class="connection-card"><small>Review Map</small><strong>${esc(review.length || stats.weak_concept_count || 0)}</strong><span class="sub">${esc(topNames(review))}</span></div>
-        <div class="connection-card"><small>Core Concepts</small><strong>${esc(core.length || stats.core_concept_count || 0)}</strong><span class="sub">${esc(topNames(core))}</span></div>
-        <div class="connection-card"><small>Bridge Concepts</small><strong>${esc(bridge.length || stats.bridge_concept_count || 0)}</strong><span class="sub">${esc(topNames(bridge))}</span></div>
-        <div class="connection-card"><small>Recent Concepts</small><strong>${esc(recent.length || stats.recalled_concept_count || 0)}</strong><span class="sub">${esc(topNames(recent))}</span></div>
+  function activeReviewItems(dueData, graphData){
+    const dueItems = Array.isArray(dueData?.items) ? dueData.items : [];
+    const explicitlyDue = dueItems.filter(item => item.is_due);
+    if(explicitlyDue.length) return explicitlyDue;
+    if(dueItems.length) return dueItems.slice(0, 7);
+    const nodes = compactNodes(graphData).filter(node => learningState(node) !== 'MASTERED');
+    return nodes.slice(0, 7).map(node => ({
+      concept_id: node.id,
+      concept: nodeLabel(node),
+      course: node.course || '',
+      unit: node.unit || ''
+    }));
+  }
+  function conceptStudyUrl(item){
+    const concept = encodeURIComponent(item?.concept || item?.label || '');
+    const course = encodeURIComponent(item?.course || '');
+    const unit = encodeURIComponent(item?.unit || '');
+    return `/?course=${course}&unit=${unit}&concept=${concept}&action=recall`;
+  }
+  function dashboardHTML(summary, memories, graphData, dueData){
+    const reviewItems = activeReviewItems(dueData, graphData);
+    const progress = learningProgressData(summary, graphData);
+    const recent = memories[0] || null;
+    return `<section class="wide"><div class="dashboard">
+      <div class="dash-card primary">
+        <div>
+          <div class="dash-label">Today's Review</div>
+          <div class="dash-number">${esc(reviewItems.length)}</div>
+          <p class="sub">${reviewItems.length ? '지금 복습할 개념이 준비되어 있습니다.' : '오늘은 새 설명을 남기며 시작해도 좋습니다.'}</p>
+        </div>
+        <button class="primary" onclick="startReview()">Start Review</button>
       </div>
+      <div class="dash-card">
+        <div>
+          <div class="dash-label">Learning Progress</div>
+          <div class="dash-title">${esc(progress.percent)}%</div>
+          <div class="progress-track"><div class="progress-fill" style="width:${esc(progress.percent)}%"></div></div>
+          <div class="progress-line"><span>Learned ${esc(progress.learned)}</span><span>Total ${esc(progress.total)}</span></div>
+        </div>
+      </div>
+      <div class="dash-card">
+        <div>
+          <div class="dash-label">Continue Learning</div>
+          <div class="dash-title">${esc(recent?.concept || '아직 최근 학습이 없습니다')}</div>
+          <p class="sub">${recent ? esc(dateText(recent.created_at)) : '설명해보기를 시작하면 이어서 학습할 개념이 표시됩니다.'}</p>
+        </div>
+        ${recent ? `<a class="btn" href="${conceptStudyUrl(recent)}">Continue</a>` : '<a class="btn" href="/">My Library</a>'}
+      </div>
+    </div></section>`;
+  }
+  function reviewMapHTML(graphData){
+    const nodes = compactNodes(graphData);
+    return `<section class="wide"><div class="review-map-head">
+      <div>
+        <h2>Review Map</h2>
+        <p class="sub">복습 결정을 돕는 작은 지도입니다. 전체 탐색은 Knowledge Exploration에서 볼 수 있습니다.</p>
+      </div>
+      <div class="review-map-filters">
+        <label>Course<input id="rm_course" type="text" placeholder="과목"></label>
+        <label>Unit<input id="rm_unit" type="text" placeholder="단원"></label>
+        <label class="review-toggle"><input id="rm_review_needed" type="checkbox" checked> Review Needed Only</label>
+        <button onclick="applyReviewMapFilters()">적용</button>
+      </div>
+    </div>
       <div class="connection-grid">
         <div><div id="reviewMap" class="review-map">${nodes.length ? '' : '<div class="empty">아직 표시할 개념 연결이 없습니다.</div>'}</div>
-          <div class="actions" style="margin-top:10px"><a class="btn" href="/concept-graph.html?mode=review">Explore Full Knowledge Map</a></div>
         </div>
         <div id="connectionDetail" class="connection-detail">노드를 클릭하면 설명, 피드백, 빠른 검색 액션이 표시됩니다.</div>
       </div>
-    </details></section>`;
+      <div class="knowledge-link">
+        <div>
+          <strong>Knowledge Exploration</strong>
+          <p class="sub">전체 그래프, 노드 연결, edge 관계, 탐색 필터는 별도 화면에서 확인합니다.</p>
+        </div>
+        <a class="btn" href="/concept-graph.html?mode=review">Open Knowledge Exploration</a>
+      </div>
+    </section>`;
   }
   function matchingMemoryForNode(node){
     const label = nodeLabel(node).toLowerCase();
@@ -301,12 +370,10 @@
     const concept = encodeURIComponent(nodeLabel(node));
     const course = encodeURIComponent(node.course || '');
     const unit = encodeURIComponent(node.unit || '');
-    const reasons = Array.isArray(node.review_reason) && node.review_reason.length ? `<ul>${node.review_reason.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>` : '<span class="sub">아직 이유 데이터가 없습니다.</span>';
+    const reasons = Array.isArray(node.review_reason) && node.review_reason.length ? `<ul>${node.review_reason.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>` : '<span class="sub">최근 학습 기록을 기준으로 추천할 내용이 아직 없습니다.</span>';
     box.innerHTML = `<h3>${esc(nodeLabel(node) || 'Concept')}</h3><dl>
       <dt>Concept</dt><dd>${esc(nodeLabel(node) || '-')}</dd>
-      <dt>Learning State</dt><dd>${esc(learningState(node))}</dd>
-      <dt>Review Priority</dt><dd>${esc(node.review_priority ?? reviewPriority(node))}</dd>
-      <dt>Why?</dt><dd>${reasons}</dd>
+      <dt>Why now?</dt><dd>${reasons}</dd>
       <dt>My explanation</dt><dd>${esc(memory?.answer_text || '아직 이 개념으로 남긴 설명이 없습니다.')}</dd>
       <dt>AI feedback</dt><dd>${esc(feedbackPreview(memory))}</dd>
       <dt>Learning Memory</dt><dd>${memory ? esc(dateText(memory.created_at)) : '새 설명을 남기면 Learning Memory에 쌓입니다.'}</dd>
@@ -359,25 +426,21 @@
       ${missing.length ? `<p class="sub" style="margin-top:10px">자주 빠지는 연결</p>${chips(missing.slice(0, 6))}` : ''}
     </section>`;
   }
-  function render(summary, data, aiSummaries, graphData){
+  function render(summary, data, aiSummaries, graphData, dueData){
     const memories = Array.isArray(data.items) ? data.items : [];
     currentMemories = memories;
     currentGraphOverview = graphData || { nodes:[], edges:[], stats:{} };
     const app = document.getElementById('app');
     app.className = 'grid';
     app.innerHTML = `
-      <section class="wide overview-compact"><h2>Overview</h2>
-        <p class="sub">${esc(summary.weekly_summary || '설명해보기를 사용하면 복습 메모리가 쌓입니다.')} 마지막 학습: ${esc(dateText(summary.last_memory_created_at || memories[0]?.created_at))}</p>
-        <div class="mini-stats">
-          <span>메모리 <b>${esc(summary.total_memories || 0)}</b></span>
-          <span>설명한 개념 <b>${esc(summary.concepts_explained || 0)}</b></span>
-          <span>복습 개념 <b>${esc((summary.weak_concepts || []).length || currentGraphOverview.stats?.review_concept_count || currentGraphOverview.stats?.weak_concept_count || 0)}</b></span>
-          <span>진행률 <b>${esc(learningProgress(summary, currentGraphOverview))}</b></span>
-        </div>
-      </section>
-      ${reviewGuideHTML(summary)}
+      ${dashboardHTML(summary, memories, currentGraphOverview, dueData)}
+      ${reviewMapHTML(currentGraphOverview)}
       ${memoriesHubHTML(memories, aiSummaries)}
-      ${conceptConnectionsHTML(summary, currentGraphOverview)}`;
+      <section class="wide">
+        <h2>Knowledge Exploration</h2>
+        <p class="sub">전체 지식 그래프, node connections, edge relationships, graph filters는 탐색 전용 화면에서 확인합니다.</p>
+        <div class="actions" style="margin-top:12px"><a class="btn" href="/concept-graph.html?mode=review">Open Knowledge Exploration</a></div>
+      </section>`;
     restoreFilters();
     drawReviewMap(currentGraphOverview);
   }
@@ -386,6 +449,27 @@
       const el = document.getElementById(id);
       if(el && window._lmFilters) el.value = window._lmFilters[id] || '';
     }
+    for(const id of ['rm_course','rm_unit']){
+      const el = document.getElementById(id);
+      if(el && window._reviewMapFilters) el.value = window._reviewMapFilters[id] || '';
+    }
+    const reviewNeeded = document.getElementById('rm_review_needed');
+    if(reviewNeeded && window._reviewMapFilters) reviewNeeded.checked = window._reviewMapFilters.rm_review_needed !== false;
+  }
+  function reviewMapParams(){
+    const saved = window._reviewMapFilters || {};
+    const course = document.getElementById('rm_course')?.value.trim() || saved.rm_course || '';
+    const unit = document.getElementById('rm_unit')?.value.trim() || saved.rm_unit || '';
+    const reviewOnly = document.getElementById('rm_review_needed') ? document.getElementById('rm_review_needed').checked : saved.rm_review_needed !== false;
+    window._reviewMapFilters = { rm_course:course, rm_unit:unit, rm_review_needed:reviewOnly };
+    const params = new URLSearchParams();
+    if(course) params.set('course', course);
+    if(unit) params.set('unit', unit);
+    if(reviewOnly) params.set('weak_only', 'true');
+    return params;
+  }
+  async function applyReviewMapFilters(){
+    await loadMemories();
   }
   async function loadMemories(){
     const saved = window._lmFilters || {};
@@ -397,13 +481,39 @@
     if(course) params.set('course', course);
     if(unit) params.set('unit', unit);
     if(concept) params.set('concept', concept);
-    const [summary, data, aiSummaries, graphData] = await Promise.all([
+    const reviewParams = reviewMapParams();
+    const dueParams = new URLSearchParams({ limit:'20' });
+    const reviewCourse = window._reviewMapFilters?.rm_course || '';
+    const reviewUnit = window._reviewMapFilters?.rm_unit || '';
+    if(reviewCourse) dueParams.set('course', reviewCourse);
+    if(reviewUnit) dueParams.set('unit', reviewUnit);
+    const [summary, data, aiSummaries, graphData, dueData] = await Promise.all([
       getJSON('/learning-memory/summary'),
       getJSON('/learning-memory?' + params.toString()),
       getJSON('/learning-memory/ai-summaries?limit=10'),
-      getJSON('/concept-graph/overview').catch(()=>({ nodes:[], edges:[], stats:{} })),
+      getJSON('/concept-graph/overview' + (reviewParams.toString() ? '?' + reviewParams.toString() : '')).catch(()=>({ nodes:[], edges:[], stats:{} })),
+      getJSON('/review/due?' + dueParams.toString()).catch(()=>({ items: [] })),
     ]);
-    render(summary, data, aiSummaries, graphData);
+    render(summary, data, aiSummaries, graphData, dueData);
+  }
+  async function startReview(){
+    const statusTarget = document.getElementById('app');
+    const scope = {};
+    const course = window._reviewMapFilters?.rm_course || '';
+    const unit = window._reviewMapFilters?.rm_unit || '';
+    if(course) scope.course = course;
+    if(unit) scope.unit = unit;
+    try {
+      const session = await postJSON('/learning-session/start', { scope, size:7 });
+      const first = Array.isArray(session.items) ? session.items[0] : null;
+      if(first){
+        location.href = conceptStudyUrl(first) + `&session=${encodeURIComponent(session.id || '')}`;
+      } else {
+        alert('복습 세션을 시작할 개념이 아직 없습니다.');
+      }
+    } catch(e) {
+      if(statusTarget) statusTarget.insertAdjacentHTML('afterbegin', `<div class="error">Review를 시작하지 못했습니다: ${esc(e.message || e)}</div>`);
+    }
   }
   async function generateAiSummary(type){
     if(!confirm('AI Summary 생성은 GPT API 호출로 비용이 발생할 수 있습니다.\n계속할까요?')) return;
@@ -453,6 +563,11 @@
       f_course: params.get('course') || '',
       f_unit: params.get('unit') || '',
       f_concept: params.get('concept') || ''
+    };
+    window._reviewMapFilters = {
+      rm_course: params.get('course') || '',
+      rm_unit: params.get('unit') || '',
+      rm_review_needed: params.get('review_needed') !== 'false'
     };
     try { await loadMemories(); }
     catch(e){ app.className='error'; app.textContent='Learning Memory를 불러오지 못했습니다: ' + e.message; }

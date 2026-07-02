@@ -145,6 +145,15 @@
 - 리뷰 스케줄과 SM-2 기반 복습 상태를 저장해 오늘 복습할 개념을 우선적으로 제안한다.
 - 기존 review_priority, learning_state, review_reason 필드는 유지하면서 is_due/due_at를 추가한다.
 
+### 4.7 Review Dashboard Redesign
+
+- 기본 학습 화면은 `Learning Dashboard`로 둔다.
+- 첫 화면은 Today's Review, Learning Progress, Continue Learning만 보여준다.
+- primary action은 `Start Review` 하나로 유지한다.
+- node count, edge count, central concept, missing links, learning state, review priority 설명, unexplained concepts 같은 내부 그래프 정보는 dashboard에 노출하지 않는다.
+- Review Map은 dashboard 아래의 보조 도구로 두고, Course filter, Unit filter, Review Needed Only만 유지한다.
+- 전체 Knowledge Graph, node connections, edge relationships, graph filters는 `Knowledge Exploration` 화면으로 분리한다.
+
 ## 5. 사용자 분리 / 계정 확장 계획
 
 초기에는 진짜 회원가입 기능을 만들지 않는다.

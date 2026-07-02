@@ -43,9 +43,9 @@ Single-document style search uses the selected semester/course/unit/file filter 
 
 Account implementation metadata such as `account_id`, `data_user_id`, maintainer status, legacy namespace status, and migration status is still available for debugging, but it is hidden by default under a collapsed Developer Information section. Backend ownership behavior and response fields are unchanged.
 
-## Concept Connections And Full Knowledge Map
+## Learning Dashboard And Knowledge Exploration
 
-My Page links to Learning Memory as the primary hub. Learning Memory embeds compact Concept Connections and links to `web/concept-graph.html` only for the advanced Full Knowledge Map. The page reads `GET /concept-graph/overview`, which derives ownership from `Authorization` -> `current_uid()` -> `data_user_id`.
+My Page links to Learning Memory as the primary hub. Learning Memory now opens as a Learning Dashboard and links to `web/concept-graph.html` only for Knowledge Exploration. The page reads `GET /concept-graph/overview`, which derives ownership from `Authorization` -> `current_uid()` -> `data_user_id`.
 
 The Full Knowledge Map destination is read-only. It uses existing `data/concept_index.json`, `data/concept_links.json`, and recall metadata. Viewing the graph does not call GPT, OpenAI embeddings, reindex ChromaDB, or rebuild concept graph data.
 
@@ -67,11 +67,11 @@ The quick search action is search-only. It calls `/ask/search`, shows related co
 
 Selected nodes are highlighted locally in the SVG. Connected edges and neighboring nodes are emphasized using already loaded visible graph data; unrelated visible edges are de-emphasized.
 
-### Concept Connections Progressive Disclosure
+### Dashboard Progressive Disclosure
 
-Learning Memory does not show the full map first. The default mode is `Review Map`, a small learning map focused on what the learner should review now. It ranks primarily by `review_priority`, then uses Core/Bridge metadata as tie-breakers. `review_priority` is a recommendation, not a grade.
+Learning Memory does not show the full map first. The default mode is now the Learning Dashboard: Today's Review, Learning Progress, and Continue Learning. `Start Review` is the primary action. Review Map sits below the dashboard as a small decision aid with course/unit/review-needed filters.
 
-Primary modes are Review Map, Core Map, Connection Map, Learning Memory Map, and New Concepts. Full Knowledge Map is an advanced action and remains capped so the page stays readable. The purpose is learning navigation, not complete visualization. Viewing or switching graph modes does not call GPT/OpenAI.
+Knowledge Exploration lives in `web/concept-graph.html`. It may expose graph details such as node connections, edge relationships, missing links, and graph filters. The daily dashboard should not foreground node count, edge count, central concept, learning state internals, review priority explanations, or unexplained concept lists. Viewing or switching graph modes does not call GPT/OpenAI.
 
 ## PDF Preview Access
 

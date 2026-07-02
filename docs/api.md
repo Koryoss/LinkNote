@@ -76,6 +76,23 @@ These endpoints use `Authorization` token -> `current_uid()` -> `data_user_id` f
 | `DELETE` | `/learning-memory/{memory_id}` | Delete one Learning Memory explanation for the authenticated user, including linked saved AI feedback records. |
 | `GET` | `/learning-memory/summary` | Return rule-based review summary fields for Learning Memory; no GPT call. |
 
+## Learning Session And Review Endpoints
+
+These endpoints use `Authorization` token -> `current_uid()` -> `data_user_id`.
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| `POST` | `/learning-session/start` | Start a concept-by-concept study session from the current concept overview ranking. The backend orders items by `review_priority`, then compatibility `weak_score`, then label. |
+| `POST` | `/learning-session/{session_id}/advance` | Mark one session item as `explained` or `skipped`. `explained` currently creates a lightweight recall trace for that concept and advances the cursor. |
+| `GET` | `/learning-session/current` | Return the latest unfinished session for the authenticated user, or `{"session": null}`. |
+| `GET` | `/learning-session/{session_id}` | Return one session after ownership validation. |
+| `POST` | `/review/grade` | Apply the local SM-2 review schedule update for `concept_id` and `quality` 0-5. |
+| `GET` | `/review/due` | Return due concepts ordered by `due_at`, with `review_priority` fallback when no concept is currently due. |
+
+Review schedules are stored in `data/review_schedule.json` by key `{data_user_id}::{concept_id}`. Learning sessions are stored in `data/learning_sessions.json`.
+
+The current SM-2 implementation starts with `ease = 2.5`, gives interval 1 day for first successful review, 6 days for the second successful review, then multiplies the previous interval by ease. Quality below 3 resets repetitions and schedules another review in 1 day. `review_priority` remains a recommendation, not a grade.
+
 
 Concept responses may include these recall metadata fields per node/concept:
 

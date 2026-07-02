@@ -2,7 +2,7 @@
 
 LinkNote is a lightweight local-first learning system for PDF-based study workflows.
 
-Current learning flow: PDF -> Explain -> AI Feedback -> Learning Memory -> Concept Connections -> Review. Learning Memory is the central learning hub; the Full Knowledge Map remains available as an advanced exploration view.
+Current learning flow: PDF -> Explain -> AI Feedback -> Learning Dashboard -> Start Review -> Review Map -> Knowledge Exploration. Learning Dashboard is the default study entry; the Full Knowledge Map remains available as an advanced exploration view.
 
 The current project is focused on stabilizing a single-user/local evaluation flow before building a full multi-user service. It supports the core knowledge infrastructure pieces: PDF upload, chunking, ChromaDB indexing, retrieval-augmented generation, concept extraction, concept connection data, Learning Memory hub flows, and gallery-style study UI experiments.
 
@@ -46,7 +46,7 @@ Current frontend entry points:
 - `web/gallery.html` is the main UI served at `/`.
 - `web/mypage.html` is the read-only My Page.
 - `web/clinical-reflection.html` is the nursing-only Clinical Reflection page.
-- `web/learning-memory.html` is the primary Learning Memory hub for review reuse, Concept Connections, and AI summaries.
+- `web/learning-memory.html` is the primary Learning Dashboard for Today's Review, Learning Progress, Continue Learning, Review Map, Learning Memory, and AI summaries.
 - `web/concept-graph.html` is the read-only Full Knowledge Map advanced view.
 - `web/app.js` is a legacy experimental frontend and should not be used for authenticated production flow.
 - Protected APIs derive data ownership from `Authorization` token -> `data_user_id`, not from frontend-provided `user_id`.
@@ -173,9 +173,9 @@ Concept connection metadata now includes:
 - `weak_score` as backward-compatible internal metadata only
 - `missing_links`
 
-Concept Connections now live inside Learning Memory as a compact Review Map. The full map remains available through `web/concept-graph.html` as an advanced Full Knowledge Map. Both views read existing graph metadata only and do not call GPT/OpenAI or rebuild graph data.
+Learning Memory now opens as a Learning Dashboard. The first screen answers what to study now: Today's Review, Learning Progress, and Continue Learning. Graph details are secondary. The Review Map sits below the dashboard as a decision aid, and the full graph remains available through `web/concept-graph.html` as Knowledge Exploration. Both views read existing graph metadata only and do not call GPT/OpenAI or rebuild graph data.
 
-Clicking a Concept Connections node in Learning Memory opens a learning action panel: Concept, My explanation, AI feedback, Learning Memory, Fast Search, and Explain Again. The quick search action uses `POST /ask/search` and does not generate a GPT answer.
+Clicking a Review Map node in Learning Memory opens a learning action panel: Concept, why now, My explanation, AI feedback, Learning Memory, Fast Search, and Explain Again. The quick search action uses `POST /ask/search` and does not generate a GPT answer.
 
 ### Learning State and Review Priority
 
@@ -188,13 +188,13 @@ LinkNote is a learning system, not a grading system. Concept Graph now separates
   - `MASTERED`: recently explained with few or no missing links.
 - `review_priority`: a 0-100 heuristic recommendation for what to review now. It is not a score, grade, or correctness judgment.
 
-The Concept Graph, Learning Memory Review Map, and desktop Gallery use Learning State, Review Priority, Recall, and Missing Links from existing local metadata. They do not call GPT, reindex ChromaDB, change ownership/auth, or rebuild concept extraction.
+The Concept Graph, Learning Memory Review Map, and desktop Gallery use Learning State, Review Priority, Recall, and Missing Links from existing local metadata. These fields stay implementation metadata and should not dominate the default dashboard. They do not call GPT, reindex ChromaDB, change ownership/auth, or rebuild concept extraction.
 
 ### Phase 4: Learning Memory
 
-Learning Memory is the primary learning hub. It turns saved `설명해보기` recall traces and feedback into reusable review material for lectures, weekly review, concept connections, and exam preparation.
+Learning Memory is the primary learning hub, but the learner-facing default is now the Learning Dashboard. It turns saved `설명해보기` recall traces and feedback into reusable review material for lectures, weekly review, Review Map decisions, and exam preparation.
 
-The page at `web/learning-memory.html` loads without GPT/OpenAI calls. It now organizes the flow as Upload -> Explain -> AI Feedback -> Learning Memory -> Concept Connections -> Review. Current summaries are rule-based from local recall data: recent memories, frequent missing links, learning states, compact Review Map, and suggested review order. Optional AI Summary generation is available only when the learner explicitly clicks an AI Summary button; generated summaries are saved and can be viewed later without another GPT call.
+The page at `web/learning-memory.html` loads without GPT/OpenAI calls. It now organizes the flow as Dashboard -> Start Review -> Review Map -> Learning Memory -> Knowledge Exploration. The dashboard intentionally hides graph statistics and internal ranking explanations. Optional AI Summary generation is available only when the learner explicitly clicks an AI Summary button; generated summaries are saved and can be viewed later without another GPT call.
 
 See [Recall and Learning Memory](docs/recall-learning-memory.md).
 
@@ -219,6 +219,7 @@ See [Recall and Learning Memory](docs/recall-learning-memory.md).
 ## Maintainer Docs
 
 - [API notes](docs/api.md)
+- [Development guide](docs/development-guide.md)
 - [Deployment notes](docs/deployment.md)
 - [Recall and Learning Memory](docs/recall-learning-memory.md)
 - [Repository audit](docs/repository-audit.md)
