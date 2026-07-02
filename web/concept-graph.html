@@ -248,7 +248,7 @@
       .filter(edge => {
         const key = [edge.source, edge.target].sort().join('::');
         if(seen.has(key)) return false;
-        if((counts[edge.source] || 0) >= limitPerNode || (counts[edge.target] || 0) >= limitPerNode) return false;
+        if((counts[edge.source] || 0) >= maxPerNode || (counts[edge.target] || 0) >= maxPerNode) return false;
         seen.add(key);
         counts[edge.source] = (counts[edge.source] || 0) + 1;
         counts[edge.target] = (counts[edge.target] || 0) + 1;
