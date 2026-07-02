@@ -2983,6 +2983,31 @@ async def learning_memory_ai_summaries(
     return LearningMemoryAiSummariesResponse(items=items[:safe_limit])
 
 
+@app.delete("/learning-memory/ai-summaries/{summary_id}")
+async def delete_learning_memory_ai_summary(summary_id: str, data_user_id: str = Depends(current_uid)) -> Dict[str, Any]:
+    target_id = str(summary_id or "").strip()
+    if not target_id:
+        raise HTTPException(status_code=400, detail="AI Summary id is required.")
+
+    summaries = _load_learning_memory_summaries()
+    kept = []
+    deleted = False
+    for item in summaries:
+        if not isinstance(item, dict):
+            kept.append(item)
+            continue
+        if str(item.get("id") or "").strip() == target_id and item.get("user_id") == data_user_id:
+            deleted = True
+            continue
+        kept.append(item)
+
+    if not deleted:
+        raise HTTPException(status_code=404, detail="AI Summary를 찾을 수 없습니다.")
+
+    _save_learning_memory_summaries(kept)
+    return {"ok": True, "deleted": True}
+
+
 @app.post("/clinical-reflection", response_model=ClinicalReflectionResponse)
 async def clinical_reflection(
     payload: ClinicalReflectionRequest,

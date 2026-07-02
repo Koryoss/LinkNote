@@ -408,7 +408,10 @@
 
   function aiSummaryCard(item){
     return `<div class="ai-result">
-      <h3>${esc(item.title || 'AI Summary')}</h3>
+      <div class="actions" style="justify-content:space-between; align-items:center; margin-bottom:8px">
+        <h3 style="margin-bottom:0">${esc(item.title || 'AI Summary')}</h3>
+        <button onclick="deleteAiSummary('${esc(item.id || '')}')">삭제</button>
+      </div>
       <small>${esc(item.summary_type || '')} · ${esc(dateText(item.created_at))}</small>
       <p style="margin-top:8px">${esc(item.summary || '')}</p>
       <p class="sub">Review Focus</p>${listItems(item.review_focus || [])}
@@ -553,6 +556,21 @@
       await loadMemories();
     } catch(e) {
       if(status) status.textContent = 'AI 피드백을 생성하지 못했습니다: ' + e.message;
+    }
+  }
+  async function deleteAiSummary(id){
+    if(!id) return;
+    if(!confirm('이 AI Summary를 삭제할까요?')) return;
+    try {
+      const r = await fetch(API + '/learning-memory/ai-summaries/' + encodeURIComponent(id), {
+        method:'DELETE',
+        headers: headers(),
+      });
+      const d = await r.json().catch(()=>({}));
+      if(!r.ok) throw new Error(d.detail || r.statusText);
+      await loadMemories();
+    } catch(e) {
+      alert('AI Summary 삭제에 실패했습니다: ' + (e.message || e));
     }
   }
   async function init(){
