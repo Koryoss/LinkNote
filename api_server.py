@@ -7,7 +7,7 @@ import re
 import hashlib
 import uuid
 from collections import Counter
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Any, Dict, List, Optional
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile, Depends, Header
@@ -41,6 +41,8 @@ UPLOAD_DIR = os.path.join(DATA_DIR, "uploads")
 TIMETABLE_PATH = os.path.join(DATA_DIR, "timetable.json")
 CONCEPTS_PATH = os.path.join(DATA_DIR, "concepts.json")
 RECALL_TRACES_PATH = os.path.join(DATA_DIR, "recall_traces.json")
+LEARNING_SESSIONS_PATH = os.path.join(DATA_DIR, "learning_sessions.json")
+REVIEW_SCHEDULE_PATH = os.path.join(DATA_DIR, "review_schedule.json")
 LEARNING_MEMORY_SUMMARIES_PATH = os.path.join(DATA_DIR, "learning_memory_summaries.json")
 CLINICAL_REFLECTIONS_PATH = os.path.join(DATA_DIR, "clinical_reflections.json")
 SEARCH_CACHE_PATH = os.path.join(DATA_DIR, "search_cache.json")
@@ -230,6 +232,30 @@ def _save_recall_traces(items: List[Dict[str, Any]]) -> None:
         json.dump(items, f, ensure_ascii=False, indent=2)
 
 
+def _load_learning_sessions() -> List[Dict[str, Any]]:
+    data = _load_json_file(LEARNING_SESSIONS_PATH)
+    return data if isinstance(data, list) else []
+
+
+def _save_learning_sessions(items: List[Dict[str, Any]]) -> None:
+    os.makedirs(os.path.dirname(LEARNING_SESSIONS_PATH), exist_ok=True)
+    with open(LEARNING_SESSIONS_PATH, "w", encoding="utf-8") as f:
+        json.dump(items, f, ensure_ascii=False, indent=2)
+
+
+def _load_review_schedule() -> Dict[str, Dict[str, Any]]:
+    data = _load_json_file(REVIEW_SCHEDULE_PATH)
+    if isinstance(data, dict):
+        return {str(key): value for key, value in data.items() if isinstance(value, dict)}
+    return {}
+
+
+def _save_review_schedule(items: Dict[str, Dict[str, Any]]) -> None:
+    os.makedirs(os.path.dirname(REVIEW_SCHEDULE_PATH), exist_ok=True)
+    with open(REVIEW_SCHEDULE_PATH, "w", encoding="utf-8") as f:
+        json.dump(items, f, ensure_ascii=False, indent=2)
+
+
 def _load_learning_memory_summaries() -> List[Dict[str, Any]]:
     data = _load_json_file(LEARNING_MEMORY_SUMMARIES_PATH)
     return data if isinstance(data, list) else []
@@ -384,6 +410,16 @@ class RecallFeedbackResponse(BaseModel):
     source_hint: str
 
 
+class LearningSessionStartRequest(BaseModel):
+    scope: Optional[Dict[str, Optional[str]]] = None
+    size: int = 7
+
+
+class LearningSessionAdvanceRequest(BaseModel):
+    concept_id: str
+    result: str
+
+
 class LearningMemoryAiSummaryRequest(BaseModel):
     summary_type: Optional[str] = "weekly"
     course: Optional[str] = None
@@ -467,6 +503,72 @@ def _parse_iso_datetime(value: Any) -> Optional[datetime]:
     if parsed.tzinfo is None:
         parsed = parsed.replace(tzinfo=timezone.utc)
     return parsed
+
+
+def _schedule_key(user_id: str, concept_id: str) -> str:
+    return f"{str(user_id or '').strip()}::{str(concept_id or '').strip()}"
+
+
+def _review_schedule_entry(user_id: str, concept_id: str) -> Optional[Dict[str, Any]]:
+    schedules = _load_review_schedule()
+    entry = schedules.get(_schedule_key(user_id, concept_id))
+    return entry if isinstance(entry, dict) else None
+
+
+def _build_review_schedule_entry(user_id: str, concept_id: str) -> Dict[str, Any]:
+    now = datetime.now(timezone.utc)
+    return {
+        "concept_id": str(concept_id or ""),
+        "user_id": str(user_id or ""),
+        "ease": 2.5,
+        "interval_days": 0,
+        "repetitions": 0,
+        "last_reviewed_at": None,
+        "due_at": now.isoformat(),
+    }
+
+
+def _apply_sm2_schedule(entry: Dict[str, Any], quality: int) -> Dict[str, Any]:
+    quality_value = max(0, min(5, int(quality)))
+    now = datetime.now(timezone.utc)
+    prev_interval = max(0, int((entry or {}).get("interval_days") or 0))
+    ease = float((entry or {}).get("ease") or 2.5)
+    repetitions = int((entry or {}).get("repetitions") or 0)
+
+    if quality_value < 3:
+        repetitions = 0
+        interval_days = 1
+    else:
+        repetitions += 1
+        if repetitions == 1:
+            interval_days = 1
+        elif repetitions == 2:
+            interval_days = 6
+        else:
+            interval_days = max(1, int(round(prev_interval * ease)))
+
+    ease = max(1.3, ease + (0.1 - (5 - quality_value) * (0.08 + (5 - quality_value) * 0.02)))
+    due_at = (now + timedelta(days=interval_days)).isoformat()
+    return {
+        **entry,
+        "ease": round(ease, 2),
+        "interval_days": int(interval_days),
+        "repetitions": int(repetitions),
+        "last_reviewed_at": now.isoformat(),
+        "due_at": due_at,
+    }
+
+
+def _grade_review_for_concept(user_id: str, concept_id: str, quality: int) -> Dict[str, Any]:
+    key = _schedule_key(user_id, concept_id)
+    schedules = _load_review_schedule()
+    entry = schedules.get(key) if isinstance(schedules, dict) else None
+    if not isinstance(entry, dict):
+        entry = _build_review_schedule_entry(user_id, concept_id)
+    updated = _apply_sm2_schedule(entry, quality)
+    schedules[key] = updated
+    _save_review_schedule(schedules)
+    return updated
 
 
 def _trace_matches(item: Dict[str, Any], user_id: str, semester: str, course: str, unit: str, concept: str) -> bool:
@@ -1315,9 +1417,9 @@ def _review_reason_for_state(
 
 def _ranking_info() -> Dict[str, Any]:
     return {
-        "algorithm_version": "concept_graph_learning_state_v2",
+        "algorithm_version": "concept_graph_learning_state_v3_sm2",
         "description": "Learning State explains the learner status; Review Priority recommends what to review now. Scores are heuristics, not grades.",
-        "score_components": ["learning_state", "review_priority", "centrality_score", "bridge_score", "memory_score"],
+        "score_components": ["learning_state", "review_priority", "centrality_score", "bridge_score", "memory_score", "due_at"],
     }
 
 
@@ -1339,6 +1441,141 @@ def _empty_graph_overview() -> Dict[str, Any]:
         },
         "ranking_info": _ranking_info(),
     }
+
+
+def _build_concept_overview_nodes(user_id: str, course_filter: str = "", unit_filter: str = "") -> List[Dict[str, Any]]:
+    if not os.path.exists(CONCEPT_INDEX_PATH) or not os.path.exists(CONCEPT_LINKS_PATH):
+        return []
+
+    index_data = _safe_list_json(CONCEPT_INDEX_PATH)
+    course_filter = (course_filter or "").strip()
+    unit_filter = (unit_filter or "").strip()
+    base_nodes: List[Dict[str, Any]] = []
+
+    for item in index_data:
+        if not isinstance(item, dict) or item.get("user_id") != user_id:
+            continue
+        if course_filter and str(item.get("course") or "") != course_filter:
+            continue
+        if unit_filter and str(item.get("unit") or "") != unit_filter:
+            continue
+        semester = str(item.get("semester") or "")
+        node_course = str(item.get("course") or "")
+        node_unit = str(item.get("unit") or "")
+        label = str(item.get("name") or item.get("keyword") or "")
+        meta = _recall_metadata_for_scope(user_id, semester, node_course, node_unit).get(_concept_key(label), {})
+        recall_count = int(meta.get("recall_count") or 0)
+        missing_links_count = int(meta.get("missing_links_count") or 0)
+        last_recalled_at = meta.get("last_recalled_at")
+        weak_score = _score_recall_weakness(recall_count, last_recalled_at, missing_links_count)
+        learning_state = _learning_state_from_recall(recall_count, last_recalled_at, missing_links_count)
+        schedule_entry = _review_schedule_entry(user_id, str(item.get("id") or ""))
+        due_at = str(schedule_entry.get("due_at") or "") if isinstance(schedule_entry, dict) else ""
+        is_due = bool(schedule_entry and due_at and _parse_iso_datetime(due_at) and _parse_iso_datetime(due_at) <= datetime.now(timezone.utc))
+        base_nodes.append({
+            "id": str(item.get("id") or ""),
+            "label": label,
+            "name": label,
+            "course": node_course,
+            "unit": node_unit,
+            "semester": semester,
+            "weight": item.get("weight", 1),
+            "recall_count": recall_count,
+            "missing_links_count": missing_links_count,
+            "weak_score": weak_score,
+            "learning_state": learning_state,
+            "review_priority": _review_priority_for_state(learning_state, recall_count, last_recalled_at, missing_links_count),
+            "review_reason": _review_reason_for_state(learning_state, recall_count, last_recalled_at, missing_links_count),
+            "last_recalled_at": last_recalled_at,
+            "is_due": is_due,
+            "due_at": due_at or None,
+        })
+    return base_nodes
+
+
+def _create_learning_session(user_id: str, scope: Optional[Dict[str, Optional[str]]], size: int = 7) -> Dict[str, Any]:
+    scope_info = {
+        "course": (scope or {}).get("course") if isinstance(scope, dict) else None,
+        "unit": (scope or {}).get("unit") if isinstance(scope, dict) else None,
+    }
+    course_filter = str(scope_info.get("course") or "").strip()
+    unit_filter = str(scope_info.get("unit") or "").strip()
+    nodes = _build_concept_overview_nodes(user_id, course_filter=course_filter, unit_filter=unit_filter)
+    ranked_nodes = sorted(
+        nodes,
+        key=lambda node: (
+            -int(node.get("review_priority") or 0),
+            -int(node.get("weak_score") or 0),
+            str(node.get("label") or ""),
+        ),
+    )
+    selected_nodes = ranked_nodes[:max(1, min(50, int(size or 7)))]
+    items = []
+    for node in selected_nodes:
+        items.append({
+            "concept_id": str(node.get("id") or ""),
+            "concept": str(node.get("label") or ""),
+            "course": str(node.get("course") or ""),
+            "unit": str(node.get("unit") or ""),
+            "state_at_start": str(node.get("learning_state") or "NEW"),
+            "status": "pending",
+        })
+    now = datetime.now(timezone.utc).isoformat()
+    session = {
+        "id": f"sess_{uuid.uuid4().hex}",
+        "user_id": user_id,
+        "created_at": now,
+        "scope": {"course": course_filter or None, "unit": unit_filter or None},
+        "items": items,
+        "cursor": 0,
+        "completed_at": None,
+    }
+    sessions = _load_learning_sessions()
+    sessions.append(session)
+    _save_learning_sessions(sessions)
+    return session
+
+
+def _advance_learning_session(session: Dict[str, Any], user_id: str, concept_id: str, result: str) -> Dict[str, Any]:
+    if not isinstance(session, dict):
+        raise ValueError("세션 데이터가 올바르지 않습니다.")
+    items = session.get("items") if isinstance(session.get("items"), list) else []
+    item = next((entry for entry in items if str(entry.get("concept_id") or "") == str(concept_id or "")), None)
+    if item is None:
+        raise KeyError("concept_id")
+
+    normalized_result = str(result or "").strip().lower()
+    if normalized_result == "explained":
+        item["status"] = "explained"
+        trace = {
+            "id": uuid.uuid4().hex,
+            "user_id": user_id,
+            "semester": "",
+            "course": str(item.get("course") or ""),
+            "unit": str(item.get("unit") or ""),
+            "concept": str(item.get("concept") or ""),
+            "answer_text": f"[{session.get('id')}] learning-session explained",
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }
+        traces = _load_recall_traces()
+        traces.append(trace)
+        _save_recall_traces(traces)
+    else:
+        item["status"] = "skipped"
+
+    cursor = int(session.get("cursor") or 0)
+    next_cursor = cursor + 1
+    session["cursor"] = next_cursor
+    if next_cursor >= len(items):
+        session["completed_at"] = datetime.now(timezone.utc).isoformat()
+
+    sessions = _load_learning_sessions()
+    for existing in sessions:
+        if isinstance(existing, dict) and str(existing.get("id") or "") == str(session.get("id") or ""):
+            existing.update(session)
+            break
+    _save_learning_sessions(sessions)
+    return session
 
 
 def _missing_link_keys_for_user(user_id: str) -> Dict[tuple[str, str, str, str], set[str]]:
@@ -2296,45 +2533,8 @@ async def concept_graph_overview(
     if not os.path.exists(CONCEPT_INDEX_PATH) or not os.path.exists(CONCEPT_LINKS_PATH):
         return _empty_graph_overview()
 
-    index_data = _safe_list_json(CONCEPT_INDEX_PATH)
     links_data = _load_json_file(CONCEPT_LINKS_PATH)
-    course_filter = (course or "").strip()
-    unit_filter = (unit or "").strip()
-    base_nodes: List[Dict[str, Any]] = []
-
-    for item in index_data:
-        if not isinstance(item, dict) or item.get("user_id") != data_user_id:
-            continue
-        if course_filter and str(item.get("course") or "") != course_filter:
-            continue
-        if unit_filter and str(item.get("unit") or "") != unit_filter:
-            continue
-        semester = str(item.get("semester") or "")
-        node_course = str(item.get("course") or "")
-        node_unit = str(item.get("unit") or "")
-        label = str(item.get("name") or item.get("keyword") or "")
-        meta = _recall_metadata_for_scope(data_user_id, semester, node_course, node_unit).get(_concept_key(label), {})
-        recall_count = int(meta.get("recall_count") or 0)
-        missing_links_count = int(meta.get("missing_links_count") or 0)
-        last_recalled_at = meta.get("last_recalled_at")
-        weak_score = _score_recall_weakness(recall_count, last_recalled_at, missing_links_count)
-        learning_state = _learning_state_from_recall(recall_count, last_recalled_at, missing_links_count)
-        base_nodes.append({
-            "id": str(item.get("id") or ""),
-            "label": label,
-            "name": label,
-            "course": node_course,
-            "unit": node_unit,
-            "semester": semester,
-            "weight": item.get("weight", 1),
-            "recall_count": recall_count,
-            "missing_links_count": missing_links_count,
-            "weak_score": weak_score,
-            "learning_state": learning_state,
-            "review_priority": _review_priority_for_state(learning_state, recall_count, last_recalled_at, missing_links_count),
-            "review_reason": _review_reason_for_state(learning_state, recall_count, last_recalled_at, missing_links_count),
-            "last_recalled_at": last_recalled_at,
-        })
+    base_nodes = _build_concept_overview_nodes(data_user_id, course_filter=(course or ""), unit_filter=(unit or ""))
 
     node_ids = {node["id"] for node in base_nodes if node.get("id")}
     node_map = {node["id"]: node for node in base_nodes if node.get("id")}
@@ -2478,6 +2678,156 @@ async def concept_graph_overview(
         "ranking_info": _ranking_info(),
     }
 
+
+
+@app.post("/learning-session/start")
+async def start_learning_session(
+    payload: LearningSessionStartRequest,
+    data_user_id: str = Depends(current_uid),
+) -> Dict[str, Any]:
+    """Start a study session using the current review priority ranking.
+
+    Example response:
+    {
+      "id": "sess_abc123",
+      "user_id": "demo",
+      "created_at": "2026-07-02T12:00:00+00:00",
+      "scope": {"course": null, "unit": null},
+      "items": [{"concept_id": "c1", "concept": "신부전", "course": "병리생리학1", "unit": "신장", "state_at_start": "REVIEW", "status": "pending"}],
+      "cursor": 0,
+      "completed_at": null
+    }
+    """
+    size = max(1, min(50, int(payload.size or 7)))
+    return _create_learning_session(data_user_id, payload.scope, size=size)
+
+
+@app.post("/learning-session/{session_id}/advance")
+async def advance_learning_session(
+    session_id: str,
+    payload: LearningSessionAdvanceRequest,
+    data_user_id: str = Depends(current_uid),
+) -> Dict[str, Any]:
+    """Advance a session item and persist a recall trace when the learner explained the concept.
+
+    Example response:
+    {
+      "id": "sess_abc123",
+      "user_id": "demo",
+      "cursor": 1,
+      "completed_at": null,
+      "next_item": {"concept_id": "c2", "concept": "요독증", "state_at_start": "LEARNING", "status": "pending"}
+    }
+    """
+    sessions = _load_learning_sessions()
+    session = next((item for item in sessions if isinstance(item, dict) and str(item.get("id") or "") == session_id), None)
+    if session is None:
+        raise HTTPException(status_code=404, detail="세션을 찾을 수 없습니다.")
+    if str(session.get("user_id") or "") != data_user_id:
+        raise HTTPException(status_code=403, detail="이 세션에 접근할 수 없습니다.")
+    if not payload.concept_id:
+        raise HTTPException(status_code=400, detail="concept_id가 필요합니다.")
+
+    updated = _advance_learning_session(session, data_user_id, payload.concept_id, payload.result)
+    next_item = None
+    if int(updated.get("cursor") or 0) < len(updated.get("items") or []):
+        next_item = (updated.get("items") or [])[int(updated.get("cursor") or 0)]
+    return {
+        **updated,
+        "next_item": next_item,
+    }
+
+
+@app.get("/learning-session/current")
+async def current_learning_session(data_user_id: str = Depends(current_uid)) -> Dict[str, Any]:
+    """Return the latest unfinished learning session, if any.
+
+    Example response:
+    {"session": {"id": "sess_abc123", "cursor": 2, "items": []}}
+    """
+    sessions = _load_learning_sessions()
+    incomplete = [
+        item for item in sessions
+        if isinstance(item, dict) and str(item.get("user_id") or "") == data_user_id and not item.get("completed_at")
+    ]
+    if incomplete:
+        incomplete.sort(key=lambda item: str(item.get("created_at") or ""), reverse=True)
+        return {"session": incomplete[0]}
+    return {"session": None}
+
+
+@app.get("/learning-session/{session_id}")
+async def get_learning_session(session_id: str, data_user_id: str = Depends(current_uid)) -> Dict[str, Any]:
+    """Return a single learning session.
+
+    Example response:
+    {"id": "sess_abc123", "user_id": "demo", "cursor": 0, "items": []}
+    """
+    sessions = _load_learning_sessions()
+    session = next((item for item in sessions if isinstance(item, dict) and str(item.get("id") or "") == session_id), None)
+    if session is None:
+        raise HTTPException(status_code=404, detail="세션을 찾을 수 없습니다.")
+    if str(session.get("user_id") or "") != data_user_id:
+        raise HTTPException(status_code=403, detail="이 세션에 접근할 수 없습니다.")
+    return session
+
+
+@app.post("/review/grade")
+async def grade_review(
+    payload: Dict[str, Any],
+    data_user_id: str = Depends(current_uid),
+) -> Dict[str, Any]:
+    """Grade a concept review result using SM-2 and return the updated schedule entry.
+
+    Example response:
+    {"concept_id": "c1", "user_id": "demo", "ease": 2.5, "interval_days": 6, "repetitions": 2, "due_at": "2026-07-08T12:00:00+00:00"}
+    """
+    concept_id = str(payload.get("concept_id") or "").strip()
+    quality = int(payload.get("quality") or 0)
+    if not concept_id:
+        raise HTTPException(status_code=400, detail="concept_id가 필요합니다.")
+    if quality < 0 or quality > 5:
+        raise HTTPException(status_code=400, detail="quality는 0~5 사이여야 합니다.")
+    entry = _grade_review_for_concept(data_user_id, concept_id, quality)
+    return {**entry, "due_at": entry.get("due_at")}
+
+
+@app.get("/review/due")
+async def review_due(
+    limit: int = 20,
+    course: Optional[str] = None,
+    unit: Optional[str] = None,
+    data_user_id: str = Depends(current_uid),
+) -> Dict[str, Any]:
+    """Return concepts that are due for review, ordered by due_at or fallback review_priority.
+
+    Example response:
+    {"items": [{"concept_id": "c1", "concept": "신부전", "learning_state": "REVIEW", "review_reason": ["..."], "is_due": true, "due_at": "2026-07-02T12:00:00+00:00"}]}
+    """
+    nodes = _build_concept_overview_nodes(data_user_id, course_filter=(course or ""), unit_filter=(unit or ""))
+    if not nodes:
+        return {"items": []}
+
+    due_nodes = [node for node in nodes if bool(node.get("is_due"))]
+    if due_nodes:
+        ordered = sorted(due_nodes, key=lambda node: (str(node.get("due_at") or ""), -int(node.get("review_priority") or 0)))
+    else:
+        ordered = sorted(nodes, key=lambda node: (-int(node.get("review_priority") or 0), str(node.get("label") or "")))
+
+    items = []
+    for node in ordered[:max(1, min(100, int(limit or 20)))]:
+        items.append({
+            "concept_id": str(node.get("id") or ""),
+            "concept": str(node.get("label") or ""),
+            "course": str(node.get("course") or ""),
+            "unit": str(node.get("unit") or ""),
+            "learning_state": str(node.get("learning_state") or "NEW"),
+            "review_reason": list(node.get("review_reason") or []),
+            "review_priority": int(node.get("review_priority") or 0),
+            "is_due": bool(node.get("is_due")),
+            "due_at": node.get("due_at"),
+        })
+    return {"items": items}
 
 
 @app.get("/me/summary")
