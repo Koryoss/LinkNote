@@ -169,13 +169,28 @@
       </div>
     </div>`;
   }
-  function filtersHTML(){
-    return `<section class="wide"><h2>Filters</h2><div class="filters">
-      <label>Course<input id="f_course" placeholder="과목"></label>
-      <label>Unit<input id="f_unit" placeholder="단원"></label>
-      <label>Concept Search<input id="f_concept" placeholder="개념/키워드"></label>
-      <button onclick="loadMemories()">적용</button>
-    </div></section>`;
+  function memoriesHubHTML(memories, aiSummaries){
+    const items = Array.isArray(aiSummaries?.items) ? aiSummaries.items : [];
+    return `<section class="wide"><h2>Learning Memories</h2>
+      <div class="filters">
+        <label>Course<input id="f_course" placeholder="과목"></label>
+        <label>Unit<input id="f_unit" placeholder="단원"></label>
+        <label>Concept Search<input id="f_concept" placeholder="개념/키워드"></label>
+        <button onclick="loadMemories()">적용</button>
+      </div>
+      <div class="ai-buttons" style="margin-top:12px">
+        <button onclick="generateAiSummary('weekly')">이번 주 요약</button>
+        <button onclick="generateAiSummary('course')">과목 요약</button>
+        <button onclick="generateAiSummary('exam')">시험 대비 요약</button>
+        <button onclick="generateAiSummary('weak_concepts')">복습 개념 요약</button>
+      </div>
+      <p class="sub">조회는 무료 · 위 요약 버튼을 누를 때만 GPT 비용이 발생하며, 필터 범위로 생성됩니다.</p>
+      <div id="aiSummaryStatus" class="sub"></div>
+      <div class="list" style="margin-top:12px">${memories.length ? memories.map(memoryCard).join('') : '<div class="item">아직 저장된 Learning Memory가 없습니다.</div>'}</div>
+      <details class="cc" style="margin-top:14px"><summary>지난 AI Summary (${items.length})</summary>
+        <div class="list" style="margin-top:10px">${items.length ? items.map(aiSummaryCard).join('') : '<div class="item">저장된 AI Summary가 없습니다.</div>'}</div>
+      </details>
+    </section>`;
   }
   const listItems = (items) => Array.isArray(items) && items.length
     ? `<ul>${items.map(item => `<li>${esc(item)}</li>`).join('')}</ul>`
@@ -334,22 +349,6 @@
       <p class="sub" style="margin-top:8px">Suggested Questions</p>${listItems(item.suggested_questions || [])}
     </div>`;
   }
-  function aiSummaryHTML(aiSummaries){
-    const items = Array.isArray(aiSummaries?.items) ? aiSummaries.items : [];
-    return `<section class="wide">
-      <h2>AI Summary</h2>
-      <div class="notice">조회는 GPT 호출이 없습니다. 요약·피드백 <b>생성 버튼을 누를 때만</b> API 비용이 발생합니다.</div>
-      <div class="ai-buttons">
-        <button onclick="generateAiSummary('weekly')">이번 주 요약 생성</button>
-        <button onclick="generateAiSummary('course')">과목 요약 생성</button>
-        <button onclick="generateAiSummary('exam')">시험 대비 요약 생성</button>
-        <button onclick="generateAiSummary('weak_concepts')">복습 개념 요약 생성</button>
-      </div>
-      <div id="aiSummaryStatus" class="sub"></div>
-      <h3 style="margin-top:12px">Previous AI Summaries</h3>
-      <div class="list">${items.length ? items.map(aiSummaryCard).join('') : '<div class="item">저장된 AI Summary가 없습니다.</div>'}</div>
-    </section>`;
-  }
   function reviewGuideHTML(summary){
     const order = (Array.isArray(summary.exam_review_focus) && summary.exam_review_focus.length ? summary.exam_review_focus : summary.weak_concepts) || [];
     const missing = Array.isArray(summary.frequent_missing_links) ? summary.frequent_missing_links : [];
@@ -377,9 +376,7 @@
         </div>
       </section>
       ${reviewGuideHTML(summary)}
-      <section class="wide"><h2>Recent Learning Memories</h2><div class="list">${memories.length ? memories.map(memoryCard).join('') : '<div class="item">아직 저장된 Learning Memory가 없습니다.</div>'}</div></section>
-      ${filtersHTML()}
-      ${aiSummaryHTML(aiSummaries)}
+      ${memoriesHubHTML(memories, aiSummaries)}
       ${conceptConnectionsHTML(summary, currentGraphOverview)}`;
     restoreFilters();
     drawReviewMap(currentGraphOverview);
