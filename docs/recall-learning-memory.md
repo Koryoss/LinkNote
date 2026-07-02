@@ -18,6 +18,7 @@ Implemented endpoints:
 - `GET /recall-traces`: lists explanation traces for the authenticated user's current concept scope.
 - `POST /recall-feedback`: generates directional feedback and stores it with the trace.
 - `GET /learning-memory`: lists normalized Learning Memory records.
+- `DELETE /learning-memory/{memory_id}`: deletes a learner's explanation and linked saved AI feedback records for the authenticated user.
 - `GET /learning-memory/summary`: returns rule-based review summary data.
 - `POST /learning-memory/ai-summary`: generates an optional GPT-based AI Summary after an explicit button click.
 - `GET /learning-memory/ai-summaries`: lists previously generated AI Summaries without a new GPT call.

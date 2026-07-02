@@ -28,6 +28,35 @@
   .map-card small { display:block; color:#64748b; font-size:.72rem; margin-bottom:5px; }
   .map-card strong { display:block; color:#0f172a; font-size:1.05rem; }
   .map-card span { display:block; margin-top:6px; color:#475569; font-size:.78rem; line-height:1.35; }
+  .map-card.active { border-color:#2563eb; box-shadow:0 0 0 2px rgba(37,99,235,.16); }
+  .map-card { cursor:pointer; }
+  .viewbar { display:flex; gap:8px; margin-bottom:14px; }
+  .viewbar button { font-size:.9rem; padding:9px 16px; }
+  .viewbar button.active { background:#2563eb; border-color:#2563eb; color:#fff; }
+  .queue-list { display:flex; flex-direction:column; gap:10px; margin-top:14px; }
+  .queue-card { display:flex; align-items:center; gap:14px; border:1px solid #e2e8f0; border-left-width:4px; border-radius:12px; padding:12px 14px; background:#fff; cursor:pointer; transition:box-shadow .15s, transform .05s; }
+  .queue-card:hover { box-shadow:0 6px 18px rgba(15,23,42,.08); }
+  .queue-card:active { transform:scale(.997); }
+  .queue-card.state-new { border-left-color:#94a3b8; }
+  .queue-card.state-learning { border-left-color:#3b82f6; }
+  .queue-card.state-review { border-left-color:#f97316; }
+  .queue-card.state-mastered { border-left-color:#10b981; }
+  .queue-rank { flex:0 0 auto; width:30px; height:30px; border-radius:999px; color:#fff; font-weight:800; font-size:.92rem; display:flex; align-items:center; justify-content:center; }
+  .queue-body { flex:1; min-width:0; display:flex; flex-direction:column; gap:3px; }
+  .queue-title { display:flex; align-items:center; gap:8px; }
+  .queue-title strong { color:#0f172a; font-size:1rem; overflow-wrap:anywhere; }
+  .qbadge { flex:0 0 auto; border-radius:999px; padding:2px 8px; font-size:.7rem; font-weight:800; }
+  .qbadge.s-new { background:#f1f5f9; color:#475569; }
+  .qbadge.s-learning { background:#eff6ff; color:#1d4ed8; }
+  .qbadge.s-review { background:#fff7ed; color:#c2410c; }
+  .qbadge.s-mastered { background:#ecfdf5; color:#047857; }
+  .queue-meta { color:#94a3b8; font-size:.76rem; }
+  .queue-reason { color:#475569; font-size:.84rem; line-height:1.45; }
+  .queue-cta { flex:0 0 auto; color:#2563eb; font-weight:700; font-size:.82rem; text-decoration:none; white-space:nowrap; }
+  .legend { display:flex; flex-wrap:wrap; gap:6px 14px; margin:10px 0; }
+  .legend-item { display:flex; align-items:center; gap:5px; font-size:.76rem; color:#475569; }
+  .legend-item i { width:11px; height:11px; border-radius:3px; display:inline-block; }
+  @media (max-width:560px){ .queue-card{flex-wrap:wrap;} .queue-cta{margin-left:44px;} }
   .modebar { display:flex; flex-wrap:wrap; gap:8px; margin-top:14px; }
   .modebar button.active { background:#2563eb; border-color:#2563eb; color:#fff; }
   .modebar button.secondary { margin-left:auto; border-color:#cbd5e1; color:#475569; }
@@ -115,8 +144,21 @@
   let currentGraphData = null;
   let currentVisibleGraph = {nodes:[], edges:[]};
   let currentMode = 'review';
+  let currentView = 'queue';
   let selectedConcept = '';
   let selectedNodeId = '';
+  const QUEUE_SIZE = 7;
+  const STATE_KO = { NEW:'처음', LEARNING:'학습 중', REVIEW:'복습 시점', MASTERED:'익힘' };
+  const COURSE_PALETTE = ['#2563eb','#7c3aed','#0891b2','#db2777','#059669','#d97706','#4f46e5','#0d9488'];
+  const _courseColorCache = {};
+  function courseColor(course){
+    const key = String(course || '기타');
+    if(!(key in _courseColorCache)){
+      const idx = Object.keys(_courseColorCache).length % COURSE_PALETTE.length;
+      _courseColorCache[key] = COURSE_PALETTE[idx];
+    }
+    return _courseColorCache[key];
+  }
   async function getJSON(path){
     const r = await fetch(API + path, { headers: headers() });
     const d = await r.json().catch(()=>({}));
@@ -194,12 +236,53 @@
     const mode = params.get('mode') || 'review';
     currentMode = MODE_LABELS[mode] ? mode : 'review';
     selectedConcept = params.get('concept') || '';
+    // 개념/모드를 지정해 들어오면(예: Learning Memory에서 클릭) 지도 보기로 시작.
+    if(params.get('concept') || params.get('mode')) currentView = 'map';
     window._graphFilters = { course:params.get('course') || '', unit:params.get('unit') || '', weakOnly:false };
   }
   function setMode(mode, concept){
     currentMode = MODE_LABELS[mode] ? mode : 'review';
     if(concept !== undefined) selectedConcept = concept || '';
+    currentView = 'map';
     renderGraph(currentGraphData || {nodes:[], edges:[], stats:{}});
+  }
+  function setView(view){
+    currentView = view === 'map' ? 'map' : 'queue';
+    renderGraph(currentGraphData || {nodes:[], edges:[], stats:{}});
+  }
+  function openFromQueue(id){
+    currentView = 'map';
+    centerNodeById(id);
+  }
+  function buildQueue(nodes){
+    return enrichNodes(nodes, Array.isArray(currentGraphData?.edges) ? currentGraphData.edges : [])
+      .slice()
+      .sort((a,b)=>reviewPriority(b)-reviewPriority(a))
+      .slice(0, QUEUE_SIZE);
+  }
+  function queueCardHTML(node, rank){
+    const state = learningState(node);
+    const reasons = Array.isArray(node.review_reason) && node.review_reason.length ? node.review_reason
+      : (Array.isArray(node.why_shown) ? node.why_shown : []);
+    const reason = reasons[0] || node.recommended_action || '내 말로 설명해보며 확인해보세요.';
+    const concept = encodeURIComponent(nodeLabel(node));
+    const course = encodeURIComponent(node.course || '');
+    const unit = encodeURIComponent(node.unit || '');
+    const recallUrl = `/?course=${course}&unit=${unit}&concept=${concept}&action=recall`;
+    return `<div class="queue-card state-${esc(state.toLowerCase())}" onclick="openFromQueue('${esc(node.id)}')">
+      <span class="queue-rank" style="background:${esc(courseColor(node.course))}">${rank}</span>
+      <div class="queue-body">
+        <div class="queue-title"><strong>${esc(nodeLabel(node) || '개념')}</strong><span class="qbadge s-${esc(state.toLowerCase())}">${esc(STATE_KO[state] || state)}</span></div>
+        <span class="queue-meta">${esc(node.course || '-')} · ${esc(node.unit || '-')}</span>
+        <span class="queue-reason">${esc(reason)}</span>
+      </div>
+      <a class="queue-cta" href="${recallUrl}" onclick="event.stopPropagation()">설명해보기 →</a>
+    </div>`;
+  }
+  function courseLegendHTML(nodes){
+    const courses = uniqueSorted(nodes.map(n => n.course));
+    if(!courses.length) return '';
+    return `<div class="legend">${courses.map(c => `<span class="legend-item"><i style="background:${esc(courseColor(c))}"></i>${esc(c)}</span>`).join('')}</div>`;
   }
   function centerNode(node){
     if(!node) return;
@@ -287,10 +370,8 @@
     };
   }
   function modeButtonsHTML(){
-    const primary = ['review','core','connection','memory','new'].map(mode =>
-      `<button class="${currentMode===mode?'active':''}" onclick="setMode('${mode}')">${esc(MODE_LABELS[mode])}</button>`
-    ).join('');
-    return `<div class="modebar">${primary}<button class="secondary ${currentMode==='full'?'active':''}" onclick="setMode('full')">Explore Full Knowledge Map</button></div>`;
+    // 카드 4개가 모드 선택을 담당 — 여기는 카드에 없는 보기만 남긴다.
+    return `<div class="modebar"><button class="secondary ${currentMode==='full'?'active':''}" onclick="setMode('full')">Explore Full Knowledge Map</button></div>`;
   }
   function uniqueSorted(items){
     return [...new Set(items.map(item => String(item || '').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b, 'ko'));
@@ -357,29 +438,41 @@
       ? `<div class="warning">Full Knowledge Map은 복잡할 수 있습니다. 과목/단원 필터나 개념 검색을 사용하면 더 읽기 쉽습니다. 전체 ${visible.totalNodes}개 중 상위 ${visible.nodes.length}개만 표시합니다.</div>`
       : '';
     const app = document.getElementById('app');
+    const viewToggle = `<div class="viewbar">
+      <button class="${currentView==='queue'?'active':''}" onclick="setView('queue')">오늘의 학습 큐</button>
+      <button class="${currentView==='map'?'active':''}" onclick="setView('map')">지식 지도</button>
+    </div>`;
+
+    if(currentView === 'queue'){
+      const queue = buildQueue(nodes);
+      app.className = '';
+      app.innerHTML = `
+        <section class="wide">${viewToggle}
+          <h2>오늘의 학습 큐</h2>
+          <p class="sub">지금 복습하면 좋은 개념을 우선순위 순으로 보여줍니다. 카드를 누르면 지도에서 연결을 보고, ‘설명해보기’로 바로 학습할 수 있습니다.</p>
+          <div class="queue-list">${queue.length
+            ? queue.map((node, i)=>queueCardHTML(node, i+1)).join('')
+            : '<div class="empty">아직 표시할 개념이 없습니다. 자료를 업로드하고 개념 추출을 먼저 진행해 주세요.</div>'}</div>
+        </section>`;
+      return;
+    }
+
     app.className = 'grid';
     app.innerHTML = `
-      <section class="wide"><h2>Today's Learning Map</h2>
-        <p class="sub">처음에는 전체 지도를 모두 보여주지 않습니다. 지금 복습에 도움이 되는 개념만 먼저 보여줍니다.</p>
+      <section class="wide">${viewToggle}
+        <h2>지식 지도</h2>
+        <p class="sub">개념을 클릭하면 연결된 개념과 상세 정보를 보여줍니다. 색은 과목을 구분합니다.</p>
         <div class="map-cards">
-          <button class="map-card" onclick="setMode('review')"><small>오늘 복습할 개념</small><strong>${esc(summary.review.length)}</strong><span>${esc(topNames(summary.review))}</span></button>
-          <button class="map-card" onclick="setMode('core')"><small>중심 개념</small><strong>${esc(summary.core.length)}</strong><span>${esc(topNames(summary.core))}</span></button>
-          <button class="map-card" onclick="setMode('memory')"><small>최근 설명한 개념</small><strong>${esc(summary.recent.length)}</strong><span>${esc(topNames(summary.recent))}</span></button>
-          <button class="map-card" onclick="setMode('new')"><small>아직 설명 안 한 개념</small><strong>${esc(summary.fresh.length)}</strong><span>${esc(topNames(summary.fresh))}</span></button>
+          <button class="map-card ${currentMode==='review'?'active':''}" onclick="setMode('review')"><small>오늘 복습할 개념</small><strong>${esc(summary.review.length)}</strong><span>${esc(topNames(summary.review))}</span></button>
+          <button class="map-card ${currentMode==='core'?'active':''}" onclick="setMode('core')"><small>중심 개념</small><strong>${esc(summary.core.length)}</strong><span>${esc(topNames(summary.core))}</span></button>
+          <button class="map-card ${currentMode==='memory'?'active':''}" onclick="setMode('memory')"><small>최근 설명한 개념</small><strong>${esc(summary.recent.length)}</strong><span>${esc(topNames(summary.recent))}</span></button>
+          <button class="map-card ${currentMode==='new'?'active':''}" onclick="setMode('new')"><small>아직 설명 안 한 개념</small><strong>${esc(summary.fresh.length)}</strong><span>${esc(topNames(summary.fresh))}</span></button>
         </div>
-      </section>
-      <section class="wide"><h2>Summary</h2><div class="stats">
-        ${stat('total concepts', stats.node_count || 0)}
-        ${stat('total links', stats.edge_count || 0)}
-        ${stat('review concepts', stats.review_concept_count || stats.weak_concept_count || 0)}
-        ${stat('recalled concepts', stats.recalled_concept_count || 0)}
-      </div>
-      ${modeButtonsHTML()}
-      <p class="sub">${esc(MODE_LABELS[currentMode])}: ${esc(modeDescription)}</p>
-      <p class="sub">처음에는 전체 지도를 모두 보여주지 않습니다. Learning State와 Review Priority를 기준으로 복습에 도움이 되는 개념을 우선 표시합니다.</p>
-      <p class="sub">현재 node ${visible.nodes.length}개 / 전체 ${nodes.length}개, edge ${visible.edges.length}개 / 전체 ${edges.length}개를 표시합니다.</p>
-      ${fullWarning}
-      ${filtersHTML()}</section>
+        <p class="sub"><b>${esc(MODE_LABELS[currentMode])}</b> — ${esc(modeDescription)} (node ${visible.nodes.length}/${nodes.length} · edge ${visible.edges.length}/${edges.length})</p>
+        ${fullWarning}
+        ${courseLegendHTML(visible.nodes)}
+        ${modeButtonsHTML()}
+        ${filtersHTML()}</section>
       <section><h2>${esc(MODE_LABELS[currentMode])}</h2><div id="graphWrap" class="graph-wrap">${visible.nodes.length ? '<svg id="graphSvg"></svg>' : '<div class="empty">아직 표시할 Concept Connections가 없습니다. 자료를 업로드하고 개념 추출을 먼저 진행해 주세요.</div>'}</div></section>
       <section><h2>Details</h2><div id="details" class="detail">노드를 클릭하면 상세 정보가 표시됩니다.</div></section>`;
     restoreFilters();
@@ -439,7 +532,8 @@
       const cls = ['node', learningState(node).toLowerCase(), node.is_review ? 'review' : '', node.is_recalled ? 'recalled' : '', node.is_core ? 'core' : '', node.is_bridge ? 'bridge' : '', node.is_recent ? 'recent' : '', isSelected ? 'selected' : '', isConnected && !isSelected ? 'connected' : '', isDimmed ? 'dimmed' : ''].filter(Boolean).join(' ');
       const r = Math.max(18, Math.min(38, 18 + Number(node.weight || 1) * 2));
       const label = labelVisibleIds.has(node.id) ? `<text text-anchor="middle" y="4">${esc(String(node.label || '').slice(0, 14))}</text>` : '';
-      return `<g class="${cls}" data-id="${esc(node.id)}" transform="translate(${p.x},${p.y})"><title>${esc(nodeLabel(node) || node.id)}</title><circle r="${r}"></circle>${label}</g>`;
+      const stroke = courseColor(node.course);
+      return `<g class="${cls}" data-id="${esc(node.id)}" transform="translate(${p.x},${p.y})"><title>${esc(nodeLabel(node) || node.id)} · ${esc(node.course || '')}</title><circle r="${r}" style="stroke:${esc(stroke)}"></circle>${label}</g>`;
     }).join('');
     svg.innerHTML = edgeLines + nodeEls;
     svg.querySelectorAll('.node').forEach(el => {
@@ -488,17 +582,11 @@
       .filter(edge => edge.source === node.id || edge.target === node.id)
       .sort((a,b)=>Number(b.weight || b.normalized_weight || 0)-Number(a.weight || a.normalized_weight || 0))
       .slice(0, 8)
-      .map(edge => {
-        const other = byId[edge.source === node.id ? edge.target : edge.source];
-        if(!other) return '';
-        const scoreValue = edge.normalized_weight ?? edge.weight ?? edge.score ?? '';
-        const scoreText = scoreValue === '' ? '' : ` · ${esc(scoreValue)}`;
-        const reason = edge.reason || edge.edge_type || '저장된 개념 연결';
-        return `<div class="connected-item"><strong>${esc(nodeLabel(other) || other.id)}</strong><span class="search-meta">${esc(edge.edge_type || 'edge')}${scoreText}</span>${esc(reason)}</div>`;
-      })
+      .map(edge => byId[edge.source === node.id ? edge.target : edge.source])
       .filter(Boolean)
+      .map(other => `<button class="btn" onclick="centerNodeById('${esc(other.id)}')">${esc(nodeLabel(other) || other.id)}</button>`)
       .join('');
-    return `<div class="connected-list"><h3>Concept Connections</h3>${rows || '<div class="search-item">현재 표시된 연결 개념이 없습니다. 이 개념 중심으로 보기를 눌러 주변 연결을 확인해보세요.</div>'}</div>`;
+    return `<div class="connected-list"><h3>Concept Connections</h3>${rows ? `<div class="detail-actions">${rows}</div>` : '<div class="search-item">현재 표시된 연결 개념이 없습니다. 이 개념 중심으로 보기를 눌러 주변 연결을 확인해보세요.</div>'}</div>`;
   }
   function searchResultsHTML(d){
     const list = (items, empty, renderItem) => items && items.length ? items.map(renderItem).join('') : `<div class="search-item">${esc(empty)}</div>`;
@@ -538,9 +626,6 @@
   }
   function showDetails(node, notice=''){
     if(!node) return;
-    const badges = (node.badges || []).length ? `<div class="badges">${node.badges.map(b=>`<span class="badge">${esc(b)}</span>`).join('')}</div>` : '<div class="sub">분류 badge가 아직 없습니다.</div>';
-    const reviewReasons = Array.isArray(node.review_reason) && node.review_reason.length ? node.review_reason : (Array.isArray(node.why_shown) ? node.why_shown : []);
-    const why = reviewReasons.length ? `<ul>${reviewReasons.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>` : '-';
     const concept = encodeURIComponent(nodeLabel(node));
     const course = encodeURIComponent(node.course || '');
     const unit = encodeURIComponent(node.unit || '');
@@ -548,16 +633,9 @@
     const recallUrl = `/?course=${course}&unit=${unit}&concept=${concept}&action=recall`;
     document.getElementById('details').innerHTML = `<dl>
       <dt>Concept</dt><dd>${esc(node.label || '')}</dd>
-      <dt>Type</dt><dd>${badges}</dd>
       <dt>Course / Unit</dt><dd>${esc(node.course || '-')} · ${esc(node.unit || '-')}</dd>
       <dt>Learning State</dt><dd>${esc(learningState(node))}</dd>
-      <dt>Review Priority</dt><dd>${esc(node.review_priority ?? reviewPriority(node))}</dd>
-      <dt>Why?</dt><dd>${why}</dd>
-      <dt>Recall Count</dt><dd>${esc(node.recall_count || 0)}</dd>
-      <dt>Missing Links</dt><dd>${esc(node.missing_links_count || 0)}</dd>
-      <dt>Degree</dt><dd>${esc(node.degree || 0)}</dd>
-      <dt>Last Recalled</dt><dd>${esc(node.last_recalled_at || '-')}</dd>
-      <dt>Recommended Action</dt><dd>${esc(node.recommended_action || '관련 자료를 빠른 검색으로 다시 확인해보세요.')}</dd>
+      <dt>Recommended Action</dt><dd>${esc(node.recommended_action || '처음으로 내 말로 설명해보세요.')}</dd>
     </dl>
     ${notice ? `<div class="warning">${esc(notice)}</div>` : ''}
     <div class="learning-actions">

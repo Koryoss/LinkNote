@@ -2527,6 +2527,47 @@ async def learning_memory(
     return {"total": len(all_items), "items": items}
 
 
+@app.delete("/learning-memory/{memory_id}")
+async def delete_learning_memory(memory_id: str, data_user_id: str = Depends(current_uid)) -> Dict[str, Any]:
+    target_id = str(memory_id or "").strip()
+    if not target_id:
+        raise HTTPException(status_code=400, detail="Learning Memory id is required.")
+
+    traces = _load_recall_traces()
+    target = next(
+        (
+            item for item in traces
+            if isinstance(item, dict)
+            and str(item.get("id") or "").strip() == target_id
+            and item.get("user_id") == data_user_id
+        ),
+        None,
+    )
+    if target is None:
+        raise HTTPException(status_code=404, detail="Learning Memory를 찾을 수 없습니다.")
+
+    related_ids = {target_id}
+    source_trace_id = str(target.get("source_trace_id") or "").strip()
+    if source_trace_id:
+        related_ids.add(source_trace_id)
+
+    kept = []
+    deleted_count = 0
+    for item in traces:
+        if not isinstance(item, dict) or item.get("user_id") != data_user_id:
+            kept.append(item)
+            continue
+        item_id = str(item.get("id") or "").strip()
+        item_source_id = str(item.get("source_trace_id") or "").strip()
+        if item_id in related_ids or item_source_id in related_ids:
+            deleted_count += 1
+            continue
+        kept.append(item)
+
+    _save_recall_traces(kept)
+    return {"ok": True, "deleted_count": deleted_count}
+
+
 @app.get("/learning-memory/summary")
 async def learning_memory_summary(data_user_id: str = Depends(current_uid)) -> Dict[str, Any]:
     return _learning_memory_summary_for_user(data_user_id)
@@ -2797,10 +2838,22 @@ from fastapi.responses import FileResponse
 _WEB_DIR = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "web")
 
 
+class _NoCacheStaticFiles(StaticFiles):
+    """데스크탑 앱(WKWebView)이 HTML을 캐시해 수정이 반영 안 되는 문제 방지."""
+
+    async def get_response(self, path, scope):
+        response = await super().get_response(path, scope)
+        response.headers["Cache-Control"] = "no-cache, must-revalidate"
+        return response
+
+
 @app.get("/")
 async def _serve_gallery():
-    return FileResponse(_os.path.join(_WEB_DIR, "gallery.html"))
+    return FileResponse(
+        _os.path.join(_WEB_DIR, "gallery.html"),
+        headers={"Cache-Control": "no-cache, must-revalidate"},
+    )
 
 
 # 정적 파일 폴백(맨 마지막에 등록 → API 라우트보다 후순위)
-app.mount("/", StaticFiles(directory=_WEB_DIR, html=True), name="web")
+app.mount("/", _NoCacheStaticFiles(directory=_WEB_DIR, html=True), name="web")

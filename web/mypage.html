@@ -12,6 +12,7 @@
   .spacer { flex:1; }
   .btn, button { border:1px solid #d8dee9; background:#fff; color:#2563eb; border-radius:8px; padding:8px 12px; font-size:.84rem; font-weight:700; text-decoration:none; cursor:pointer; }
   .btn.primary { background:#2563eb; border-color:#2563eb; color:#fff; }
+  .btn.danger, button.danger { border-color:#fecaca; color:#b91c1c; background:#fff7f7; }
   main { width:min(1080px, calc(100vw - 32px)); margin:24px auto 42px; }
   .hero { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; margin-bottom:18px; flex-wrap:wrap; }
   h1 { font-size:1.5rem; color:#0f172a; }
@@ -44,6 +45,8 @@
   .memory-pane h4 { font-size:.86rem; color:#1e293b; margin-bottom:8px; }
   .memory-pane p { margin-top:8px; }
   .feedback-empty { border:1px dashed #cbd5e1; border-radius:10px; padding:12px; background:#fff; color:#64748b; }
+  .snapshot-inline { border-top:1px solid #eef1f6; margin-top:14px; padding-top:14px; color:#475569; font-size:.9rem; line-height:1.5; }
+  .snapshot-inline h3 { font-size:.9rem; margin-bottom:6px; }
   .chips { display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; }
   .chip { border:1px solid #bfdbfe; background:#eff6ff; color:#1d4ed8; border-radius:999px; padding:3px 8px; font-size:.74rem; font-weight:700; }
   details.dev { border:1px solid #e8ebf2; border-radius:12px; padding:12px; background:#f8fafc; }
@@ -102,6 +105,12 @@
     if(!r.ok) throw new Error(`${path} returned ${r.status} ${d.detail || r.statusText}`);
     return d;
   }
+  async function deleteJSON(path){
+    const r = await fetch(API + path, { method:'DELETE', headers: headers() });
+    const d = await r.json().catch(()=>({}));
+    if(!r.ok) throw new Error(`${path} returned ${r.status} ${d.detail || r.statusText}`);
+    return d;
+  }
   function logout(){ localStorage.removeItem('ln_token'); location.href='/'; }
   function stat(label, value){ return `<div class="stat"><small>${esc(label)}</small><strong>${esc(value)}</strong></div>`; }
   function row(k,v){ return `<div class="k">${esc(k)}</div><div class="v">${esc(v || '-')}</div>`; }
@@ -148,24 +157,22 @@
           ${feedbackSection(item, index)}
         </section>
       </div>
-      <div class="actions" style="margin-top:10px"><a class="btn" href="${graphUrl}">개념 연결 보기</a></div>
+      <div class="actions" style="margin-top:10px">
+        <a class="btn" href="${graphUrl}">개념 연결 보기</a>
+        <button class="danger" onclick="deleteMemory(${index})">내 설명 기록 삭제</button>
+      </div>
     </div>`;
   }
-  function recentActivityHTML(learning, aiSummaries){
-    const items = [];
-    const recentExplanations = Array.isArray(learning.recent_explanations) ? learning.recent_explanations : [];
-    const summaries = Array.isArray(aiSummaries?.items) ? aiSummaries.items : [];
-    if(recentExplanations[0]){
-      const x = recentExplanations[0];
-      items.push(compactItem(`Recent explanation · ${x.concept || '개념'}`, x.feedback_text || x.answer_text || '', `${x.course || ''} · ${x.unit || ''} · ${dateText(x.created_at)}`));
-    }
-    if(summaries[0]){
-      const x = summaries[0];
-      items.push(compactItem(`Recent AI summary · ${x.title || 'AI Summary'}`, x.summary || '', `${x.summary_type || ''} · ${dateText(x.created_at)}`));
-    }
-    return items.join('');
+  function snapshotHTML(learning, memorySummary){
+    const body = memorySummary.weekly_summary || '설명해보기를 사용하면 복습 메모리가 쌓입니다.';
+    const recent = learning.last_studied_at || memorySummary.last_memory_created_at;
+    return `<div class="snapshot-inline">
+      <h3>Learning Snapshot</h3>
+      <div>${esc(body)}</div>
+      <p class="sub">최근 학습 <b>${esc(dateText(recent))}</b></p>
+    </div>`;
   }
-  function render(summary, me, memory, clinical, aiSummaries, memories){
+  function render(summary, me, memory, clinical, memories){
     const account = summary.account || me.user || {};
     const library = summary.library || {};
     const learning = summary.learning || {};
@@ -174,7 +181,6 @@
     const clinicalItems = Array.isArray(clinical?.items) ? clinical.items : [];
     currentMemories = Array.isArray(memories?.items) ? memories.items : [];
     document.getElementById('userLabel').textContent = account.display_name || account.email || '';
-    const activity = recentActivityHTML(learning, aiSummaries);
     document.getElementById('app').className = 'grid';
     document.getElementById('app').innerHTML = `
       <section class="wide"><h2>Learning Memory</h2>
@@ -182,8 +188,8 @@
         <div class="actions" style="margin-top:12px">
           <a class="btn" href="/learning-memory.html">전체 Learning Memory · AI Summary 보기</a>
         </div>
+        ${snapshotHTML(learning, memorySummary)}
       </section>
-      ${activity ? `<section class="wide"><h2>Recent Activity</h2><div class="list">${activity}</div></section>` : ''}
       <section class="wide nursing-card ${isNursing ? 'on' : ''}"><h2>Nursing Practice Mode: Clinical Reflection</h2>
         <div class="stats">
           ${stat('saved reflections', clinicalItems.length)}
@@ -192,10 +198,6 @@
         </div>
         <p class="sub" style="margin-top:10px">환자 식별 정보 없이 실습 상황을 학습 자료, 개념 연결, 복습 포인트와 연결하는 교육용 회고 기능입니다.</p>
         <div class="actions" style="margin-top:12px"><a class="btn primary" href="/clinical-reflection.html">실습 회고 / Clinical Reflection</a></div>
-      </section>
-      <section class="wide"><h2>Learning Snapshot</h2>
-        <div class="weekly" style="color:#475569;font-size:.9rem;line-height:1.5">${esc(memorySummary.weekly_summary || '설명해보기를 사용하면 복습 메모리가 쌓입니다.')}</div>
-        <p class="sub" style="margin-top:8px">최근 학습 <b>${esc(dateText(learning.last_studied_at || memorySummary.last_memory_created_at))}</b></p>
       </section>
       <section class="wide">
         <details class="dev">
@@ -232,22 +234,32 @@
       if(status) status.textContent = 'AI 피드백을 생성하지 못했습니다: ' + e.message;
     }
   }
+  async function deleteMemory(index){
+    const item = currentMemories[index];
+    if(!item?.id) return;
+    if(!confirm('이 <내 설명> 기록을 삭제할까요?\n연결된 AI 피드백 기록도 함께 삭제됩니다.')) return;
+    try {
+      await deleteJSON(`/learning-memory/${encodeURIComponent(item.id)}`);
+      await init();
+    } catch(e) {
+      alert('Learning Memory를 삭제하지 못했습니다: ' + e.message);
+    }
+  }
   async function init(){
     const app = document.getElementById('app');
     if(!token()) { app.className='error'; app.textContent='로그인이 필요합니다. Gallery에서 먼저 로그인해주세요.'; return; }
     try {
       const me = await getJSON('/auth/me');
-      const [summary, memory, memories, aiSummaries] = await Promise.all([
+      const [summary, memory, memories] = await Promise.all([
         getJSON('/me/summary'),
         getJSON('/learning-memory/summary'),
         getJSON('/learning-memory?limit=5').catch(()=>({ items: [] })),
-        getJSON('/learning-memory/ai-summaries?limit=1').catch(()=>({ items: [] })),
       ]);
       let clinical = { items: [] };
       if(((me.user || {}).student_track || 'general') === 'nursing'){
         clinical = await getJSON('/clinical-reflections?limit=5').catch(()=>({ items: [] }));
       }
-      render(summary, me, memory, clinical, aiSummaries, memories);
+      render(summary, me, memory, clinical, memories);
     } catch(e) {
       app.className='error';
       app.textContent = 'My Page를 불러오지 못했습니다: ' + e.message;
