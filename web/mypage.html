@@ -74,6 +74,7 @@
       <div>
         <h1>My Page</h1>
       </div>
+      <a id="studyHeroBtn" class="btn primary" href="/study.html" style="display:none; padding:10px 18px; font-size:.9rem; align-self:center;">📚 스터디 열기</a>
     </div>
     <div id="app" class="empty">불러오는 중...</div>
   </main>
@@ -249,7 +250,10 @@
     if(!token()) { app.className='error'; app.textContent='로그인이 필요합니다. Gallery에서 먼저 로그인해주세요.'; return; }
     try {
       const me = await getJSON('/auth/me');
-      if((me.user || {}).study_enabled) document.getElementById('studyLink').style.display = 'inline-block';
+      if((me.user || {}).study_enabled){
+        document.getElementById('studyLink').style.display = 'inline-block';
+        document.getElementById('studyHeroBtn').style.display = 'inline-block';
+      }
       const [summary, memory, memories] = await Promise.all([
         getJSON('/me/summary'),
         getJSON('/learning-memory/summary'),
