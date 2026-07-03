@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LinkNote · Study</title>
+<style>
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { font-family:-apple-system,"Apple SD Gothic Neo","Malgun Gothic",sans-serif; background:#fbfcfe; color:#1f2937; }
+  .topbar { position:sticky; top:0; z-index:20; display:flex; align-items:center; gap:14px; padding:12px 24px; background:rgba(255,255,255,.94); backdrop-filter:blur(6px); border-bottom:1px solid #eef1f6; }
+  .brand { font-size:1.25rem; font-weight:800; color:#1e293b; text-decoration:none; }
+  .spacer { flex:1; }
+  .sub { color:#64748b; font-size:.9rem; }
+  button, .btn { border:1px solid #d8dee9; background:#fff; color:#2563eb; border-radius:8px; padding:8px 12px; font-size:.84rem; font-weight:700; cursor:pointer; text-decoration:none; }
+  button.primary { background:#15803d; border-color:#15803d; color:#fff; }
+  button:disabled { opacity:.45; cursor:default; }
+  main { width:min(1080px, calc(100vw - 32px)); margin:24px auto 42px; }
+  h1 { font-size:1.5rem; color:#0f172a; }
+  .hero { margin-bottom:18px; }
+  .hero .sub { margin-top:6px; line-height:1.5; }
+  section { background:#fff; border:1px solid #e8ebf2; border-radius:14px; padding:18px; box-shadow:0 8px 24px rgba(15,23,42,.06); margin-bottom:16px; }
+  h2 { font-size:.98rem; margin-bottom:6px; color:#1e293b; }
+  .desc { font-size:.82rem; color:#64748b; margin-bottom:12px; line-height:1.5; }
+  textarea, input[type=text] { width:100%; border:1px solid #d8dee9; border-radius:10px; padding:10px 12px; font-size:.9rem; font-family:inherit; resize:vertical; background:#fff; color:#1f2937; }
+  textarea:focus, input:focus { outline:none; border-color:#86efac; }
+  .row { display:flex; gap:8px; align-items:flex-end; margin-top:8px; flex-wrap:wrap; }
+  .answer { border:1px solid #eef1f6; border-radius:10px; padding:12px 14px; background:#f8fafc; font-size:.88rem; line-height:1.65; white-space:pre-wrap; margin-top:12px; }
+  .srcs { display:flex; flex-direction:column; gap:4px; margin-top:10px; }
+  .src { font-size:.76rem; color:#475569; border:1px solid #eef1f6; border-radius:8px; padding:5px 9px; background:#fff; }
+  .src b { color:#0f172a; }
+  .kv { display:grid; grid-template-columns:110px 1fr; gap:8px 12px; font-size:.86rem; margin-top:12px; }
+  .k { color:#64748b; }
+  .v { color:#1f2937; line-height:1.5; }
+  .strength { display:inline-block; border-radius:999px; padding:2px 10px; font-size:.78rem; font-weight:800; }
+  .strength.강 { background:#dcfce7; color:#15803d; }
+  .strength.중 { background:#fef9c3; color:#a16207; }
+  .strength.약 { background:#ffedd5; color:#c2410c; }
+  .strength.미확인 { background:#f1f5f9; color:#64748b; }
+  .list { display:flex; flex-direction:column; gap:10px; margin-top:12px; }
+  .item { border:1px solid #eef1f6; border-radius:10px; padding:10px 12px; background:#f8fafc; font-size:.84rem; line-height:1.5; position:relative; }
+  .item small { display:block; color:#94a3b8; margin-top:4px; }
+  .item .del { position:absolute; top:8px; right:8px; border:none; background:none; color:#94a3b8; font-size:1rem; padding:0 4px; }
+  .error, .empty { border:1px dashed #d8dee9; border-radius:12px; padding:16px; color:#64748b; background:#fff; font-size:.88rem; }
+  .error { border-color:#fecaca; color:#b91c1c; background:#fff7f7; }
+  .note { border:1px solid #f0d9b5; background:#fef9f0; color:#8d6a3a; border-radius:12px; padding:12px 14px; font-size:.78rem; line-height:1.6; }
+  .result-line { font-size:.8rem; padding:6px 10px; border-radius:8px; margin-top:6px; }
+  .result-line.ok { background:#f0fdf4; color:#15803d; border:1px solid #bbf7d0; }
+  .result-line.fail { background:#fff7f7; color:#b91c1c; border:1px solid #fecaca; }
+  .muted { color:#94a3b8; font-size:.8rem; }
+  @media (max-width:760px){ .kv{grid-template-columns:1fr;} }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <a class="brand" href="/">LinkNote</a>
+    <span class="sub">스터디 / Study</span>
+    <span id="userLabel" class="sub"></span>
+    <span class="spacer"></span>
+    <a class="btn" href="/">갤러리로</a>
+  </div>
+  <main>
+    <div class="hero">
+      <h1>스터디</h1>
+      <p class="sub">내 자료를 근거로 질문하고, 주장의 근거강도를 정리하는 본인 전용 워크스페이스입니다. CareFlow 스터디와 자료를 주고받을 수 있습니다.</p>
+    </div>
+
+    <div id="gate" class="empty">확인 중...</div>
+
+    <div id="app" style="display:none;">
+      <!-- 논문 질문 -->
+      <section>
+        <h2>논문 질문</h2>
+        <p class="desc">업로드된 자료 청크만 근거로 답하며, 출처(자료 제목·페이지·유사도)를 함께 보여줍니다.</p>
+        <textarea id="askQ" rows="2" placeholder="자료에 대해 질문하세요"></textarea>
+        <div class="row">
+          <input id="askCourse" type="text" placeholder="과목으로 범위 제한 (선택)" style="flex:1; min-width:180px;">
+          <button class="primary" id="askBtn" onclick="doAsk()">질문</button>
+        </div>
+        <div id="askOut"></div>
+      </section>
+
+      <!-- 주장 근거화 -->
+      <section>
+        <h2>주장 근거화</h2>
+        <p class="desc">주장을 입력하면 자료와 비교해 출처 요약·근거강도·활용 맥락·안전 메모 초안을 만듭니다. 확인 후 저장하세요.</p>
+        <textarea id="claimQ" rows="2" placeholder="예: 수면의 질 저하는 어지럼 악화와 관련이 있다"></textarea>
+        <div class="row">
+          <button class="primary" id="claimBtn" onclick="doClaim()">근거 초안 만들기</button>
+        </div>
+        <div id="claimOut"></div>
+        <h2 style="margin-top:20px;">저장된 주장</h2>
+        <div id="claimList" class="list"><span class="muted">불러오는 중...</span></div>
+      </section>
+
+      <!-- CareFlow 가져오기 -->
+      <section>
+        <h2>CareFlow 스터디 자료 가져오기</h2>
+        <p class="desc">CareFlow 스터디의 "LinkNote 연동 → JSON 내려받기"로 받은 파일(linknote-pages-v1)을 올리면 내 자료로 학습됩니다.</p>
+        <div class="row">
+          <input type="file" id="importFile" accept=".json,application/json">
+          <button class="primary" id="importBtn" onclick="doImport()">가져오기</button>
+        </div>
+        <div id="importOut"></div>
+      </section>
+
+      <div class="note">⚠️ 이 화면은 자료 참조·인용 학습 도구입니다. 의료 진단·처방·예후 예측이 아니며, 증상은 전문 의료진과 상담하세요.</div>
+    </div>
+  </main>
+<script>
+  const configuredApi = window.LINKNOTE_API_BASE || localStorage.getItem('ln_api_base') || '';
+  const API = configuredApi.replace(/\/+$/, '');
+  const token = () => localStorage.getItem('ln_token') || '';
+  const headers = (json) => {
+    const h = token() ? { Authorization: 'Bearer ' + token() } : {};
+    if (json) h['Content-Type'] = 'application/json';
+    return h;
+  };
+  const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+  async function api(path, opts = {}) {
+    const res = await fetch(API + path, opts);
+    const body = await res.json().catch(() => null);
+    if (!res.ok) throw new Error((body && body.detail) || 'HTTP ' + res.status);
+    return body;
+  }
+
+  function strengthClass(s) {
+    return { '강': '강', '중': '중', '약': '약' }[s] || '미확인';
+  }
+
+  function renderSources(sources) {
+    if (!sources || !sources.length) return '';
+    return '<div class="srcs">' + sources.map(s =>
+      `<div class="src"><b>${esc(s.doc_title)}</b> · p.${esc(s.page_num)}` +
+      (s.similarity != null ? ` · 유사도 ${esc(s.similarity)}%` : '') +
+      (s.excerpt ? `<br>${esc(s.excerpt)}` : '') + '</div>'
+    ).join('') + '</div>';
+  }
+
+  function courseFilter(inputId) {
+    const course = document.getElementById(inputId).value.trim();
+    return course ? { course } : null;
+  }
+
+  async function doAsk() {
+    const q = document.getElementById('askQ').value.trim();
+    const out = document.getElementById('askOut');
+    if (!q) return;
+    const btn = document.getElementById('askBtn');
+    btn.disabled = true;
+    out.innerHTML = '<div class="answer">자료 검색 중…</div>';
+    try {
+      const data = await api('/study/ask', {
+        method: 'POST', headers: headers(true),
+        body: JSON.stringify({ question: q, search_filter: courseFilter('askCourse') }),
+      });
+      out.innerHTML = `<div class="answer">${esc(data.answer)}</div>` +
+        `<div class="muted" style="margin-top:6px;">검색 범위: ${esc(data.scope_label)}</div>` +
+        renderSources(data.sources);
+    } catch (e) {
+      out.innerHTML = `<div class="error">${esc(e.message)}</div>`;
+    }
+    btn.disabled = false;
+  }
+
+  let lastDraft = null;
+  async function doClaim() {
+    const claim = document.getElementById('claimQ').value.trim();
+    const out = document.getElementById('claimOut');
+    if (!claim) return;
+    const btn = document.getElementById('claimBtn');
+    btn.disabled = true;
+    out.innerHTML = '<div class="answer">근거 비교 중…</div>';
+    try {
+      const data = await api('/study/claim', {
+        method: 'POST', headers: headers(true),
+        body: JSON.stringify({ claim }),
+      });
+      lastDraft = { claim: data.claim, ...data.draft };
+      const d = data.draft;
+      out.innerHTML =
+        `<div class="answer"><div class="kv">` +
+        `<span class="k">출처 요약</span><span class="v">${esc(d.source_summary)}</span>` +
+        `<span class="k">근거강도</span><span class="v"><span class="strength ${strengthClass(d.strength)}">${esc(d.strength)}</span></span>` +
+        `<span class="k">활용 맥락</span><span class="v">${esc(d.application_context) || '—'}</span>` +
+        `<span class="k">안전 메모</span><span class="v">${esc(d.safety_note) || '—'}</span>` +
+        `</div><div class="row"><button class="primary" onclick="saveClaim()">이 초안 저장</button></div></div>` +
+        renderSources(data.sources);
+    } catch (e) {
+      out.innerHTML = `<div class="error">${esc(e.message)}</div>`;
+    }
+    btn.disabled = false;
+  }
+
+  async function saveClaim() {
+    if (!lastDraft) return;
+    try {
+      await api('/study/claims', { method: 'POST', headers: headers(true), body: JSON.stringify(lastDraft) });
+      lastDraft = null;
+      document.getElementById('claimOut').innerHTML = '<div class="result-line ok">저장했습니다.</div>';
+      loadClaims();
+    } catch (e) {
+      document.getElementById('claimOut').insertAdjacentHTML('beforeend', `<div class="error">${esc(e.message)}</div>`);
+    }
+  }
+
+  async function loadClaims() {
+    const list = document.getElementById('claimList');
+    try {
+      const data = await api('/study/claims', { headers: headers() });
+      if (!data.claims.length) { list.innerHTML = '<span class="muted">저장된 주장이 아직 없습니다.</span>'; return; }
+      list.innerHTML = data.claims.map(c =>
+        `<div class="item"><b>${esc(c.claim)}</b>` +
+        `<button class="del" title="삭제" onclick="delClaim('${esc(c.id)}')">×</button>` +
+        `<small><span class="strength ${strengthClass(c.strength)}">${esc(c.strength)}</span> · ${esc(c.source_summary)}</small>` +
+        (c.safety_note ? `<small>${esc(c.safety_note)}</small>` : '') +
+        `</div>`
+      ).join('');
+    } catch (e) {
+      list.innerHTML = `<div class="error">${esc(e.message)}</div>`;
+    }
+  }
+
+  async function delClaim(id) {
+    if (!confirm('저장된 주장을 삭제할까요?')) return;
+    try {
+      await api('/study/claims/' + id, { method: 'DELETE', headers: headers() });
+      loadClaims();
+    } catch (e) { alert(e.message); }
+  }
+
+  async function doImport() {
+    const fileInput = document.getElementById('importFile');
+    const out = document.getElementById('importOut');
+    const file = fileInput.files && fileInput.files[0];
+    if (!file) { out.innerHTML = '<div class="error">JSON 파일을 선택하세요.</div>'; return; }
+    const btn = document.getElementById('importBtn');
+    btn.disabled = true;
+    out.innerHTML = '<div class="muted">가져오는 중… (임베딩 처리로 시간이 걸릴 수 있습니다)</div>';
+    try {
+      const payload = JSON.parse(await file.text());
+      const data = await api('/study/import', { method: 'POST', headers: headers(true), body: JSON.stringify(payload) });
+      out.innerHTML = (data.results || []).map(r =>
+        `<div class="result-line ${r.ok ? 'ok' : 'fail'}">${esc(r.filename)} — ${r.ok ? `완료 (${r.pages}페이지)` : esc(r.message)}</div>`
+      ).join('');
+      fileInput.value = '';
+    } catch (e) {
+      out.innerHTML = `<div class="error">${esc(e.message)}</div>`;
+    }
+    btn.disabled = false;
+  }
+
+  async function init() {
+    const gate = document.getElementById('gate');
+    if (!token()) { gate.className = 'error'; gate.textContent = '로그인이 필요합니다. 갤러리에서 먼저 로그인해주세요.'; return; }
+    try {
+      const me = await api('/auth/me', { headers: headers() });
+      if (!me.user.study_enabled) {
+        gate.className = 'error';
+        gate.textContent = '이 계정에서는 스터디 기능을 사용할 수 없습니다.';
+        return;
+      }
+      document.getElementById('userLabel').textContent = me.user.display_name || me.user.email;
+      gate.style.display = 'none';
+      document.getElementById('app').style.display = 'block';
+      loadClaims();
+    } catch (e) {
+      gate.className = 'error';
+      gate.textContent = e.message;
+    }
+  }
+  init();
+</script>
+</body>
+</html>
