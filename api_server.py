@@ -5,6 +5,7 @@ import logging
 import os
 import re
 import hashlib
+import time
 import uuid
 from collections import Counter
 from datetime import datetime, timezone, timedelta
@@ -34,6 +35,7 @@ from rag import (
     get_filter_label,
     get_library_overview,
     get_units,
+    search_relevant_chunks,
 )
 
 DATA_DIR = os.getenv("DATA_DIR", "./data")
@@ -45,6 +47,7 @@ LEARNING_SESSIONS_PATH = os.path.join(DATA_DIR, "learning_sessions.json")
 REVIEW_SCHEDULE_PATH = os.path.join(DATA_DIR, "review_schedule.json")
 LEARNING_MEMORY_SUMMARIES_PATH = os.path.join(DATA_DIR, "learning_memory_summaries.json")
 CLINICAL_REFLECTIONS_PATH = os.path.join(DATA_DIR, "clinical_reflections.json")
+STUDY_CLAIMS_PATH = os.path.join(DATA_DIR, "study_claims.json")
 SEARCH_CACHE_PATH = os.path.join(DATA_DIR, "search_cache.json")
 CONCEPT_INDEX_PATH = os.path.join(DATA_DIR, "concept_index.json")
 CONCEPT_LINKS_PATH = os.path.join(DATA_DIR, "concept_links.json")
@@ -3088,6 +3091,249 @@ async def clinical_reflections(
 # ============== 계정 / 인증 (Stage C-1) ==============
 from fastapi import Header
 import auth as _auth
+
+
+# ============== 스터디 (허용 계정 전용) ==============
+# CareFlow 스터디 워크스페이스와 호환되는 기능: 자료 가져오기(linknote-pages-v1),
+# 논문 질문(출처 인용), 주장 근거화(근거강도 초안). STUDY_EMAILS 계정만 사용 가능.
+
+STUDY_DISCLAIMER = "⚠️ 이 내용은 자료 근거 인용이며 의료 자문이 아닙니다."
+
+STUDY_ASK_PROMPT = """당신은 업로드된 논문·강의 자료를 분석하는 학술 리서치 보조 도구입니다.
+
+규칙:
+1. 오직 제공된 자료 청크만을 근거로 답변합니다. 없는 내용을 꾸며내지 않습니다.
+2. 모든 주장에는 출처를 표기합니다: [자료 제목, p.페이지]
+3. 진단·예후·처방·중증도 판정을 절대 하지 않습니다.
+4. 상관관계와 인과관계를 명확히 구분합니다 ("관련이 있다" vs "원인이다").
+5. 자료에 없는 정보는 "제공된 자료에서 확인할 수 없습니다"라고 답합니다.
+
+한국어로 답변하고, 마지막 줄에 반드시 이 문구를 붙입니다:
+\"""" + STUDY_DISCLAIMER + "\""
+
+STUDY_CLAIM_PROMPT = """당신은 연구 근거를 분석하는 학술 도구입니다.
+제공된 자료 청크와 주장을 비교해 아래 JSON만 출력하세요 (다른 텍스트 없이).
+
+{"source_summary": "저자(연도) 자료명 p.페이지 — 없으면 '출처 미확인'",
+ "strength": "강|중|약|출처 미확인",
+ "application_context": "이 주장이 어떤 학습·기능 맥락에서 쓰일 수 있는지 (한 문장)",
+ "safety_note": "상관·인과 구분, 진단 표현 금지 해당 여부 (한 문장)"}
+
+근거강도 기준:
+- 강: 국가통계·메타분석·체계적 문헌고찰·확립된 원칙
+- 중: 코호트·단면·척도 연구 (n≥50)
+- 약: 소표본(n<50)·설계 정의·사례 보고·전문가 의견
+- 출처 미확인: 관련 자료 없거나 유사도 낮음
+
+규칙:
+- 진단·예후·처방 관련 주장은 safety_note에 경고 필수
+- 인과관계 주장이면 safety_note에 "상관관계로만 표현 필요" 추가
+"""
+
+STUDY_STRENGTHS = ("강", "중", "약", "출처 미확인")
+
+
+def current_study_user(authorization: Optional[str] = Header(None)) -> Dict[str, Any]:
+    """스터디 기능은 STUDY_EMAILS(기본: 관리자 계정)에서만 열린다."""
+    user = current_user(authorization)
+    if not _auth.is_study_enabled(user):
+        raise HTTPException(status_code=403, detail="이 계정에서는 스터디 기능을 사용할 수 없습니다.")
+    return user
+
+
+def _study_uid(user: Dict[str, Any]) -> str:
+    return user.get("data_user_id") or user["email"]
+
+
+def _study_source(chunk: Dict[str, Any]) -> Dict[str, Any]:
+    distance = chunk.get("distance")
+    similarity = max(0, round((1 - distance) * 100)) if isinstance(distance, (int, float)) else None
+    text = chunk.get("text") or ""
+    return {
+        "doc_title": chunk.get("title") or chunk.get("filename") or "",
+        "filename": chunk.get("filename") or "",
+        "course": chunk.get("course") or "",
+        "page_num": chunk.get("page") or 0,
+        "similarity": similarity,
+        "excerpt": text[:130] + ("…" if len(text) > 130 else ""),
+    }
+
+
+def _study_context(chunks: List[Dict[str, Any]]) -> str:
+    return "\n\n---\n\n".join(
+        f"[출처 {i + 1}] 자료: \"{c.get('title') or c.get('filename')}\" / p.{c.get('page') or 0}\n{c.get('text') or ''}"
+        for i, c in enumerate(chunks)
+    )
+
+
+def _parse_study_claim_json(raw: str) -> Dict[str, str]:
+    fallback = {"source_summary": "출처 미확인", "strength": "출처 미확인", "application_context": "", "safety_note": ""}
+    text = (raw or "").strip()
+    start, end = text.find("{"), text.rfind("}")
+    if start < 0 or end <= start:
+        return fallback
+    try:
+        parsed = json.loads(text[start:end + 1])
+    except ValueError:
+        return fallback
+    strength = parsed.get("strength", "")
+    return {
+        "source_summary": str(parsed.get("source_summary") or "출처 미확인"),
+        "strength": strength if strength in STUDY_STRENGTHS else "약",
+        "application_context": str(parsed.get("application_context") or ""),
+        "safety_note": str(parsed.get("safety_note") or ""),
+    }
+
+
+class StudyPagePayload(BaseModel):
+    page: int
+    text: str
+
+
+class StudyImportDoc(BaseModel):
+    title: str
+    filename: str
+    semester: Optional[str] = "CareFlow"
+    course: Optional[str] = "스터디 논문"
+    unit: Optional[str] = ""
+    pages: List[StudyPagePayload]
+
+
+class StudyImportRequest(BaseModel):
+    format: Optional[str] = None
+    docs: List[StudyImportDoc]
+
+
+class StudyAskRequest(BaseModel):
+    question: str
+    search_filter: Optional[SearchFilter] = None
+
+
+class StudyClaimRequest(BaseModel):
+    claim: str
+    search_filter: Optional[SearchFilter] = None
+
+
+class StudyClaimSavePayload(BaseModel):
+    claim: str
+    source_summary: Optional[str] = ""
+    strength: Optional[str] = "출처 미확인"
+    application_context: Optional[str] = ""
+    safety_note: Optional[str] = ""
+
+
+@app.post("/study/import")
+async def study_import(req: StudyImportRequest, user: Dict[str, Any] = Depends(current_study_user)) -> Dict[str, Any]:
+    """CareFlow 스터디 내보내기(linknote-pages-v1) JSON을 내 자료로 학습한다."""
+    if req.format and req.format != "linknote-pages-v1":
+        raise HTTPException(status_code=400, detail="지원하지 않는 형식입니다. (linknote-pages-v1 필요)")
+    if not req.docs:
+        raise HTTPException(status_code=400, detail="가져올 문서가 없습니다.")
+
+    uid = _study_uid(user)
+    results = []
+    for doc in req.docs:
+        filename = (doc.filename or doc.title or "").strip()
+        title = (doc.title or filename).strip()
+        pages = [{"page": p.page, "text": p.text} for p in doc.pages if (p.text or "").strip()]
+        if not filename or not pages:
+            results.append({"filename": filename or title, "ok": False, "message": "본문 텍스트가 없습니다."})
+            continue
+        add_pdf_pages_to_db(
+            pages=pages,
+            filename=filename,
+            semester=(doc.semester or "CareFlow").strip() or "CareFlow",
+            course=(doc.course or "스터디 논문").strip() or "스터디 논문",
+            title=title,
+            user_id=uid,
+            unit=(doc.unit or "").strip(),
+        )
+        results.append({"filename": filename, "ok": True, "pages": len(pages)})
+    return {"results": results}
+
+
+@app.post("/study/ask")
+async def study_ask(req: StudyAskRequest, user: Dict[str, Any] = Depends(current_study_user)) -> Dict[str, Any]:
+    """논문 질문 — 자료 청크만 근거로 출처·유사도와 함께 답한다."""
+    question = (req.question or "").strip()
+    if not question:
+        raise HTTPException(status_code=400, detail="question이 필요합니다.")
+
+    search_filter = req.search_filter.dict() if req.search_filter else None
+    chunks = search_relevant_chunks(question, n_results=6, search_filter=search_filter, user_id=_study_uid(user))
+    scope_label = get_filter_label(search_filter)
+    if not chunks:
+        return {
+            "answer": f"제공된 자료에서 관련 내용을 찾을 수 없습니다.\n\n{STUDY_DISCLAIMER}",
+            "sources": [],
+            "scope_label": scope_label,
+        }
+
+    answer = generate_openai_answer(
+        f"{STUDY_ASK_PROMPT}\n\n자료 청크:\n{_study_context(chunks)}\n\n질문: {question}",
+        max_tokens=1500,
+    )
+    return {"answer": answer, "sources": [_study_source(c) for c in chunks], "scope_label": scope_label}
+
+
+@app.post("/study/claim")
+async def study_claim(req: StudyClaimRequest, user: Dict[str, Any] = Depends(current_study_user)) -> Dict[str, Any]:
+    """주장 근거화 — 주장과 자료를 비교해 근거강도 초안(4필드)을 만든다. 저장은 별도."""
+    claim = (req.claim or "").strip()
+    if not claim:
+        raise HTTPException(status_code=400, detail="claim이 필요합니다.")
+
+    search_filter = req.search_filter.dict() if req.search_filter else None
+    chunks = search_relevant_chunks(claim, n_results=5, search_filter=search_filter, user_id=_study_uid(user))
+    if not chunks:
+        draft = {"source_summary": "출처 미확인", "strength": "출처 미확인", "application_context": "", "safety_note": ""}
+    else:
+        raw = generate_openai_answer(
+            f"{STUDY_CLAIM_PROMPT}\n자료 청크:\n{_study_context(chunks)}\n\n주장: {claim}",
+            max_tokens=600,
+        )
+        draft = _parse_study_claim_json(raw)
+
+    return {"claim": claim, "draft": draft, "sources": [_study_source(c) for c in chunks]}
+
+
+@app.post("/study/claims")
+async def study_claim_save(payload: StudyClaimSavePayload, user: Dict[str, Any] = Depends(current_study_user)) -> Dict[str, Any]:
+    claim = (payload.claim or "").strip()
+    if not claim:
+        raise HTTPException(status_code=400, detail="claim이 필요합니다.")
+    entry = {
+        "id": uuid.uuid4().hex,
+        "claim": claim,
+        "source_summary": (payload.source_summary or "").strip(),
+        "strength": payload.strength if payload.strength in STUDY_STRENGTHS else "출처 미확인",
+        "application_context": (payload.application_context or "").strip(),
+        "safety_note": (payload.safety_note or "").strip(),
+        "created": int(time.time()),
+    }
+    data = _load_json_file(STUDY_CLAIMS_PATH)
+    data.setdefault(_study_uid(user), []).insert(0, entry)
+    _save_json_file(STUDY_CLAIMS_PATH, data)
+    return {"ok": True, "claim": entry}
+
+
+@app.get("/study/claims")
+async def study_claim_list(user: Dict[str, Any] = Depends(current_study_user)) -> Dict[str, Any]:
+    data = _load_json_file(STUDY_CLAIMS_PATH)
+    return {"claims": data.get(_study_uid(user), [])}
+
+
+@app.delete("/study/claims/{claim_id}")
+async def study_claim_delete(claim_id: str, user: Dict[str, Any] = Depends(current_study_user)) -> Dict[str, Any]:
+    data = _load_json_file(STUDY_CLAIMS_PATH)
+    uid = _study_uid(user)
+    claims = data.get(uid, [])
+    remaining = [c for c in claims if c.get("id") != claim_id]
+    if len(remaining) == len(claims):
+        raise HTTPException(status_code=404, detail="저장된 주장을 찾을 수 없습니다.")
+    data[uid] = remaining
+    _save_json_file(STUDY_CLAIMS_PATH, data)
+    return {"ok": True}
 
 
 class RegisterRequest(BaseModel):

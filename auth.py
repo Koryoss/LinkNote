@@ -26,6 +26,18 @@ MAINTAINER_EMAILS = {
     if email.strip()
 }
 
+# 스터디 기능(논문 질문·주장 근거화·CareFlow 자료 가져오기) 사용 가능 계정.
+# 기본값은 관리자 계정 — 본인 전용. 다른 계정을 추가하려면 STUDY_EMAILS 환경변수 사용.
+STUDY_EMAILS = {
+    email.strip().lower()
+    for email in os.getenv("STUDY_EMAILS", "").split(",")
+    if email.strip()
+} or set(MAINTAINER_EMAILS)
+
+
+def is_study_enabled(user: dict) -> bool:
+    return (user.get("email") or "").strip().lower() in STUDY_EMAILS
+
 
 def _normalize_student_track(value: str = "") -> str:
     track = (value or "").strip().lower()
@@ -137,6 +149,7 @@ def _public(user: dict) -> dict:
         "login_method": provider,
         "data_user_id": user.get("data_user_id", user["email"]),
         "student_track": _normalize_student_track(user.get("student_track", "general")),
+        "study_enabled": is_study_enabled(user),
         "created": created,
         "created_at": created,
         "joined_at": created,
