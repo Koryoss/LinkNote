@@ -184,6 +184,16 @@
     document.getElementById('userLabel').textContent = account.display_name || account.email || '';
     document.getElementById('app').className = 'grid';
     document.getElementById('app').innerHTML = `
+      <section class="wide">
+        <details class="dev">
+          <summary>계정 정보</summary>
+          <div class="kv">
+            ${row('Email', account.email)}
+            ${row('Display name', account.display_name)}
+            ${row('Student track', account.student_track || 'general')}
+          </div>
+        </details>
+      </section>
       <section class="wide"><h2>Learning Memory</h2>
         <div class="list">${currentMemories.length ? currentMemories.map(memoryCard).join('') : '<div class="item">아직 저장된 Learning Memory가 없습니다. 설명해보기를 사용하면 여기에 쌓입니다.</div>'}</div>
         <div class="actions" style="margin-top:12px">
@@ -200,19 +210,7 @@
         <p class="sub" style="margin-top:10px">환자 식별 정보 없이 실습 상황을 학습 자료, 개념 연결, 복습 포인트와 연결하는 교육용 회고 기능입니다.</p>
         <div class="actions" style="margin-top:12px"><a class="btn primary" href="/clinical-reflection.html">실습 회고 / Clinical Reflection</a></div>
       </section>
-      <section class="wide">
-        <details class="dev">
-          <summary>계정 정보</summary>
-          <div class="kv">
-            ${row('Email', account.email)}
-            ${row('Display name', account.display_name)}
-            ${row('Login method', account.login_method || account.auth_provider)}
-            ${row('Student track', account.student_track || 'general')}
-            ${row('Joined date', dateText(account.joined_at || account.created_at || account.created))}
-            ${account.is_maintainer ? `${row('account_id', short(account.account_id || account.id))}${row('data_user_id', account.data_user_id)}${row('maintainer', 'yes')}${row('migration status', account.migration_status)}` : ''}
-          </div>
-        </details>
-      </section>`;
+      `;
   }
   async function generateMemoryFeedback(index){
     const item = currentMemories[index];
