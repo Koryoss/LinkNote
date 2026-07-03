@@ -66,6 +66,7 @@
     <a class="brand" href="/">LinkNote</a>
     <span id="userLabel" class="sub"></span>
     <span class="spacer"></span>
+    <a id="studyLink" class="btn" href="/study.html" style="display:none; border-color:#bbf7d0; background:#f0fdf4; color:#15803d;">스터디 / Study</a>
     <button onclick="logout()">Logout</button>
   </div>
   <main>
@@ -250,6 +251,7 @@
     if(!token()) { app.className='error'; app.textContent='로그인이 필요합니다. Gallery에서 먼저 로그인해주세요.'; return; }
     try {
       const me = await getJSON('/auth/me');
+      if((me.user || {}).study_enabled) document.getElementById('studyLink').style.display = 'inline-block';
       const [summary, memory, memories] = await Promise.all([
         getJSON('/me/summary'),
         getJSON('/learning-memory/summary'),
