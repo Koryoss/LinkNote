@@ -94,8 +94,17 @@
   async function getJSON(path){
     const r = await fetch(API + path, { headers: headers() });
     const d = await r.json().catch(()=>({}));
-    if(!r.ok) throw new Error(`${path} returned ${r.status} ${d.detail || r.statusText}`);
+    if(!r.ok){
+      const err = new Error(`${path} returned ${r.status} ${d.detail || r.statusText}`);
+      err.status = r.status;
+      throw err;
+    }
     return d;
+  }
+  function loginGate(app, message){
+    app.className = 'error';
+    app.innerHTML = esc(message) +
+      `<div style="margin-top:12px"><a class="btn primary" href="/?next=${encodeURIComponent('/mypage.html')}">로그인하러 가기</a></div>`;
   }
   async function postJSON(path, body){
     const r = await fetch(API + path, {
@@ -287,7 +296,7 @@
   }
   async function init(){
     const app = document.getElementById('app');
-    if(!token()) { app.className='error'; app.textContent='로그인이 필요합니다. Gallery에서 먼저 로그인해주세요.'; return; }
+    if(!token()) { loginGate(app, '로그인이 필요합니다.'); return; }
     try {
       const me = await getJSON('/auth/me');
       if((me.user || {}).study_enabled){
@@ -306,6 +315,11 @@
       }
       render(summary, me, memory, clinical, memories, due);
     } catch(e) {
+      if(e.status === 401){
+        localStorage.removeItem('ln_token');
+        loginGate(app, '로그인이 만료되었습니다. 다시 로그인해주세요.');
+        return;
+      }
       app.className='error';
       app.textContent = 'My Page를 불러오지 못했습니다: ' + e.message;
     }

@@ -569,7 +569,7 @@
   }
   async function init(){
     const app = document.getElementById('app');
-    if(!token()) { app.className='error'; app.textContent='로그인이 필요합니다. Gallery에서 먼저 로그인해주세요.'; return; }
+    if(!token()) { app.className='error'; app.innerHTML='로그인이 필요합니다.<div style="margin-top:12px"><a class="btn primary" href="/?next=%2Flearning-memory.html" style="text-decoration:none">로그인하러 가기</a></div>'; return; }
     const params = new URLSearchParams(location.search);
     window._lmFilters = {
       f_course: params.get('course') || '',
