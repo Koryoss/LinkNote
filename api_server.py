@@ -413,6 +413,8 @@ class RecallFeedbackResponse(BaseModel):
     missing_links: List[str]
     followup_question: str
     source_hint: str
+    # 방금 설명한 개념에서 다른 과목으로 이어지는 추후 학습 제안 (개념 그래프 조회만)
+    related_concepts: List[Dict[str, Any]] = []
 
 
 class LearningSessionStartRequest(BaseModel):
@@ -2330,6 +2332,14 @@ async def recall_feedback(
     if not feedback.source_hint:
         first = source_chunks[0]
         feedback.source_hint = f"{first.get('course', course)} · {first.get('unit', unit)} · {first.get('filename', '')} p.{first.get('page', '')} 근처를 다시 보세요."
+
+    # 추후 학습 제안: 방금 설명한 개념(+피드백의 '더 연결해볼 점')을 시드로
+    # 다른 과목 연계 개념을 곁들인다. 실패해도 피드백 자체는 그대로 반환.
+    try:
+        seed = " ".join([concept, answer_text] + list(feedback.missing_links or []))
+        feedback.related_concepts = _related_cross_concepts(user_id, seed, limit=4)
+    except Exception:
+        feedback.related_concepts = []
 
     payload_for_persist = payload.copy(update={"user_id": data_user_id})
     try:
