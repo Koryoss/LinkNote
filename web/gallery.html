@@ -412,7 +412,7 @@
         <button id="authTabLogin" class="auth-tab on" onclick="authTab('login')">로그인</button>
         <button id="authTabReg" class="auth-tab" onclick="authTab('register')">회원가입</button>
       </div>
-      <input id="au_email" type="email" placeholder="이메일">
+      <input id="au_email" type="email" placeholder="이메일" onkeydown="if(event.key==='Enter')document.getElementById('au_pw').focus()">
       <input id="au_pw" type="password" placeholder="비밀번호" onkeydown="if(event.key==='Enter')authSubmit()">
       <div id="au_reg_only" hidden>
         <input id="au_name" placeholder="표시 이름 (예: 정유진)">
@@ -473,7 +473,7 @@
   }
   function setStatus(ok){
     document.getElementById('dot').className = 'dot ' + (ok ? 'on':'off');
-    document.getElementById('statusText').textContent = ok ? 'API 연결됨 (8000)' : 'API 미연결 · 데모 표시';
+    document.getElementById('statusText').textContent = ok ? 'API 연결됨' : 'API 미연결 · 데모 표시';
     const b = document.getElementById('banner');
     if(ok){ b.style.display='none'; }
     else { b.style.display='block';
@@ -872,7 +872,7 @@
     setCrumbs([]);
     const sems = data.semesters || [];
     const view = document.getElementById('view');
-    if(!sems.length){ view.innerHTML = emptyBox('이 사용자명으로 학습된 자료가 없습니다. 상단 사용자명을 확인하세요.'); return; }
+    if(!sems.length){ view.innerHTML = emptyBox('아직 추가한 자료가 없습니다. 오른쪽 위 「＋ 자료 추가」 버튼으로 첫 PDF를 올려보세요.'); return; }
     let opts = sems.map((s,i)=>`<option value="${i}">${esc(s.semester)}</option>`).join('');
     inlineAskCourse = null;
     inlineCourses = [...new Set((sems||[]).flatMap(x => (x.courses||[]).map(c => c.course)))].sort();
@@ -1662,6 +1662,9 @@
     document.getElementById('studyBtn').style.display = user.study_enabled ? 'inline-block' : 'none';
     document.getElementById('logoutBtn').style.display = 'inline-block';
     document.getElementById('authOverlay').hidden = true;
+    // 다른 페이지에서 로그인하러 온 경우(?next=/study.html 등) 원래 목적지로 돌려보낸다.
+    const next = new URLSearchParams(location.search).get('next');
+    if (next && next.startsWith('/') && !next.startsWith('//')) { location.replace(next); return; }
     ensureInitialHistory();
     loadHome(false);
   }
