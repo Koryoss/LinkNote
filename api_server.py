@@ -749,9 +749,12 @@ def _safe_list_json(path: str) -> List[Dict[str, Any]]:
     return [item for item in data if isinstance(item, dict)] if isinstance(data, list) else []
 
 
-def _load_cross_edges(user_id: str) -> List[Dict[str, Any]]:
+def _load_cross_edges() -> List[Dict[str, Any]]:
+    """이미 만들어진 개념 지도(/concept-graph)와 같은 규칙으로 교차 링크를 읽는다.
+    엣지 소유자는 파일 상단 user_id가 아니라 양 끝 노드가 내 개념인지로 판별하므로
+    (호출부에서 by_id 멤버십으로 필터) 여기서는 형식 검증만 한다."""
     data = _load_json_file(CONCEPT_LINKS_PATH)
-    if not isinstance(data, dict) or data.get("user_id") != user_id:
+    if not isinstance(data, dict):
         return []
     return [edge for edge in data.get("edges", []) if isinstance(edge, dict)]
 
@@ -764,7 +767,7 @@ def _related_cross_concepts(user_id: str, seed_text: str, limit: int = 5) -> Lis
     if not text:
         return []
     nodes = [n for n in _safe_list_json(CONCEPT_INDEX_PATH) if n.get("user_id") == user_id]
-    edges = _load_cross_edges(user_id)
+    edges = _load_cross_edges()
     if not nodes or not edges:
         return []
     by_id = {str(n.get("id")): n for n in nodes}
