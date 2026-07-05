@@ -1534,8 +1534,16 @@
       const d=await r.json();
       if(!r.ok){ st.style.color='#ef4444'; st.textContent=(d.detail||'실패'); return; }
       st.textContent='';
-      ans.innerHTML=`<div class="ask-a">${esc(d.answer||'')}</div>`;
+      ans.innerHTML=`<div class="ask-a">${esc(d.answer||'')}</div>` + renderRelatedConcepts(d.related_concepts);
     }catch(e){ st.style.color='#ef4444'; st.textContent='서버 미연결 — 질문 실패'; }
+  }
+  function renderRelatedConcepts(items){
+    if(!items || !items.length) return '';
+    const chip = c => `<a href="/concept-graph.html?mode=connection&concept=${encodeURIComponent(c.concept||'')}&course=${encodeURIComponent(c.course||'')}&unit=${encodeURIComponent(c.unit||'')}"`
+      + ` title="${esc(c.from_concept||'')}(${esc(c.from_course||'')})와 연결${c.reason ? ' — ' + esc(c.reason) : ''}"`
+      + ` style="display:inline-block;border:1px solid #bfdbfe;background:#eff6ff;color:#1d4ed8;border-radius:999px;padding:3px 10px;font-size:.76rem;font-weight:700;text-decoration:none;margin:0 6px 6px 0;">`
+      + `${esc(c.concept||'')} · ${esc(c.course||'')}</a>`;
+    return `<div class="ask-a" style="margin-top:8px"><div style="font-size:.78rem;color:#64748b;font-weight:700;margin-bottom:6px;">다른 과목 연계 개념 (누르면 연결 지도)</div>${items.map(chip).join('')}</div>`;
   }
   async function askInlineSearch(payload){
     const st=document.getElementById('iq_status'), ans=document.getElementById('iq_answer');

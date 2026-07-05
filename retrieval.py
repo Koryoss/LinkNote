@@ -100,6 +100,27 @@ def _rerank(question, cands, n):
         return cands[:n]
 
 
+def _diversify(cands, n, per_file=2):
+    """같은 파일 청크 편중을 막는다: 파일당 per_file개까지 우선 선발해
+    여러 파일·과목에서 근거가 고르게 나오게 한 뒤, 부족하면 상한 없이 채운다."""
+    picked, counts, picked_ids = [], {}, set()
+    for c in cands:
+        key = c.get("filename") or c.get("id")
+        if counts.get(key, 0) >= per_file:
+            continue
+        counts[key] = counts.get(key, 0) + 1
+        picked.append(c); picked_ids.add(c.get("id"))
+        if len(picked) >= n:
+            return picked
+    for c in cands:
+        if c.get("id") in picked_ids:
+            continue
+        picked.append(c)
+        if len(picked) >= n:
+            break
+    return picked
+
+
 def retrieve(collection, question, where, n=8, use_hyde=True, use_keyword=True, use_rerank=True):
     pool = max(n * 3, 18)
     ranklists = [_vector(collection, question, where, pool)]
@@ -110,4 +131,5 @@ def retrieve(collection, question, where, n=8, use_hyde=True, use_keyword=True, 
     fused = _rrf(ranklists)
     if not fused:
         return []
-    return _rerank(question, fused, n) if use_rerank else fused[:n]
+    ranked = _rerank(question, fused, max(n * 2, 12)) if use_rerank else fused
+    return _diversify(ranked, n)

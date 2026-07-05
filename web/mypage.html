@@ -66,7 +66,6 @@
     <a class="brand" href="/">LinkNote</a>
     <span id="userLabel" class="sub"></span>
     <span class="spacer"></span>
-    <a id="studyLink" class="btn" href="/study.html" style="display:none; border-color:#bfdbfe; background:#eff6ff; color:#1d4ed8;">스터디 / Study</a>
     <button onclick="logout()">Logout</button>
   </div>
   <main>
@@ -187,10 +186,15 @@
     const url = `/concept-graph.html?mode=connection&concept=${encodeURIComponent(item.concept || '')}&course=${encodeURIComponent(item.course || '')}&unit=${encodeURIComponent(item.unit || '')}`;
     return `<a class="chip" style="text-decoration:none;" href="${url}" title="개념 연결 보기">${esc(item.concept || '')}</a>`;
   }
+  function suggestionChip(item){
+    const url = `/concept-graph.html?mode=connection&concept=${encodeURIComponent(item.concept || '')}&course=${encodeURIComponent(item.course || '')}&unit=${encodeURIComponent(item.unit || '')}`;
+    const tip = `${item.from_concept || ''}(${item.from_course || ''})와 연결` + (item.reason ? ` — ${item.reason}` : '');
+    return `<a class="chip" style="text-decoration:none;" href="${url}" title="${esc(tip)}">${esc(item.concept || '')} · ${esc(item.course || '')}</a>`;
+  }
   function uploadItem(u){
     return `<div class="item"><strong>${esc(u.title || u.filename)}</strong><small>${esc([u.semester, u.course].filter(Boolean).join(' · '))}</small></div>`;
   }
-  function render(summary, me, memory, clinical, memories, due){
+  function render(summary, me, memory, clinical, memories, due, suggest){
     const account = summary.account || me.user || {};
     const library = summary.library || {};
     const learning = summary.learning || {};
@@ -199,6 +203,7 @@
     const studyOn = !!(me.user || {}).study_enabled;
     const clinicalItems = Array.isArray(clinical?.items) ? clinical.items : [];
     const dueItems = Array.isArray(due?.items) ? due.items.filter(d => d.is_due) : [];
+    const suggestions = Array.isArray(suggest?.items) ? suggest.items : [];
     const recentUploads = Array.isArray(library.recent_uploads) ? library.recent_uploads : [];
     currentMemories = Array.isArray(memories?.items) ? memories.items : [];
     document.getElementById('userLabel').textContent = account.display_name || account.email || '';
@@ -209,13 +214,15 @@
           ? `<p class="sub" style="margin-bottom:8px">복습 대기 개념 ${dueItems.length}개 — 개념을 누르면 연결 지도로 이동합니다.</p>
              <div class="chips">${dueItems.slice(0, 8).map(dueChip).join('')}</div>`
           : `<p class="sub">지금 복습 대기 개념이 없어요. 설명해보기를 사용하면 복습 일정이 만들어집니다.</p>`}
+        ${suggestions.length
+          ? `<div style="margin-top:14px"><span class="sub" style="font-weight:700">연계 학습 제안</span>
+             <p class="sub" style="margin:4px 0 8px">지금 복습할 개념과 다른 과목에서 연결된 개념입니다. 함께 보면 연계 학습에 도움이 됩니다.</p>
+             <div class="chips">${suggestions.map(suggestionChip).join('')}</div></div>`
+          : ''}
         <p class="sub" style="margin-top:10px">최근 학습 <b>${esc(dateText(learning.last_studied_at || memorySummary.last_memory_created_at))}</b></p>
         <div class="actions" style="margin-top:12px">
           <a class="btn primary" href="/">갤러리 · 자료 보기</a>
           <a class="btn" href="/concept-graph.html">개념 지도</a>
-          <a class="btn" href="/learning-memory.html">Learning Memory</a>
-          ${isNursing ? '<a class="btn" href="/clinical-reflection.html">실습 회고</a>' : ''}
-          ${studyOn ? '<a class="btn" href="/study.html">스터디</a>' : ''}
         </div>
       </section>
       <section><h2>학습 현황</h2>
@@ -300,20 +307,20 @@
     try {
       const me = await getJSON('/auth/me');
       if((me.user || {}).study_enabled){
-        document.getElementById('studyLink').style.display = 'inline-block';
         document.getElementById('studyHeroBtn').style.display = 'inline-block';
       }
-      const [summary, memory, memories, due] = await Promise.all([
+      const [summary, memory, memories, due, suggest] = await Promise.all([
         getJSON('/me/summary'),
         getJSON('/learning-memory/summary'),
         getJSON('/learning-memory?limit=5').catch(()=>({ items: [] })),
         getJSON('/review/due?limit=8').catch(()=>({ items: [] })),
+        getJSON('/learning/suggestions?limit=6').catch(()=>({ items: [] })),
       ]);
       let clinical = { items: [] };
       if(((me.user || {}).student_track || 'general') === 'nursing'){
         clinical = await getJSON('/clinical-reflections?limit=5').catch(()=>({ items: [] }));
       }
-      render(summary, me, memory, clinical, memories, due);
+      render(summary, me, memory, clinical, memories, due, suggest);
     } catch(e) {
       if(e.status === 401){
         localStorage.removeItem('ln_token');
