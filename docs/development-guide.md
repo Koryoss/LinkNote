@@ -1240,3 +1240,41 @@ curl -i http://127.0.0.1:8000/concept-graph/overview
 - production multi-user storage boundary를 강화할 시점을 별도 PR로 잡는다.
 - Google login desktop webview 제약을 사용자 안내에 더 명확히 반영한다.
 - Render 운영 데이터와 로컬 데이터의 export/import 전략을 별도 설계한다.
+
+
+## 25. Production 전환 전 아키텍처 기준
+
+이 항목들은 즉시 구현할 작업이 아니라, 공개 서비스 또는 대규모 리팩터링 PR을 시작하기 전 반드시 합의해야 하는 기준선이다. 기존 데스크탑 앱, local-first 학습 흐름, 임시 user_id 기반 구조와 충돌하지 않도록 별도 PR 단위로 진행한다.
+
+### API 계층 분리
+
+- 현재 `api_server.py`는 단일 FastAPI 진입점 역할을 한다. production 전환 전에는 도메인별 `router / service / repository` 계층으로 분리한다.
+- 우선 분리 대상 도메인은 `auth`, `library`, `ingest`, `ask`, `recall`, `learning_memory`, `clinical_reflection`이다.
+- 분리 PR은 endpoint behavior, auth dependency, response shape를 바꾸지 않는 migration-first 방식으로 진행한다.
+- 대규모 이동 전에는 백업 또는 브랜치 전략을 사용자에게 먼저 확인한다.
+
+### Auth 경계
+
+- 현재 `auth.py`는 로컬/소수 테스트에 적합한 lightweight auth다.
+- 공개 서비스 전환 시 검증된 Auth provider와 durable user DB로 전환한다.
+- 전환 전까지 실제 다중 사용자 DB를 임의로 도입하지 않는다. 기존 local `user_id`/token-derived ownership 흐름을 유지한다.
+
+### Provider와 모델 평가
+
+- `providers/*`는 local-first 철학과 배포 전환을 모두 지원해야 한다.
+- 모델/provider 변경은 기능 코드와 분리하고, 요청 목적, 모델명, 비용 추정, 성공/실패, latency, 사용자 action 단위의 평가 로그를 남길 설계를 둔다.
+- 페이지 로드에서 GPT 호출이 일어나지 않는 원칙은 유지한다.
+
+### 데이터 분리와 스토리지 전환
+
+- `data/` 및 `chroma_db/`에는 사용자 데이터와 fixture/test data를 절대 섞지 않는다.
+- JSON 파일 저장은 SQLite 또는 Postgres로 옮길 계획을 세우고, migration, backup, rollback 절차를 포함한다.
+- Chroma metadata schema는 version field와 migration note를 두고 관리한다.
+- 저장소 구조 변경은 기존 업로드, recall trace, Learning Memory, concept graph 데이터를 파괴하지 않아야 한다.
+
+### 운영 보안과 비용 제한
+
+- CORS는 공개 전 `allow_origins=["*"]`에서 허용 도메인 목록으로 좁힌다.
+- 업로드 크기 제한, 파일 타입 검증, rate limit, AI cost limit, audit log를 추가한다.
+- 임상/간호 관련 기능은 audit log와 safety boundary를 별도 설계한다.
+- 이 항목들은 기능 구현 PR과 섞지 않고 production-hardening PR로 분리한다.

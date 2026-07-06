@@ -213,6 +213,7 @@ See [Recall and Learning Memory](docs/recall-learning-memory.md).
 - Keep the local-first learning workflow stable.
 - Keep `user_id` lightweight until real authentication is needed.
 - Avoid building a full account system too early.
+- Treat production architecture hardening as a separate PR track; see `docs/development-guide.md` section 25 for router/service split, auth, storage, CORS, rate/cost limit, and audit-log criteria.
 - Keep SCiyl-inspired recall work lightweight and local-first until the knowledge infrastructure is stable.
 - Recall trace storage/query remains limited to JSON-backed `user_id` records. AI feedback and review-focused concept graph metadata are local-first extensions; full account-based multi-user storage remains later work.
 
