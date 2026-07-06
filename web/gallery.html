@@ -1275,13 +1275,26 @@
   }
   function drillReset(){ drillVisible=null; if(lastNodes) layoutNodes(lastNodes); }
   function drillAll(){ if(lastNodes){ drillVisible=new Set(lastNodes.map(n=>n.name)); layoutNodes(lastNodes); } }
+  function conceptPrimaryOccurrence(n){
+    const occurrences = Array.isArray(n.occurrences) ? n.occurrences.filter(x=>x && (x.page || x.filename)) : [];
+    occurrences.sort((a,b)=>(Number(a.page||0)-Number(b.page||0)) || String(a.filename||"").localeCompare(String(b.filename||"")));
+    const first = occurrences[0] || {};
+    return { filename:first.filename || n.filename, page:first.page || n.page || 1 };
+  }
+  function conceptPageSummary(n){
+    const occurrences = Array.isArray(n.occurrences) ? n.occurrences.filter(x=>x && x.page) : [];
+    const pages = occurrences.length ? [...new Set(occurrences.map(x=>Number(x.page)).filter(Boolean))].sort((a,b)=>a-b) : (n.page ? [Number(n.page)] : []);
+    if(!pages.length) return "페이지 정보 없음";
+    return "나오는 페이지 " + pages.map(p=>`p.${p}`).join(", ");
+  }
   function expandNode(n, nodes){
     const rel=(n.links||[]).filter(t=>nodes.some(x=>x.name===t));
     let changed=false;
     rel.forEach(t=>{ if(!drillVisible.has(t)){ drillVisible.add(t); changed=true; } });
     if(changed){ drillVisible.add(n.name); layoutNodes(nodes); }
     selectNode(n.name, nodes.filter(x=>drillVisible.has(x.name)));
-    if(n.filename) docShow(n.filename, n.page||1);
+    const target = conceptPrimaryOccurrence(n);
+    if(target.filename) docShow(target.filename, target.page || 1);
   }
   function layoutNodes(nodes){
     lastNodes = nodes;
@@ -1326,10 +1339,11 @@
       const recallClass = recallCount <= 0 ? ' recall-none' : ` recall-${Math.min(4, recallCount)}`;
       const stateLabel = recallCount <= 0 ? '미설명' : `설명 ${recallCount}회`;
       const stateBadge = `<div class="state-badge">${esc(stateLabel)}</div>`;
+      const target = conceptPrimaryOccurrence(n);
       el.className = `node w${w}` + (n===core?' core':'') + (hasMore?' has-more':'') + recallClass;
       el.style.left = pos[n.name].x+'px'; el.style.top = pos[n.name].y+'px';
       el.style.animationDelay = (i*0.05)+'s';
-      el.innerHTML = `<div class="nm">${esc(n.name)}</div>` + (n.page?`<div class="pg">p.${esc(String(n.page))}</div>`:'') + stateBadge + (hasMore?`<div class="more">＋</div>`:'');
+      el.innerHTML = `<div class="nm">${esc(n.name)}</div>` + (target.page?`<div class="pg">p.${esc(String(target.page))}</div>`:'') + stateBadge + (hasMore?`<div class="more">＋</div>`:'');
       el.addEventListener('mouseenter', (e)=>{ if(!dragging) showTip(n, e); });
       el.addEventListener('mousemove', (e)=>{ if(!dragging) moveTip(e); });
       el.addEventListener('mouseleave', hideTip);
@@ -1365,8 +1379,9 @@
     const links = (n.links||[]).length;
     const recallCount = Number(n.recall_count || 0);
     const stateText = recallCount <= 0 ? '아직 설명 없음' : `설명 ${recallCount}회`;
+    const pageText = conceptPageSummary(n);
     tip.innerHTML = `<div class="t-nm">${esc(n.name)}</div>` +
-      `<div class="t-meta">${n.page?('p.'+esc(String(n.page))+' · '):''}연결 개념 ${links}개 · ${stateText}</div>`;
+      `<div class="t-meta">${esc(pageText)} · 연결 개념 ${links}개 · ${stateText}</div>`;
     tip.classList.add('on'); moveTip(e);
   }
   function moveTip(e){

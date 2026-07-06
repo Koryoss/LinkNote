@@ -36,6 +36,7 @@ from rag import (
     get_library_overview,
     get_units,
     search_relevant_chunks,
+    concept_occurrences_for_unit,
 )
 
 DATA_DIR = os.getenv("DATA_DIR", "./data")
@@ -2123,6 +2124,31 @@ async def reindex_concepts(payload: dict, data_user_id: str = Depends(current_ui
     }
 
 
+def _augment_concepts_with_page_locations(concepts: List[Dict[str, Any]], user_id: str, semester: str, course: str, unit: str) -> List[Dict[str, Any]]:
+    out = []
+    for concept in concepts:
+        item = dict(concept)
+        occurrences = item.get("occurrences") if isinstance(item.get("occurrences"), list) else []
+        if not occurrences:
+            keyword = str(item.get("keyword") or item.get("name") or "").strip()
+            try:
+                occurrences = concept_occurrences_for_unit(user_id, semester, course, unit, keyword)
+                if not occurrences and keyword != str(item.get("name") or "").strip():
+                    occurrences = concept_occurrences_for_unit(user_id, semester, course, unit, str(item.get("name") or "").strip())
+            except Exception:
+                occurrences = []
+        if occurrences:
+            occurrences = [x for x in occurrences if isinstance(x, dict)]
+            occurrences.sort(key=lambda x: (int(x.get("page") or 0), str(x.get("filename") or "")))
+            item["occurrences"] = occurrences
+            item["pages"] = sorted({x.get("page") for x in occurrences if x.get("page") is not None})
+            first = occurrences[0]
+            item["filename"] = item.get("filename") or first.get("filename")
+            item["page"] = item.get("page") or first.get("page")
+        out.append(item)
+    return out
+
+
 @app.get("/concepts")
 async def concepts(semester: str, course: str, unit: str, data_user_id: str = Depends(current_uid)) -> Dict[str, Any]:
     if not semester.strip() or not course.strip() or not unit.strip():
@@ -2140,7 +2166,8 @@ async def concepts(semester: str, course: str, unit: str, data_user_id: str = De
     if not concepts:
         return {"status": "empty", "concepts": []}
 
-    return {"status": "ready", "concepts": _augment_concepts_with_recall(concepts, data_user_id, semester, course, unit)}
+    recalled = _augment_concepts_with_recall(concepts, data_user_id, semester, course, unit)
+    return {"status": "ready", "concepts": _augment_concepts_with_page_locations(recalled, data_user_id, semester, course, unit)}
 
 
 @app.post("/recall-traces", response_model=RecallTraceResponse)

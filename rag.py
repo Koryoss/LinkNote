@@ -94,6 +94,39 @@ def rename_unit(user_id, semester, course, old_unit, new_unit):
     return len(ids)
 
 
+def _concept_occurrences_from_chunks(keyword, chunks):
+    seen = set()
+    out = []
+    needle = str(keyword or "").strip()
+    if not needle:
+        return out
+    for c in chunks:
+        if needle not in (c.get("text") or ""):
+            continue
+        page = c.get("page")
+        filename = c.get("filename")
+        key = (filename or "", page)
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append({"filename": filename, "page": page})
+    out.sort(key=lambda x: (int(x.get("page") or 0), str(x.get("filename") or "")))
+    return out
+
+
+def concept_occurrences_for_unit(user_id, semester, course, unit, keyword):
+    where_filter = _build_where_filter({"semester": semester, "course": course}, user_id=user_id)
+    if not where_filter:
+        return []
+    results = collection.get(where=where_filter, include=["metadatas", "documents"])
+    chunks = [
+        {"text": doc or "", "page": meta.get("page"), "filename": meta.get("filename")}
+        for meta, doc in zip(results.get("metadatas", []), results.get("documents", []))
+        if (meta.get("unit") or "").strip() == unit
+    ]
+    return _concept_occurrences_from_chunks(keyword, chunks)
+
+
 def _parse_concept_items(raw_text, chunks):
     parsed_raw = _extract_json_array((raw_text or "").strip())
     try:
@@ -108,11 +141,12 @@ def _parse_concept_items(raw_text, chunks):
             weight = max(1, min(5, int(item.get("importance") or item.get("weight"))))
         except (ValueError, TypeError):
             weight = 3
-        match = next((c for c in chunks if keyword in c["text"]), None)
+        occurrences = _concept_occurrences_from_chunks(keyword, chunks)
+        match = occurrences[0] if occurrences else None
         page = match.get("page") if match else None
         fname = match.get("filename") if match else None
         links = [r.strip() for r in item.get("related", []) if isinstance(r, str) and r.strip()]
-        out.append({"name": name, "keyword": keyword, "weight": weight, "page": page, "filename": fname, "links": links})
+        out.append({"name": name, "keyword": keyword, "weight": weight, "page": page, "filename": fname, "pages": [x["page"] for x in occurrences if x.get("page") is not None], "occurrences": occurrences, "links": links})
     return out
 
 
@@ -191,6 +225,12 @@ def build_concepts_for_unit(user_id, semester, course, unit, seg_size: int = 900
             e["links"] = list({*e["links"], *c["links"]})
             if e.get("page") is None: e["page"] = c.get("page")
             if e.get("filename") is None: e["filename"] = c.get("filename")
+            merged_occurrences = {
+                (item.get("filename") or "", item.get("page")): item
+                for item in [*(e.get("occurrences") or []), *(c.get("occurrences") or [])]
+            }
+            e["occurrences"] = sorted(merged_occurrences.values(), key=lambda x: (int(x.get("page") or 0), str(x.get("filename") or "")))
+            e["pages"] = sorted({item.get("page") for item in e["occurrences"] if item.get("page") is not None})
         else:
             by_kw[k] = dict(c)
     merged = list(by_kw.values())
