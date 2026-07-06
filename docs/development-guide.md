@@ -84,7 +84,7 @@ study-rag-api/
 ├── render.yaml
 │
 ├── web/
-│   ├── gallery.html              # 메인 Knowledge Gallery
+│   ├── gallery.html              # 메인 My Library
 │   ├── mypage.html               # My Page / Learning Dashboard
 │   ├── learning-memory.html      # Learning Memory hub
 │   ├── concept-graph.html        # Full Knowledge Map advanced view
@@ -305,7 +305,7 @@ Authorization: Bearer <token>
 
 ### Question modes
 
-Gallery UI에는 두 모드가 있다.
+My Library에는 두 모드가 있다.
 
 | UI 모드 | API | GPT 호출 | 용도 |
 | --- | --- | --- | --- |
@@ -551,7 +551,7 @@ Full mode는 복잡도 때문에 visible node를 제한한다. 과목/단원 필
 - Review Map에는 Course filter, Unit filter, Review Needed Only를 둔다.
 - `Explore Full Knowledge Map` 링크는 Review Map 아래에 secondary navigation으로 둔다. dashboard의 primary action이 아니다.
 - Full graph, node connections, edge relationships, graph filters는 `web/concept-graph.html`의 Knowledge Exploration으로 보낸다.
-- node click 시 action panel을 열어 Why now, Learning Memory, 빠른 검색, Gallery context 이동을 제공한다.
+- node click 시 action panel을 열어 Why now, Learning Memory, 빠른 검색, My Library context 이동을 제공한다.
 - 원칙: dashboard는 학습용, Knowledge Map은 탐색용이다.
 
 ## 12. Recall Trace와 AI Feedback

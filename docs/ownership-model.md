@@ -49,4 +49,4 @@ Do not automatically migrate, delete, reset, or reassign legacy data. Use an exp
 - Invalid token fails with 401.
 - `../` path traversal fails.
 - Unknown filename returns 404.
-- Gallery PDF preview still works.
+- My Library PDF preview still works.

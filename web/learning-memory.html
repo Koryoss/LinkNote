@@ -169,9 +169,14 @@
   function memoryCard(item, index){
     const graphUrl = `/concept-graph.html?mode=connection&concept=${encodeURIComponent(item.concept || '')}&course=${encodeURIComponent(item.course || '')}&unit=${encodeURIComponent(item.unit || '')}`;
     return `<div class="memory-card">
-      <h3>${esc(item.concept || '개념 미지정')}</h3>
-      <div class="memory-meta">${esc(item.course)} · ${esc(item.unit)} · ${esc(dateText(item.created_at))}</div>
-      <div class="actions" style="margin-top:8px"><a class="btn" href="${graphUrl}">개념 연결 보기</a></div>
+      <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:10px;">
+        <div style="flex:1;">
+          <h3>${esc(item.concept || '개념 미지정')}</h3>
+          <div class="memory-meta">${esc(item.course)} · ${esc(item.unit)} · ${esc(dateText(item.created_at))}</div>
+        </div>
+        <input type="checkbox" class="memory-checkbox" data-id="${esc(item.id || '')}" onchange="updateSelectedCount()" style="width:18px; height:18px; cursor:pointer;">
+      </div>
+      <div class="actions" style="margin-top:8px"><a class="btn" href="${graphUrl}">개념 연결 보기</a><button class="secondary" onclick="deleteMemory('${esc(item.id || '')}')">삭제</button></div>
       <div class="memory-two-col">
         <section class="memory-pane">
           <h4>내 설명</h4>
@@ -192,6 +197,14 @@
         <label>Unit<input id="f_unit" placeholder="단원"></label>
         <label>Concept Search<input id="f_concept" placeholder="개념/키워드"></label>
         <button onclick="loadMemories()">적용</button>
+      </div>
+      <div style="display:flex; gap:8px; align-items:center; margin-top:12px; flex-wrap:wrap;">
+        <label style="display:flex; align-items:center; gap:6px; border:1px solid #d8dee9; border-radius:8px; padding:8px 10px; background:#fff; color:#475569; font-size:.82rem; font-weight:800; cursor:pointer;">
+          <input type="checkbox" id="selectAllMemories" onchange="toggleSelectAllMemories()"> 모두 선택
+        </label>
+        <button onclick="deleteSelectedMemories()" style="color:#dc2626; border-color:#fecaca;">선택 삭제</button>
+        <button onclick="deleteAllMemories()" style="color:#991b1b; border-color:#fca5a5;">전체 삭제</button>
+        <span id="selectedCount" class="sub" style="margin-left:auto;"></span>
       </div>
       <div class="ai-buttons" style="margin-top:12px">
         <button onclick="generateAiSummary('weekly')">이번 주 요약</button>
@@ -567,9 +580,73 @@
       alert('AI Summary 삭제에 실패했습니다: ' + (e.message || e));
     }
   }
+  async function deleteLearningMemoryBulk(body){
+    const r = await fetch(API + '/learning-memory', {
+      method:'DELETE',
+      headers:{ ...headers(), 'Content-Type':'application/json' },
+      body:JSON.stringify(body || {}),
+    });
+    const d = await r.json().catch(()=>({}));
+    if(!r.ok) throw new Error(d.detail || r.statusText);
+    return d;
+  }
+  async function deleteMemory(id){
+    if(!id) return;
+    if(!confirm('이 Learning Memory를 삭제할까요?')) return;
+    try {
+      await fetch(API + '/learning-memory/' + encodeURIComponent(id), {
+        method:'DELETE',
+        headers: headers(),
+      }).then(async r => {
+        const d = await r.json().catch(()=>({}));
+        if(!r.ok) throw new Error(d.detail || r.statusText);
+      });
+      await loadMemories();
+    } catch(e) {
+      alert('Learning Memory 삭제에 실패했습니다: ' + (e.message || e));
+    }
+  }
+  function toggleSelectAllMemories(){
+    const allChecked = document.getElementById('selectAllMemories').checked;
+    document.querySelectorAll('.memory-checkbox').forEach(cb => cb.checked = allChecked);
+    updateSelectedCount();
+  }
+  function updateSelectedCount(){
+    const count = document.querySelectorAll('.memory-checkbox:checked').length;
+    const countEl = document.getElementById('selectedCount');
+    if(countEl) countEl.textContent = count > 0 ? `${count}개 선택됨` : '';
+  }
+  async function deleteSelectedMemories(){
+    const selected = Array.from(document.querySelectorAll('.memory-checkbox:checked')).map(cb => cb.dataset.id).filter(Boolean);
+    if(!selected.length) { alert('삭제할 항목을 선택해주세요.'); return; }
+    if(!confirm(`${selected.length}개의 Learning Memory를 삭제할까요?`)) return;
+    try {
+      await deleteLearningMemoryBulk({ ids:selected });
+      await loadMemories();
+    } catch(e) {
+      alert('Learning Memory 삭제에 실패했습니다: ' + (e.message || e));
+    }
+  }
+  async function deleteAllMemories(){
+    if(!confirm('필터 범위의 모든 Learning Memory를 삭제할까요?\n이 작업은 되돌릴 수 없습니다.')) return;
+    const body = { delete_all:true };
+    const course = document.getElementById('f_course')?.value.trim() || '';
+    const unit = document.getElementById('f_unit')?.value.trim() || '';
+    const concept = document.getElementById('f_concept')?.value.trim() || '';
+    if(course) body.course = course;
+    if(unit) body.unit = unit;
+    if(concept) body.concept = concept;
+    try {
+      await deleteLearningMemoryBulk(body);
+      await loadMemories();
+    } catch(e) {
+      alert('Learning Memory 삭제에 실패했습니다: ' + (e.message || e));
+    }
+  }
+
   async function init(){
     const app = document.getElementById('app');
-    if(!token()) { app.className='error'; app.textContent='로그인이 필요합니다. Gallery에서 먼저 로그인해주세요.'; return; }
+    if(!token()) { app.className='error'; app.textContent='로그인이 필요합니다. My Library에서 먼저 로그인해주세요.'; return; }
     const params = new URLSearchParams(location.search);
     window._lmFilters = {
       f_course: params.get('course') || '',

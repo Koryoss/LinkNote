@@ -9,7 +9,7 @@ import time
 import uuid
 from collections import Counter
 from datetime import datetime, timezone, timedelta
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Set
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile, Depends, Header
 from fastapi.middleware.cors import CORSMiddleware
@@ -443,6 +443,14 @@ class LearningMemoryAiSummaryResponse(BaseModel):
     suggested_questions: List[str]
     source_memory_ids: List[str]
     created_at: str
+
+
+class LearningMemoryBulkDeleteRequest(BaseModel):
+    ids: Optional[List[str]] = None
+    delete_all: bool = False
+    course: Optional[str] = None
+    unit: Optional[str] = None
+    concept: Optional[str] = None
 
 
 class LearningMemoryAiSummariesResponse(BaseModel):
@@ -2884,29 +2892,63 @@ async def learning_memory(
     return {"total": len(all_items), "items": items}
 
 
-@app.delete("/learning-memory/{memory_id}")
-async def delete_learning_memory(memory_id: str, data_user_id: str = Depends(current_uid)) -> Dict[str, Any]:
-    target_id = str(memory_id or "").strip()
-    if not target_id:
-        raise HTTPException(status_code=400, detail="Learning Memory id is required.")
+def _delete_learning_memories_for_user(
+    data_user_id: str,
+    target_ids: Optional[Set[str]] = None,
+    delete_all: bool = False,
+    course: Optional[str] = None,
+    unit: Optional[str] = None,
+    concept: Optional[str] = None,
+) -> Dict[str, Any]:
+    requested_ids = {str(item or "").strip() for item in (target_ids or set()) if str(item or "").strip()}
+    if not delete_all and not requested_ids:
+        raise HTTPException(status_code=400, detail="삭제할 Learning Memory id가 필요합니다.")
 
     traces = _load_recall_traces()
-    target = next(
-        (
-            item for item in traces
-            if isinstance(item, dict)
-            and str(item.get("id") or "").strip() == target_id
-            and item.get("user_id") == data_user_id
-        ),
-        None,
-    )
-    if target is None:
-        raise HTTPException(status_code=404, detail="Learning Memory를 찾을 수 없습니다.")
+    user_items = [item for item in traces if isinstance(item, dict) and item.get("user_id") == data_user_id]
+    course_filter = str(course or "").strip()
+    unit_filter = str(unit or "").strip()
+    concept_filter = str(concept or "").strip().lower()
 
-    related_ids = {target_id}
-    source_trace_id = str(target.get("source_trace_id") or "").strip()
-    if source_trace_id:
-        related_ids.add(source_trace_id)
+    def matches_filters(item: Dict[str, Any]) -> bool:
+        if course_filter and str(item.get("course") or "") != course_filter:
+            return False
+        if unit_filter and str(item.get("unit") or "") != unit_filter:
+            return False
+        if concept_filter and concept_filter not in " ".join([
+            str(item.get("concept") or ""),
+            str(item.get("answer_text") or ""),
+            str(item.get("feedback_text") or ""),
+        ]).lower():
+            return False
+        return True
+
+    deletable_items = [item for item in user_items if matches_filters(item)] if delete_all else user_items
+    user_ids = {str(item.get("id") or "").strip() for item in user_items if str(item.get("id") or "").strip()}
+    deletable_ids = {str(item.get("id") or "").strip() for item in deletable_items if str(item.get("id") or "").strip()}
+
+    if delete_all:
+        related_ids = set(deletable_ids)
+    else:
+        missing_ids = requested_ids - user_ids
+        if missing_ids:
+            raise HTTPException(status_code=404, detail="Learning Memory를 찾을 수 없습니다.")
+        related_ids = set(requested_ids)
+
+    changed = True
+    while changed:
+        changed = False
+        for item in user_items:
+            item_id = str(item.get("id") or "").strip()
+            source_id = str(item.get("source_trace_id") or "").strip()
+            if not item_id:
+                continue
+            if item_id in related_ids or (source_id and source_id in related_ids):
+                before = len(related_ids)
+                related_ids.add(item_id)
+                if source_id:
+                    related_ids.add(source_id)
+                changed = changed or len(related_ids) > before
 
     kept = []
     deleted_count = 0
@@ -2915,14 +2957,33 @@ async def delete_learning_memory(memory_id: str, data_user_id: str = Depends(cur
             kept.append(item)
             continue
         item_id = str(item.get("id") or "").strip()
-        item_source_id = str(item.get("source_trace_id") or "").strip()
-        if item_id in related_ids or item_source_id in related_ids:
+        if item_id in related_ids:
             deleted_count += 1
             continue
         kept.append(item)
 
     _save_recall_traces(kept)
     return {"ok": True, "deleted_count": deleted_count}
+
+
+@app.delete("/learning-memory")
+async def delete_learning_memories(
+    payload: LearningMemoryBulkDeleteRequest,
+    data_user_id: str = Depends(current_uid),
+) -> Dict[str, Any]:
+    return _delete_learning_memories_for_user(
+        data_user_id=data_user_id,
+        target_ids=set(payload.ids or []),
+        delete_all=bool(payload.delete_all),
+        course=payload.course,
+        unit=payload.unit,
+        concept=payload.concept,
+    )
+
+
+@app.delete("/learning-memory/{memory_id}")
+async def delete_learning_memory(memory_id: str, data_user_id: str = Depends(current_uid)) -> Dict[str, Any]:
+    return _delete_learning_memories_for_user(data_user_id=data_user_id, target_ids={memory_id})
 
 
 @app.get("/learning-memory/summary")

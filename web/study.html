@@ -56,7 +56,7 @@
     <span class="sub">스터디 / Study</span>
     <span id="userLabel" class="sub"></span>
     <span class="spacer"></span>
-    <a class="btn" href="/">갤러리로</a>
+    <a class="btn" href="/">My Library</a>
   </div>
   <main>
     <div class="hero">
@@ -252,7 +252,7 @@
 
   async function init() {
     const gate = document.getElementById('gate');
-    if (!token()) { gate.className = 'error'; gate.textContent = '로그인이 필요합니다. 갤러리에서 먼저 로그인해주세요.'; return; }
+    if (!token()) { gate.className = 'error'; gate.textContent = '로그인이 필요합니다. My Library에서 먼저 로그인해주세요.'; return; }
     try {
       const me = await api('/auth/me', { headers: headers() });
       if (!me.user.study_enabled) {

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>LinkNote · Knowledge Gallery</title>
+<title>LinkNote · My Library</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif; background: #fbfcfe; color: #1f2937; }
@@ -147,7 +147,7 @@
   #tip.on { opacity: 1; transform: translateY(0); }
   #tip .t-nm { font-weight: 700; } #tip .t-meta { color: #cbd5e1; margin-top: 2px; }
 
-  /* 시간표를 보조로: 기본은 갤러리 전면, 토글 시 사이드바 표시 */
+  /* 시간표를 보조로: 기본은 My Library 전면, 토글 시 사이드바 표시 */
   .topbar button.ghost { background:#fff; color:#2563eb; }
   .layout.collapsed { grid-template-columns: 1fr; }
   .layout.collapsed .sidebar { display:none; }
@@ -398,7 +398,7 @@
         <label>과목</label><input id="up_course" placeholder="예: 병태생리학 1">
       </div>
       <label>자료명</label><input id="up_title" placeholder="예: 9장 강의자료">
-      <label>단원 (갤러리 단원 카드가 됩니다)</label><input id="up_unit" placeholder="예: 신부전">
+      <label>단원 (My Library 단원 카드가 됩니다)</label><input id="up_unit" placeholder="예: 신부전">
       <label>PDF 파일 (선택하면 칸이 자동 추가돼요)</label><div id="up_files"></div>
       <button onclick="doUpload()">업로드 &amp; 학습</button>
       <div id="up_status" class="modal-status"></div>
@@ -547,7 +547,7 @@
     }
     const withIdx = list.map((e, i) => Object.assign({}, e, { _i: i }));
     const semesters = [...new Set(withIdx.map(e => e.semester || '학기 미정'))].sort();
-    // 갤러리에서 고른 학기를 기본값으로(없으면 첫 학기)
+    // My Library에서 고른 학기를 기본값으로(없으면 첫 학기)
     let current = (state.semester && semesters.includes(state.semester)) ? state.semester : semesters[0];
 
     const opts = semesters.map(s => `<option value="${esc(s)}" ${s===current?'selected':''}>${esc(s)}</option>`).join('');
@@ -878,7 +878,7 @@
     inlineCourses = [...new Set((sems||[]).flatMap(x => (x.courses||[]).map(c => c.course)))].sort();
     view.innerHTML = `
       ${inlineQuestionHTML('전체 자료')}
-      <div class="section-title">📚 과목 갤러리</div>
+      <div class="section-title">My Library</div>
       <div class="view-controls" style="padding:0 24px; display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:14px;">
         <button id="ttHomeBtn" onclick="toggleTimetable()">🗓 시간표</button>
         <select id="semSel" style="border:1px solid #d8dee9;border-radius:8px;padding:8px 14px;font-size:0.85rem;">${opts}</select>

@@ -8,7 +8,7 @@ The production desktop window is configured in `src-tauri/tauri.conf.json` to op
 http://127.0.0.1:8000
 ```
 
-That means the desktop app shows the same `web/gallery.html` experience served by `api_server.py`, including the concept-map recall trace controls.
+That means the desktop app shows the same My Library (`web/gallery.html`) experience served by `api_server.py`, including the concept-map recall trace controls.
 
 ## Run
 
@@ -31,6 +31,6 @@ Phase 1 recall trace is implemented in the backend and gallery UI:
 
 - `POST /recall-traces`
 - `GET /recall-traces`
-- `web/gallery.html` concept-map `설명해보기` panel
+- My Library (`web/gallery.html`) concept-map `설명해보기` panel
 
 No additional desktop-only data model is used. The desktop app should continue to rely on the existing local `user_id` recall trace flow until auth/user database work is planned in a later PR.

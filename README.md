@@ -4,7 +4,7 @@ LinkNote is a lightweight local-first learning system for PDF-based study workfl
 
 Current learning flow: PDF -> Explain -> AI Feedback -> Learning Dashboard -> Start Review -> Review Map -> Knowledge Exploration. Learning Dashboard is the default study entry; the Full Knowledge Map remains available as an advanced exploration view.
 
-The current project is focused on stabilizing a single-user/local evaluation flow before building a full multi-user service. It supports the core knowledge infrastructure pieces: PDF upload, chunking, ChromaDB indexing, retrieval-augmented generation, concept extraction, concept connection data, Learning Memory hub flows, and gallery-style study UI experiments.
+The current project is focused on stabilizing a single-user/local evaluation flow before building a full multi-user service. It supports the core knowledge infrastructure pieces: PDF upload, chunking, ChromaDB indexing, retrieval-augmented generation, concept extraction, concept connection data, Learning Memory hub flows, and My Library study UI experiments.
 
 `user_id` may appear in code or metadata, but it is currently a temporary local identifier. It is not yet a full authentication account, production user database key, or multi-user storage boundary.
 
@@ -53,7 +53,7 @@ Current frontend entry points:
 
 ## Question Modes
 
-The active Gallery UI has two question modes:
+My Library has two question modes:
 
 - `빠른 검색`: finds related chunks, concepts, and Learning Memory/Recall matches through `POST /ask/search` without generating a GPT answer.
 - `AI 답변`: uses the existing `POST /ask` flow and calls the configured answer-generation provider.
@@ -109,7 +109,7 @@ Note: the current `desktop-app` branch contains `web/app.js` and `web/gallery.ht
 - `pdf_loader.py`: PDF text extraction and ingestion support.
 - `reset_db.py`: Local development utility for clearing generated state.
 - `providers/`: Model provider layer for Ollama, OpenAI, or hybrid configurations.
-- `web/`: Browser UI experiments, including the gallery view.
+- `web/`: Browser UI experiments, including My Library.
 - `desktop/`: Desktop app shell and Tauri project.
 - `data/`: Local JSON state for concepts, indexes, links, and future recall traces.
 - `chroma_db/`: Local ChromaDB vector index storage.
@@ -188,7 +188,7 @@ LinkNote is a learning system, not a grading system. Concept Graph now separates
   - `MASTERED`: recently explained with few or no missing links.
 - `review_priority`: a 0-100 heuristic recommendation for what to review now. It is not a score, grade, or correctness judgment.
 
-The Concept Graph, Learning Memory Review Map, and desktop Gallery use Learning State, Review Priority, Recall, and Missing Links from existing local metadata. These fields stay implementation metadata and should not dominate the default dashboard. They do not call GPT, reindex ChromaDB, change ownership/auth, or rebuild concept extraction.
+The Concept Graph, Learning Memory Review Map, and desktop My Library use Learning State, Review Priority, Recall, and Missing Links from existing local metadata. These fields stay implementation metadata and should not dominate the default dashboard. They do not call GPT, reindex ChromaDB, change ownership/auth, or rebuild concept extraction.
 
 ### Phase 4: Learning Memory
 
@@ -239,7 +239,7 @@ LinkNote is currently focused on building a unified knowledge management system 
 * Concept extraction from lecture materials
 * Concept graph visualization
 * Cross-course concept linking
-* Gallery-based document browsing
+* My Library-based document browsing
 
 At the current stage, LinkNote is designed primarily for **single-user development and evaluation**.
 

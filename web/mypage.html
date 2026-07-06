@@ -39,6 +39,14 @@
   .item { border:1px solid #eef1f6; border-radius:10px; padding:10px 12px; background:#f8fafc; font-size:.84rem; line-height:1.45; }
   .item small { display:block; color:#94a3b8; margin-top:3px; }
   .memory-card { border:1px solid #e2e8f0; border-radius:12px; padding:14px; background:#fff; box-shadow:0 5px 16px rgba(15,23,42,.04); font-size:.86rem; line-height:1.55; }
+  .memory-header { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; }
+  .memory-select { display:flex; align-items:center; gap:6px; color:#475569; font-size:.78rem; font-weight:800; white-space:nowrap; }
+  .memory-select input { width:16px; height:16px; accent-color:#2563eb; }
+  .memory-bulk { align-items:center; justify-content:space-between; border:1px solid #eef1f6; border-radius:10px; padding:10px 12px; background:#f8fafc; }
+  .memory-bulk .bulk-left { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+  .memory-bulk label { display:flex; align-items:center; gap:7px; color:#475569; font-size:.82rem; font-weight:800; }
+  .memory-bulk input { width:16px; height:16px; accent-color:#2563eb; }
+  .memory-bulk button:disabled { opacity:.45; cursor:not-allowed; }
   .memory-meta { color:#94a3b8; font-size:.78rem; margin-top:3px; }
   .memory-two-col { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:12px; }
   .memory-pane { border:1px solid #eef1f6; border-radius:10px; padding:12px; background:#f8fafc; }
@@ -106,8 +114,13 @@
     if(!r.ok) throw new Error(`${path} returned ${r.status} ${d.detail || r.statusText}`);
     return d;
   }
-  async function deleteJSON(path){
-    const r = await fetch(API + path, { method:'DELETE', headers: headers() });
+  async function deleteJSON(path, body){
+    const opts = { method:'DELETE', headers: headers() };
+    if(body !== undefined){
+      opts.headers = { ...opts.headers, 'Content-Type':'application/json' };
+      opts.body = JSON.stringify(body || {});
+    }
+    const r = await fetch(API + path, opts);
     const d = await r.json().catch(()=>({}));
     if(!r.ok) throw new Error(`${path} returned ${r.status} ${d.detail || r.statusText}`);
     return d;
@@ -122,6 +135,8 @@
     ? `<div class="chips">${items.map(item => `<span class="chip">${esc(item.name || item.concept || item)}</span>`).join('')}</div>`
     : '';
   let currentMemories = [];
+  let selectedMemoryIds = new Set();
+  let totalMemoryCount = 0;
   function feedbackSection(item, index){
     const missing = Array.isArray(item.missing_links) ? item.missing_links : [];
     const good = Array.isArray(item.good_points) ? item.good_points : [];
@@ -145,9 +160,15 @@
   }
   function memoryCard(item, index){
     const graphUrl = `/concept-graph.html?mode=connection&concept=${encodeURIComponent(item.concept || '')}&course=${encodeURIComponent(item.course || '')}&unit=${encodeURIComponent(item.unit || '')}`;
+    const checked = selectedMemoryIds.has(item.id) ? ' checked' : '';
     return `<div class="memory-card">
-      <h3>${esc(item.concept || '개념 미지정')}</h3>
-      <div class="memory-meta">${esc(item.course)} · ${esc(item.unit)} · ${esc(dateText(item.created_at))}</div>
+      <div class="memory-header">
+        <div>
+          <h3>${esc(item.concept || '개념 미지정')}</h3>
+          <div class="memory-meta">${esc(item.course)} · ${esc(item.unit)} · ${esc(dateText(item.created_at))}</div>
+        </div>
+        <label class="memory-select"><input type="checkbox" onchange='toggleMemorySelection(${JSON.stringify(item.id)}, this.checked)'${checked}>선택</label>
+      </div>
       <div class="memory-two-col">
         <section class="memory-pane">
           <h4>내 설명</h4>
@@ -163,6 +184,49 @@
         <button class="danger" onclick="deleteMemory(${index})">내 설명 기록 삭제</button>
       </div>
     </div>`;
+  }
+  function memoryBulkControlsHTML(){
+    if(!currentMemories.length) return '';
+    const visibleIds = currentMemories.map(item => item.id).filter(Boolean);
+    const allVisibleSelected = visibleIds.length > 0 && visibleIds.every(id => selectedMemoryIds.has(id));
+    return `<div class="memory-bulk actions" style="margin-top:12px">
+      <div class="bulk-left">
+        <label><input id="memorySelectAll" type="checkbox" onchange="toggleAllVisibleMemories(this.checked)"${allVisibleSelected ? ' checked' : ''}>현재 목록 전체 선택</label>
+        <span class="sub" id="memorySelectionCount">선택 0개</span>
+      </div>
+      <div class="actions">
+        <button id="deleteSelectedBtn" class="danger" onclick="deleteSelectedMemories()" disabled>선택 삭제</button>
+        <button class="danger" onclick="deleteAllMemories()">전체 삭제</button>
+      </div>
+    </div>
+    <p class="sub">현재 ${currentMemories.length}개 표시 · 전체 ${totalMemoryCount}개</p>`;
+  }
+  function refreshMemorySelectionUI(){
+    const count = selectedMemoryIds.size;
+    const label = document.getElementById('memorySelectionCount');
+    if(label) label.textContent = `선택 ${count}개`;
+    const btn = document.getElementById('deleteSelectedBtn');
+    if(btn) btn.disabled = count === 0;
+    const selectAll = document.getElementById('memorySelectAll');
+    if(selectAll){
+      const visibleIds = currentMemories.map(item => item.id).filter(Boolean);
+      selectAll.checked = visibleIds.length > 0 && visibleIds.every(id => selectedMemoryIds.has(id));
+      selectAll.indeterminate = visibleIds.some(id => selectedMemoryIds.has(id)) && !selectAll.checked;
+    }
+  }
+  function toggleMemorySelection(id, checked){
+    if(!id) return;
+    if(checked) selectedMemoryIds.add(id);
+    else selectedMemoryIds.delete(id);
+    refreshMemorySelectionUI();
+  }
+  function toggleAllVisibleMemories(checked){
+    currentMemories.forEach(item => {
+      if(!item.id) return;
+      if(checked) selectedMemoryIds.add(item.id);
+      else selectedMemoryIds.delete(item.id);
+    });
+    refreshMemorySelectionUI();
   }
   function snapshotHTML(learning, memorySummary){
     const body = memorySummary.weekly_summary || '설명해보기를 사용하면 복습 메모리가 쌓입니다.';
@@ -181,6 +245,8 @@
     const isNursing = (account.student_track || 'general') === 'nursing';
     const clinicalItems = Array.isArray(clinical?.items) ? clinical.items : [];
     currentMemories = Array.isArray(memories?.items) ? memories.items : [];
+    totalMemoryCount = Number(memories?.total || currentMemories.length || 0);
+    selectedMemoryIds = new Set([...selectedMemoryIds].filter(id => currentMemories.some(item => item.id === id)));
     document.getElementById('userLabel').textContent = account.display_name || account.email || '';
     document.getElementById('app').className = 'grid';
     document.getElementById('app').innerHTML = `
@@ -195,6 +261,7 @@
         </details>
       </section>
       <section class="wide"><h2>Learning Memory</h2>
+        ${memoryBulkControlsHTML()}
         <div class="list">${currentMemories.length ? currentMemories.map(memoryCard).join('') : '<div class="item">아직 저장된 Learning Memory가 없습니다. 설명해보기를 사용하면 여기에 쌓입니다.</div>'}</div>
         <div class="actions" style="margin-top:12px">
           <a class="btn" href="/learning-memory.html">Learning History</a>
@@ -211,6 +278,7 @@
         <div class="actions" style="margin-top:12px"><a class="btn primary" href="/clinical-reflection.html">실습 회고 / Clinical Reflection</a></div>
       </section>
       `;
+    refreshMemorySelectionUI();
   }
   async function generateMemoryFeedback(index){
     const item = currentMemories[index];
@@ -239,21 +307,45 @@
     if(!confirm('이 <내 설명> 기록을 삭제할까요?\n연결된 AI 피드백 기록도 함께 삭제됩니다.')) return;
     try {
       await deleteJSON(`/learning-memory/${encodeURIComponent(item.id)}`);
+      selectedMemoryIds.delete(item.id);
       await init();
     } catch(e) {
       alert('Learning Memory를 삭제하지 못했습니다: ' + e.message);
     }
   }
+  async function deleteSelectedMemories(){
+    const ids = [...selectedMemoryIds];
+    if(!ids.length) return;
+    if(!confirm(`선택한 <내 설명> 기록 ${ids.length}개를 삭제할까요?\n연결된 AI 피드백 기록도 함께 삭제됩니다.`)) return;
+    try {
+      await deleteJSON('/learning-memory', { ids });
+      selectedMemoryIds.clear();
+      await init();
+    } catch(e) {
+      alert('선택한 Learning Memory를 삭제하지 못했습니다: ' + e.message);
+    }
+  }
+  async function deleteAllMemories(){
+    if(!totalMemoryCount) return;
+    if(!confirm(`전체 <내 설명> 기록 ${totalMemoryCount}개를 모두 삭제할까요?\n연결된 AI 피드백 기록도 함께 삭제됩니다.`)) return;
+    try {
+      await deleteJSON('/learning-memory', { delete_all:true });
+      selectedMemoryIds.clear();
+      await init();
+    } catch(e) {
+      alert('전체 Learning Memory를 삭제하지 못했습니다: ' + e.message);
+    }
+  }
   async function init(){
     const app = document.getElementById('app');
-    if(!token()) { app.className='error'; app.textContent='로그인이 필요합니다. Gallery에서 먼저 로그인해주세요.'; return; }
+    if(!token()) { app.className='error'; app.textContent='로그인이 필요합니다. My Library에서 먼저 로그인해주세요.'; return; }
     try {
       const me = await getJSON('/auth/me');
       if((me.user || {}).study_enabled) document.getElementById('studyLink').style.display = 'inline-block';
       const [summary, memory, memories] = await Promise.all([
         getJSON('/me/summary'),
         getJSON('/learning-memory/summary'),
-        getJSON('/learning-memory?limit=5').catch(()=>({ items: [] })),
+        getJSON('/learning-memory?limit=200').catch(()=>({ items: [] })),
       ]);
       let clinical = { items: [] };
       if(((me.user || {}).student_track || 'general') === 'nursing'){

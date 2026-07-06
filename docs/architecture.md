@@ -14,7 +14,7 @@ The active development surface is centered on:
 - Retrieval-augmented generation (RAG)
 - Concept extraction
 - Concept graph construction
-- Gallery and study UI experiments
+- My Library and study UI experiments
 
 `user_id` exists in parts of the codebase, but it should be treated as a temporary identifier for local testing and evaluation. It is not yet a full authentication account, multi-user storage boundary, or production user database key.
 
