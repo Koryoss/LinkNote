@@ -225,5 +225,17 @@ def upsert_google_user(email: str, google_sub: str, display_name: str = "", link
     return user
 
 
+def update_student_track(uid: str, student_track: str):
+    track = _normalize_student_track(student_track)
+    users = _load_users()
+    for email, user in users.items():
+        if user.get("id") == uid:
+            user["student_track"] = track
+            users[email] = user
+            _save_users(users)
+            return user, None
+    return None, "사용자를 찾을 수 없습니다."
+
+
 def public_user(user: dict) -> dict:
     return _public(user)

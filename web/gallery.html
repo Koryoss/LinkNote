@@ -317,6 +317,7 @@
   .topbar .nav-link { display:none; border:1px solid #d8dee9; background:#fff; color:#2563eb; border-radius:8px; padding:7px 12px; font-size:0.84rem; text-decoration:none; font-weight:600; }
   .topbar .nursing-only { display:none; border-color:#bfdbfe; background:#eff6ff; color:#1d4ed8; }
   .topbar .study-only { display:none; border-color:#bbf7d0; background:#f0fdf4; color:#15803d; }
+  .topbar .track-toggle { display:none; border-color:#c8d6f1; background:#fff; color:#2563eb; }
   .auth-overlay { position:fixed; inset:0; z-index:200; background:linear-gradient(135deg,#eef4ff,#f7f9ff 60%,#fff); display:flex; align-items:center; justify-content:center; }
   .auth-overlay[hidden]{ display:none; }
   .auth-card { width:min(380px,92vw); background:#fff; border:1px solid #e8ebf2; border-radius:18px; padding:28px 26px; box-shadow:0 24px 60px rgba(15,23,42,0.16); display:flex; flex-direction:column; }
@@ -359,6 +360,7 @@
     <input id="uid" type="hidden" value="">
     <span id="userChip" class="user-chip"></span>
     <span class="topbar-spacer"></span>
+    <button id="trackToggleBtn" class="nav-link track-toggle" onclick="toggleStudentTrack()" title="학습 버전 전환"></button>
     <a id="myPageLink" class="nav-link" href="/mypage.html">My Page</a>
     <button id="clinicalReflectionBtn" class="nav-link nursing-only" onclick="location.href='/clinical-reflection.html'" title="Clinical Reflection">실습 회고 / Clinical Reflection</button>
     <button id="logoutBtn" onclick="logout()" style="display:none;">로그아웃</button>
@@ -1082,8 +1084,11 @@
   }
 
   // ===== 임상 검증 (간호학과 트랙 전용, 단원 화면 우측 탭) =====
+  function currentStudentTrack(){
+    return (sessionUser && sessionUser.student_track === 'nursing') ? 'nursing' : 'general';
+  }
   function clinicalEnabled(){
-    return !!(sessionUser && ((sessionUser.student_track === 'nursing') || sessionUser.study_enabled));
+    return currentStudentTrack() === 'nursing';
   }
   function renderRelatedConcepts(items, heading){
     if(!items || !items.length) return '';
@@ -1786,16 +1791,49 @@
     showAuth();
   }
   function showAuth(){ document.getElementById('authOverlay').hidden = false; initGoogle(); }
+  function renderTrackControls(){
+    const track = currentStudentTrack();
+    const toggle = document.getElementById('trackToggleBtn');
+    const clinicalBtn = document.getElementById('clinicalReflectionBtn');
+    if(toggle){
+      toggle.style.display = 'inline-block';
+      toggle.textContent = track === 'nursing' ? 'General 버전으로 전환' : 'Nursing 버전으로 전환';
+      toggle.title = track === 'nursing' ? '일반 학습 화면으로 전환' : '간호학과 학습 화면으로 전환';
+    }
+    if(clinicalBtn) clinicalBtn.style.display = track === 'nursing' ? 'inline-block' : 'none';
+  }
   function setSession(user){
-    sessionUser = user;
-    document.getElementById('uid').value = user.data_user_id || user.email;
-    document.getElementById('userChip').textContent = user.display_name || user.email;
+    sessionUser = { ...user, student_track: user.student_track === 'nursing' ? 'nursing' : 'general' };
+    document.getElementById('uid').value = sessionUser.data_user_id || sessionUser.email;
+    document.getElementById('userChip').textContent = sessionUser.display_name || sessionUser.email;
     document.getElementById('myPageLink').style.display = 'inline-block';
-    document.getElementById('clinicalReflectionBtn').style.display = user.student_track === 'nursing' ? 'inline-block' : 'none';
+    renderTrackControls();
     document.getElementById('logoutBtn').style.display = 'inline-block';
     document.getElementById('authOverlay').hidden = true;
     ensureInitialHistory();
     loadHome(false);
+  }
+  async function toggleStudentTrack(){
+    if(!sessionUser) return;
+    const nextTrack = currentStudentTrack() === 'nursing' ? 'general' : 'nursing';
+    const label = nextTrack === 'nursing' ? 'Nursing 버전' : 'General 버전';
+    if(!confirm(`${label}으로 전환할까요?`)) return;
+    const btn = document.getElementById('trackToggleBtn');
+    const prev = btn ? btn.textContent : '';
+    if(btn){ btn.disabled = true; btn.textContent = '전환 중...'; }
+    try{
+      const r = await fetch(API + '/auth/track', {
+        method:'PATCH',
+        headers: authHeaders({'Content-Type':'application/json'}),
+        body: JSON.stringify({ student_track: nextTrack })
+      });
+      const d = await r.json().catch(()=>({}));
+      if(!r.ok) throw new Error(d.detail || r.statusText);
+      setSession(d.user);
+    }catch(e){
+      alert('버전 전환에 실패했습니다: ' + (e.message || e));
+      if(btn){ btn.disabled = false; btn.textContent = prev; }
+    }
   }
   function logout(){ localStorage.removeItem('ln_token'); location.reload(); }
   function authTab(which){
