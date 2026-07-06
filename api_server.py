@@ -49,6 +49,7 @@ REVIEW_SCHEDULE_PATH = os.path.join(DATA_DIR, "review_schedule.json")
 LEARNING_MEMORY_SUMMARIES_PATH = os.path.join(DATA_DIR, "learning_memory_summaries.json")
 CLINICAL_REFLECTIONS_PATH = os.path.join(DATA_DIR, "clinical_reflections.json")
 STUDY_CLAIMS_PATH = os.path.join(DATA_DIR, "study_claims.json")
+CLINICAL_VERIFICATIONS_PATH = os.path.join(DATA_DIR, "clinical_verifications.json")
 SEARCH_CACHE_PATH = os.path.join(DATA_DIR, "search_cache.json")
 CONCEPT_INDEX_PATH = os.path.join(DATA_DIR, "concept_index.json")
 CONCEPT_LINKS_PATH = os.path.join(DATA_DIR, "concept_links.json")
@@ -755,6 +756,70 @@ def _is_uuid_like(value: str) -> bool:
 def _safe_list_json(path: str) -> List[Dict[str, Any]]:
     data = _load_json_file(path)
     return [item for item in data if isinstance(item, dict)] if isinstance(data, list) else []
+
+
+def _load_cross_edges() -> List[Dict[str, Any]]:
+    """이미 만들어진 개념 지도(/concept-graph)와 같은 규칙으로 교차 링크를 읽는다.
+    엣지 소유자는 파일 상단 user_id가 아니라 양 끝 노드가 내 개념인지로 판별하므로
+    (호출부에서 by_id 멤버십으로 필터) 여기서는 형식 검증만 한다."""
+    data = _load_json_file(CONCEPT_LINKS_PATH)
+    if not isinstance(data, dict):
+        return []
+    return [edge for edge in data.get("edges", []) if isinstance(edge, dict)]
+
+
+def _related_cross_concepts(user_id: str, seed_text: str, limit: int = 5) -> List[Dict[str, Any]]:
+    """텍스트에 등장한 개념에서 '다른 과목'으로 이어지는 연계 개념을 찾는다.
+    저장된 개념 인덱스와 교차 링크만 사용해 임베딩·LLM 호출 없이 즉시 응답한다."""
+    text = (seed_text or "").strip()
+    if not text:
+        return []
+    nodes = [n for n in _safe_list_json(CONCEPT_INDEX_PATH) if n.get("user_id") == user_id]
+    edges = _load_cross_edges()
+    if not nodes or not edges:
+        return []
+    by_id = {str(n.get("id")): n for n in nodes}
+    seed_ids = {
+        str(n.get("id"))
+        for n in nodes
+        if len(term := str(n.get("keyword") or n.get("name") or "").strip()) >= 2 and term in text
+    }
+    if not seed_ids:
+        return []
+    candidates = []
+    for edge in edges:
+        a, b = str(edge.get("a")), str(edge.get("b"))
+        for src_id, dst_id in ((a, b), (b, a)):
+            if src_id not in seed_ids or dst_id not in by_id or src_id not in by_id:
+                continue
+            src, dst = by_id[src_id], by_id[dst_id]
+            if src.get("course") == dst.get("course"):
+                continue
+            candidates.append({
+                "from_concept": src.get("name"),
+                "from_course": src.get("course"),
+                "concept": dst.get("name"),
+                "course": dst.get("course"),
+                "unit": dst.get("unit"),
+                "reason": edge.get("reason") or "",
+                "score": round(float(edge.get("score") or 0), 3),
+            })
+    # 여러 시드가 같은 개념으로 이어지면 가장 강한 링크 하나만 남기고,
+    # 이미 시드(지금 보고 있는 개념)인 대상은 새 개념보다 뒤로 보낸다.
+    seed_names = {
+        (str(by_id[sid].get("name")), str(by_id[sid].get("course"))) for sid in seed_ids
+    }
+    candidates.sort(
+        key=lambda item: ((str(item["concept"]), str(item["course"])) in seed_names, -item["score"])
+    )
+    suggestions, seen_targets = [], set()
+    for cand in candidates:
+        target = (str(cand["concept"]), str(cand["course"]))
+        if target in seen_targets:
+            continue
+        seen_targets.add(target)
+        suggestions.append(cand)
+    return suggestions[:limit]
 
 
 def _iter_user_concepts(data: Any, user_id: str) -> List[Dict[str, Any]]:
@@ -3425,6 +3490,156 @@ async def study_claim_delete(claim_id: str, user: Dict[str, Any] = Depends(curre
         raise HTTPException(status_code=404, detail="저장된 주장을 찾을 수 없습니다.")
     data[uid] = remaining
     _save_json_file(STUDY_CLAIMS_PATH, data)
+    return {"ok": True}
+
+
+# ============== 임상 검증 (간호학과 트랙 전용) ==============
+# 갤러리 단원 화면 우측 패널에서 임상 주장·중재를 내 자료 근거로 검증한다.
+# 스터디의 주장 근거화와 같은 4필드 초안이지만, 간호 실습 교육 맥락으로 프레이밍한다.
+
+CLINICAL_VERIFY_PROMPT = """당신은 간호학 학습을 돕는 근거 검증 도구입니다.
+제공된 강의자료 청크와 임상 주장을 비교해 아래 JSON만 출력하세요 (다른 텍스트 없이).
+
+{"source_summary": "출처 요약: 자료명 p.페이지 — 없으면 '출처 미확인'",
+ "strength": "강|중|약|출처 미확인",
+ "application_context": "이 주장이 임상 실습에서 어떤 상황과 관련되는지 (교육 목적, 한 문장)",
+ "safety_note": "주의점: 상관·인과 구분, 환자 개별 적용 시 병원 지침·지도자 확인 필요 여부 (한 문장)"}
+
+근거강도 기준:
+- 강: 임상 가이드라인·교과서 원칙·메타분석
+- 중: 코호트·단면·척도 연구 수준의 서술 (n≥50)
+- 약: 소표본·사례 보고·전문가 의견 수준의 서술
+- 출처 미확인: 관련 자료 없거나 유사도 낮음
+
+규칙:
+- 진단·처방·환자 개별 의사결정 관련 주장은 safety_note에 "병원 지침·지도자 확인 필요" 필수
+- 인과관계 주장이면 safety_note에 "상관관계로만 표현 필요" 추가
+"""
+
+CLINICAL_DISCLAIMER = "⚠️ 교육용 근거 검증입니다. 실제 임상 의사결정은 병원 지침과 지도자 확인을 따르세요."
+
+
+def current_nursing_user(authorization: Optional[str] = Header(None)) -> Dict[str, Any]:
+    """임상 검증은 간호학과 트랙(또는 스터디 허용 계정)에서만 열린다."""
+    user = current_user(authorization)
+    track = (user.get("student_track") or "general").strip().lower()
+    if track != "nursing" and not _auth.is_study_enabled(user):
+        raise HTTPException(status_code=403, detail="임상 검증은 간호학과 트랙 계정에서 사용할 수 있습니다.")
+    return user
+
+
+class ClinicalVerifyRequest(BaseModel):
+    claim: str
+    semester: Optional[str] = None
+    course: Optional[str] = None
+    unit: Optional[str] = None
+
+
+class ClinicalVerificationSavePayload(BaseModel):
+    claim: str
+    source_summary: Optional[str] = ""
+    strength: Optional[str] = "출처 미확인"
+    application_context: Optional[str] = ""
+    safety_note: Optional[str] = ""
+    course: Optional[str] = ""
+    unit: Optional[str] = ""
+
+
+def _clinical_scope_chunks(uid: str, claim: str, req: "ClinicalVerifyRequest"):
+    """단원 → 과목 → 전체 순으로 좁은 범위부터 근거를 찾는다."""
+    scopes = []
+    if req.course and req.unit:
+        scopes.append({"semester": req.semester, "course": req.course, "unit": req.unit})
+    if req.course:
+        scopes.append({"semester": req.semester, "course": req.course})
+    scopes.append(None)
+    for scope in scopes:
+        chunks = search_relevant_chunks(claim, n_results=5, search_filter=scope, user_id=uid)
+        if chunks:
+            return chunks, get_filter_label(scope)
+    return [], get_filter_label(None)
+
+
+@app.post("/clinical/verify")
+async def clinical_verify(req: ClinicalVerifyRequest, user: Dict[str, Any] = Depends(current_nursing_user)) -> Dict[str, Any]:
+    claim = (req.claim or "").strip()
+    if not claim:
+        raise HTTPException(status_code=400, detail="claim이 필요합니다.")
+    uid = _study_uid(user)
+
+    chunks, scope_label = _clinical_scope_chunks(uid, claim, req)
+    if not chunks:
+        draft = {"source_summary": "출처 미확인", "strength": "출처 미확인",
+                 "application_context": "", "safety_note": CLINICAL_DISCLAIMER}
+    else:
+        raw = generate_openai_answer(
+            f"{CLINICAL_VERIFY_PROMPT}\n자료 청크:\n{_study_context(chunks)}\n\n임상 주장: {claim}",
+            max_tokens=600,
+        )
+        draft = _parse_study_claim_json(raw)
+
+    try:
+        related = _related_cross_concepts(uid, f"{claim} {draft.get('source_summary', '')}", limit=4)
+    except Exception:
+        related = []
+
+    return {
+        "claim": claim,
+        "draft": draft,
+        "sources": [_study_source(c) for c in chunks],
+        "scope_label": scope_label,
+        "related_concepts": related,
+        "disclaimer": CLINICAL_DISCLAIMER,
+    }
+
+
+@app.post("/clinical/verifications")
+async def clinical_verification_save(payload: ClinicalVerificationSavePayload, user: Dict[str, Any] = Depends(current_nursing_user)) -> Dict[str, Any]:
+    claim = (payload.claim or "").strip()
+    if not claim:
+        raise HTTPException(status_code=400, detail="claim이 필요합니다.")
+    entry = {
+        "id": uuid.uuid4().hex,
+        "claim": claim,
+        "source_summary": (payload.source_summary or "").strip(),
+        "strength": payload.strength if payload.strength in STUDY_STRENGTHS else "출처 미확인",
+        "application_context": (payload.application_context or "").strip(),
+        "safety_note": (payload.safety_note or "").strip(),
+        "course": (payload.course or "").strip(),
+        "unit": (payload.unit or "").strip(),
+        "created": int(time.time()),
+    }
+    data = _load_json_file(CLINICAL_VERIFICATIONS_PATH)
+    data.setdefault(_study_uid(user), []).insert(0, entry)
+    _save_json_file(CLINICAL_VERIFICATIONS_PATH, data)
+    return {"ok": True, "verification": entry}
+
+
+@app.get("/clinical/verifications")
+async def clinical_verification_list(
+    course: Optional[str] = None,
+    unit: Optional[str] = None,
+    limit: int = 20,
+    user: Dict[str, Any] = Depends(current_nursing_user),
+) -> Dict[str, Any]:
+    items = _load_json_file(CLINICAL_VERIFICATIONS_PATH).get(_study_uid(user), [])
+    if course:
+        items = [i for i in items if (i.get("course") or "") == course]
+    if unit:
+        items = [i for i in items if (i.get("unit") or "") == unit]
+    return {"items": items[:max(1, min(100, limit))]}
+
+
+@app.delete("/clinical/verifications/{verification_id}")
+async def clinical_verification_delete(verification_id: str, user: Dict[str, Any] = Depends(current_nursing_user)) -> Dict[str, Any]:
+    data = _load_json_file(CLINICAL_VERIFICATIONS_PATH)
+    uid = _study_uid(user)
+    items = data.get(uid, [])
+    remaining = [i for i in items if i.get("id") != verification_id]
+    if len(remaining) == len(items):
+        raise HTTPException(status_code=404, detail="저장된 검증 기록을 찾을 수 없습니다.")
+    data[uid] = remaining
+    _save_json_file(CLINICAL_VERIFICATIONS_PATH, data)
     return {"ok": True}
 
 
