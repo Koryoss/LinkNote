@@ -198,8 +198,7 @@
         <button id="deleteSelectedBtn" class="danger" onclick="deleteSelectedMemories()" disabled>선택 삭제</button>
         <button class="danger" onclick="deleteAllMemories()">전체 삭제</button>
       </div>
-    </div>
-    <p class="sub">현재 ${currentMemories.length}개 표시 · 전체 ${totalMemoryCount}개</p>`;
+    </div>`;
   }
   function refreshMemorySelectionUI(){
     const count = selectedMemoryIds.size;
@@ -250,23 +249,20 @@
     document.getElementById('userLabel').textContent = account.display_name || account.email || '';
     document.getElementById('app').className = 'grid';
     document.getElementById('app').innerHTML = `
-      <section class="wide">
-        <details class="dev">
-          <summary>계정 정보</summary>
-          <div class="kv">
-            ${row('Email', account.email)}
-            ${row('Display name', account.display_name)}
-            ${row('Student track', account.student_track || 'general')}
-          </div>
-        </details>
+      <section class="wide"><h2>계정 정보</h2>
+        <div class="kv">
+          ${row("Email", account.email)}
+          ${row("Display name", account.display_name)}
+          ${row("Student track", account.student_track || "general")}
+        </div>
+        ${snapshotHTML(learning, memorySummary)}
       </section>
-      <section class="wide"><h2>Learning Memory</h2>
+      <section class="wide"><h2>Learning Memory <span class="sub">현재 ${currentMemories.length}개 표시 · 전체 ${totalMemoryCount}개</span></h2>
         ${memoryBulkControlsHTML()}
-        <div class="list">${currentMemories.length ? currentMemories.map(memoryCard).join('') : '<div class="item">아직 저장된 Learning Memory가 없습니다. 설명해보기를 사용하면 여기에 쌓입니다.</div>'}</div>
+        <div class="list">${currentMemories.length ? currentMemories.map(memoryCard).join("") : '<div class="item">아직 저장된 Learning Memory가 없습니다. 설명해보기를 사용하면 여기에 쌓입니다.</div>'}</div>
         <div class="actions" style="margin-top:12px">
           <a class="btn" href="/learning-memory.html">Learning History</a>
         </div>
-        ${snapshotHTML(learning, memorySummary)}
       </section>
       <section class="wide nursing-card ${isNursing ? 'on' : ''}"><h2>Nursing Practice Mode: Clinical Reflection</h2>
         <div class="stats">
