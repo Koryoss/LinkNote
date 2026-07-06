@@ -124,7 +124,7 @@
     return Number.isNaN(d.getTime()) ? String(v) : d.toLocaleString('ko-KR');
   };
   async function getJSON(path){
-    const r = await fetch(API + path, { headers: headers() });
+    const r = await fetch(API + path, { headers: headers(), cache:'no-store' });
     const d = await r.json().catch(()=>({}));
     if(!r.ok) throw new Error(`${path} returned ${r.status} ${d.detail || r.statusText}`);
     return d;
@@ -418,10 +418,11 @@
   }
 
   function aiSummaryCard(item){
-    return `<div class="ai-result">
+    const id = String(item.id || '');
+    return `<div class="ai-result" data-summary-id="${esc(id)}">
       <div class="actions" style="justify-content:space-between; align-items:center; margin-bottom:8px">
         <h3 style="margin-bottom:0">${esc(item.title || 'AI Summary')}</h3>
-        <button onclick="deleteAiSummary('${esc(item.id || '')}')">삭제</button>
+        <button type="button" data-delete-summary-id="${esc(id)}" onclick='deleteAiSummary(${JSON.stringify(id)})'>삭제</button>
       </div>
       <small>${esc(item.summary_type || '')} · ${esc(dateText(item.created_at))}</small>
       <p style="margin-top:8px">${esc(item.summary || '')}</p>
@@ -566,17 +567,24 @@
     }
   }
   async function deleteAiSummary(id){
-    if(!id) return;
+    if(!id) { alert('삭제할 AI Summary id를 찾지 못했습니다. 새로고침 후 다시 시도해주세요.'); return; }
     if(!confirm('이 AI Summary를 삭제할까요?')) return;
+    const btn = document.querySelector(`[data-delete-summary-id="${CSS.escape(id)}"]`);
+    const card = document.querySelector(`[data-summary-id="${CSS.escape(id)}"]`);
+    const originalText = btn?.textContent || '삭제';
+    if(btn){ btn.disabled = true; btn.textContent = '삭제 중...'; }
     try {
       const r = await fetch(API + '/learning-memory/ai-summaries/' + encodeURIComponent(id), {
         method:'DELETE',
         headers: headers(),
+        cache:'no-store',
       });
       const d = await r.json().catch(()=>({}));
       if(!r.ok) throw new Error(d.detail || r.statusText);
+      if(card) card.remove();
       await loadMemories();
     } catch(e) {
+      if(btn){ btn.disabled = false; btn.textContent = originalText; }
       alert('AI Summary 삭제에 실패했습니다: ' + (e.message || e));
     }
   }
