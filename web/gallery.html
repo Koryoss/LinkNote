@@ -80,6 +80,31 @@
   .doc-file { font-weight:700; color:#1e293b; margin:10px 0 4px; font-size:0.82rem; }
   .doc-pg { color:#2563eb; font-weight:600; font-size:0.74rem; margin:8px 0 2px; }
   .doc-tx { white-space:pre-wrap; margin-bottom:6px; }
+  .unit-cols .unit-main { order:1; }
+  .unit-cols .doc-panel { order:2; }
+  .unit-cols.doc-collapsed .doc-panel .clinical-panel { display:none; }
+  .unit-cols.doc-collapsed .doc-panel .doc-tab { display:none; }
+  .doc-tab { border:1px solid #d8dee9; background:#fff; color:#475569; border-radius:6px; padding:3px 8px; font-size:.72rem; cursor:pointer; font-weight:600; }
+  .doc-tab.on { border-color:#2563eb; color:#2563eb; background:#eff6ff; }
+  .clinical-panel { flex:1 1 auto; min-height:0; overflow-y:auto; padding:12px; display:flex; flex-direction:column; gap:10px; font-size:.8rem; background:#fff; }
+  .clinical-panel[hidden] { display:none; }
+  .clinical-panel textarea { width:100%; border:1px solid #d8dee9; border-radius:8px; padding:8px 10px; font-size:.8rem; font-family:inherit; resize:vertical; box-sizing:border-box; }
+  .clin-note { background:#fff7ed; border:1px solid #fed7aa; color:#9a3412; border-radius:8px; padding:8px 10px; line-height:1.5; font-size:.72rem; }
+  .clin-row { display:flex; align-items:center; gap:8px; }
+  .clin-btn { border:1px solid #2563eb; background:#2563eb; color:#fff; border-radius:8px; padding:6px 12px; font-size:.78rem; cursor:pointer; font-weight:700; }
+  .clin-btn:disabled { opacity:.45; cursor:default; }
+  .clin-card { border:1px solid #e8ebf2; border-radius:10px; padding:10px; background:#f8fafc; line-height:1.55; }
+  .clin-card .k { color:#64748b; font-size:.72rem; display:block; margin-top:8px; }
+  .clin-card .k:first-child { margin-top:0; }
+  .clin-strength { display:inline-block; border-radius:999px; padding:2px 10px; font-weight:800; font-size:.72rem; }
+  .clin-strength.s강 { background:#dcfce7; color:#15803d; }
+  .clin-strength.s중 { background:#fef9c3; color:#a16207; }
+  .clin-strength.s약 { background:#ffedd5; color:#c2410c; }
+  .clin-strength.s미확인 { background:#f1f5f9; color:#64748b; }
+  .clin-src { border:1px solid #eef1f6; background:#fff; border-radius:8px; padding:5px 8px; font-size:.72rem; color:#475569; margin-top:4px; }
+  .clin-saved-head { font-weight:700; color:#1e293b; margin-top:6px; font-size:.78rem; }
+  .clin-item { border:1px solid #eef1f6; border-radius:8px; padding:8px 24px 8px 10px; background:#fff; position:relative; margin-top:4px; line-height:1.5; }
+  .clin-item .del { position:absolute; top:6px; right:6px; border:none; background:none; color:#94a3b8; cursor:pointer; font-size:.9rem; }
   @media (max-width:900px){ .unit-cols{flex-direction:column;} .doc-panel{flex:1 1 auto; width:100%; height:min(62vh,520px); min-height:320px;} }
   .line { stroke: #cbd5e1; stroke-width: 2; opacity: 0.4; }
   .line.active { stroke: #2563eb; opacity: 0.95; stroke-width: 2.5; }
@@ -430,6 +455,7 @@
   // 같은 서버가 화면을 서빙하면 상대경로(웹/데스크톱), 파일로 직접 열면 로컬 서버로 폴백
   const API = location.protocol.startsWith('http') ? '' : 'http://127.0.0.1:8000';
   let state = { page: 'home', semester: null, course: null, unit: null };
+  let sessionUser = null;
 
   const DEMO = {
     library: { total_chunks: 0, semesters: [
@@ -1027,7 +1053,9 @@
     inlineAskCourse = state.course;
     view.innerHTML = `<div class="section-title">${esc(unit)} · 개념 지도 ${note} <button class="mini-btn" onclick="renameUnitPrompt()">✏️ 단원명 수정</button></div>
       <div class="unit-cols" id="unitCols">
-        <div class="doc-panel"><div class="doc-head"><span class="doc-title">📄 파일 원문</span><select id="doc_sel" onchange="docShow()"></select><button class="mini-btn" onclick="toggleDocPanel()" id="docToggleBtn">PDF 닫기</button></div><iframe id="doc_frame" class="doc-frame" title="원문 PDF"></iframe></div>
+        <div class="doc-panel"><div class="doc-head">${clinicalEnabled()
+            ? `<button class="doc-tab on" id="docTabDoc" onclick="docTab('doc')">📄 원문</button><button class="doc-tab" id="docTabClin" onclick="docTab('clinical')">🩺 임상 검증</button>`
+            : `<span class="doc-title">📄 파일 원문</span>`}<select id="doc_sel" onchange="docShow()"></select><button class="mini-btn" onclick="toggleDocPanel()" id="docToggleBtn">PDF 닫기</button></div><iframe id="doc_frame" class="doc-frame" title="원문 PDF"></iframe>${clinicalEnabled() ? clinicalPanelHTML() : ''}</div>
         <div class="unit-main">${inlineQuestionHTML(state.course)}<div class="drill-bar"><button class="mini-btn" onclick="startRecallForActive()">설명해보기</button><span class="muted" style="font-size:.72rem">개념 클릭 = 연관 펼치기</span></div>${recallPanelHTML()}<div class="graph-panel" id="graphPanel"><div class="graph-head"><span class="graph-title">개념 지도</span><button class="mini-btn" onclick="toggleGraphPanel()" id="graphToggleBtn">지도 닫기</button></div><div id="canvas"><div class="graph-tools"><button class="mini-btn" onclick="drillReset()">핵심만</button><button class="mini-btn" onclick="drillAll()">전체 보기</button></div><svg id="lines"></svg></div></div></div>
       </div>`;
     drillVisible = null;
@@ -1051,6 +1079,118 @@
 
   function restoreDocPanelState(){
     toggleDocPanel(localStorage.getItem('ln_doc_panel_collapsed') === '1');
+  }
+
+  // ===== 임상 검증 (간호학과 트랙 전용, 단원 화면 우측 탭) =====
+  function clinicalEnabled(){
+    return !!(sessionUser && ((sessionUser.student_track === 'nursing') || sessionUser.study_enabled));
+  }
+  function renderRelatedConcepts(items, heading){
+    if(!items || !items.length) return '';
+    const chip = c => `<a href="/concept-graph.html?mode=connection&concept=${encodeURIComponent(c.concept||'')}&course=${encodeURIComponent(c.course||'')}&unit=${encodeURIComponent(c.unit||'')}"`
+      + ` title="${esc(c.from_concept||'')}(${esc(c.from_course||'')})와 연결${c.reason ? ' — ' + esc(c.reason) : ''}"`
+      + ` style="display:inline-block;border:1px solid #bfdbfe;background:#eff6ff;color:#1d4ed8;border-radius:999px;padding:3px 10px;font-size:.76rem;font-weight:700;text-decoration:none;margin:0 6px 6px 0;">`
+      + `${esc(c.concept||'')} · ${esc(c.course||'')}</a>`;
+    return `<div style="margin-top:8px"><div style="font-size:.78rem;color:#64748b;font-weight:700;margin-bottom:6px;">${esc(heading || '다른 과목 연계 개념 (누르면 연결 지도)')}</div>${items.map(chip).join('')}</div>`;
+  }
+  function clinicalPanelHTML(){
+    return `<div id="clinicalPanel" class="clinical-panel" hidden>
+      <div class="clin-note">이 단원 자료를 근거로 임상 주장·중재를 검증합니다. ⚠️ 교육용 — 실제 임상 의사결정은 병원 지침과 지도자 확인을 따르세요.</div>
+      <textarea id="clin_claim" rows="2" placeholder='예: "체위 변경은 욕창 예방에 효과적이다"'></textarea>
+      <div class="clin-row"><button class="clin-btn" id="clinVerifyBtn" onclick="clinicalVerify()">근거 검증</button><span id="clin_status" class="muted" style="font-size:.72rem"></span></div>
+      <div id="clin_result"></div>
+      <div class="clin-saved-head">이 단원의 검증 기록</div>
+      <div id="clin_saved"><span class="muted" style="font-size:.72rem">아직 없습니다.</span></div>
+    </div>`;
+  }
+  function docTab(mode){
+    const frame = document.getElementById('doc_frame');
+    const sel = document.getElementById('doc_sel');
+    const panel = document.getElementById('clinicalPanel');
+    const tDoc = document.getElementById('docTabDoc');
+    const tClin = document.getElementById('docTabClin');
+    if(!panel || !frame) return;
+    const clin = mode === 'clinical';
+    frame.style.display = clin ? 'none' : '';
+    if(sel) sel.style.display = clin ? 'none' : '';
+    panel.hidden = !clin;
+    if(tDoc) tDoc.classList.toggle('on', !clin);
+    if(tClin) tClin.classList.toggle('on', clin);
+    if(clin){ toggleDocPanel(false); loadClinicalSaved(); }
+  }
+  let lastClinicalResult = null;
+  function clinStrengthBadge(s){
+    const cls = ['강','중','약'].includes(s) ? s : '미확인';
+    return `<span class="clin-strength s${cls}">${esc(s || '출처 미확인')}</span>`;
+  }
+  async function clinicalVerify(){
+    const claim = (document.getElementById('clin_claim')?.value || '').trim();
+    const st = document.getElementById('clin_status');
+    const out = document.getElementById('clin_result');
+    const btn = document.getElementById('clinVerifyBtn');
+    if(!claim){ st.textContent = '검증할 문장을 입력하세요.'; return; }
+    btn.disabled = true; st.textContent = '자료 검색·검증 중…'; out.innerHTML = '';
+    try{
+      const r = await fetch(API + '/clinical/verify', {
+        method:'POST', headers: authHeaders({'Content-Type':'application/json'}),
+        body: JSON.stringify({ claim, semester: state.semester, course: state.course, unit: state.unit }),
+      });
+      const d = await r.json();
+      if(!r.ok){ st.textContent = d.detail || '검증 실패'; btn.disabled = false; return; }
+      st.textContent = '';
+      lastClinicalResult = d;
+      const srcs = (d.sources || []).map(s =>
+        `<div class="clin-src"><b>${esc(s.doc_title)}</b> · p.${esc(s.page_num)}` +
+        (s.similarity != null ? ` · 유사도 ${esc(s.similarity)}%` : '') + `</div>`).join('');
+      out.innerHTML = `<div class="clin-card">
+        <span class="k">근거강도</span>${clinStrengthBadge(d.draft.strength)}
+        <span class="k">출처 요약</span>${esc(d.draft.source_summary || '—')}
+        <span class="k">임상 적용 맥락 (교육 목적)</span>${esc(d.draft.application_context || '—')}
+        <span class="k">안전 메모</span>${esc(d.draft.safety_note || '—')}
+        <span class="k">검색 범위</span>${esc(d.scope_label || '')}
+        ${srcs ? `<span class="k">근거 출처</span>${srcs}` : ''}
+        ${renderRelatedConcepts(d.related_concepts, '함께 볼 연계 개념 (다른 과목)')}
+        <div class="clin-row" style="margin-top:10px"><button class="clin-btn" onclick="clinicalSave()">검증 기록 저장</button></div>
+      </div>`;
+    }catch(e){ st.textContent = '서버에 연결할 수 없습니다.'; }
+    btn.disabled = false;
+  }
+  async function clinicalSave(){
+    if(!lastClinicalResult) return;
+    const d = lastClinicalResult;
+    try{
+      const r = await fetch(API + '/clinical/verifications', {
+        method:'POST', headers: authHeaders({'Content-Type':'application/json'}),
+        body: JSON.stringify({ claim: d.claim, ...d.draft, course: state.course || '', unit: state.unit || '' }),
+      });
+      if(!r.ok){ const e = await r.json().catch(()=>({})); alert(e.detail || '저장 실패'); return; }
+      lastClinicalResult = null;
+      document.getElementById('clin_result').innerHTML = '<div class="clin-src">저장했습니다.</div>';
+      loadClinicalSaved();
+    }catch(e){ alert('서버에 연결할 수 없습니다.'); }
+  }
+  async function loadClinicalSaved(){
+    const box = document.getElementById('clin_saved');
+    if(!box) return;
+    try{
+      const params = new URLSearchParams({ course: state.course || '', unit: state.unit || '', limit: '5' });
+      const r = await fetch(API + `/clinical/verifications?${params}`, { headers: authHeaders() });
+      const d = await r.json();
+      const items = d.items || [];
+      box.innerHTML = items.length
+        ? items.map(i => `<div class="clin-item">${clinStrengthBadge(i.strength)} <b>${esc(i.claim)}</b>
+            <button class="del" title="삭제" onclick="delClinicalSaved('${esc(i.id)}')">×</button>
+            <div class="muted" style="font-size:.7rem;margin-top:3px">${esc(i.source_summary || '')}</div>
+            ${i.safety_note ? `<div class="muted" style="font-size:.7rem">${esc(i.safety_note)}</div>` : ''}</div>`).join('')
+        : '<span class="muted" style="font-size:.72rem">아직 없습니다. 위에서 첫 검증을 해보세요.</span>';
+    }catch(e){ box.innerHTML = '<span class="muted" style="font-size:.72rem">기록을 불러오지 못했습니다.</span>'; }
+  }
+  async function delClinicalSaved(id){
+    if(!confirm('이 검증 기록을 삭제할까요?')) return;
+    try{
+      await fetch(API + `/clinical/verifications/${encodeURIComponent(id)}`, { method:'DELETE', headers: authHeaders() });
+      loadClinicalSaved();
+    }catch(e){}
   }
 
 
@@ -1647,6 +1787,7 @@
   }
   function showAuth(){ document.getElementById('authOverlay').hidden = false; initGoogle(); }
   function setSession(user){
+    sessionUser = user;
     document.getElementById('uid').value = user.data_user_id || user.email;
     document.getElementById('userChip').textContent = user.display_name || user.email;
     document.getElementById('myPageLink').style.display = 'inline-block';
