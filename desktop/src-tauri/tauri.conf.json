@@ -11,7 +11,7 @@
     "windows": [
       {
         "title": "LinkNote",
-        "url": "http://127.0.0.1:8000",
+        "url": "index.html",
         "width": 1280,
         "height": 900,
         "minWidth": 900,

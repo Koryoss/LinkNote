@@ -11,6 +11,18 @@ fn backend_running() -> bool {
 }
 
 fn find_project_root() -> Option<PathBuf> {
+    let fallback_roots = [
+        "/Users/jeong-yujin/Desktop/LINKNOTE/study-rag-api",
+        "/Users/jeong-yujin/Desktop/study-rag-api",
+    ];
+
+    for root in fallback_roots {
+        let path = PathBuf::from(root);
+        if path.join("api_server.py").exists() {
+            return Some(path);
+        }
+    }
+
     if let Ok(manifest_dir) = env::var("CARGO_MANIFEST_DIR") {
         let mut path = PathBuf::from(manifest_dir);
         if path.ends_with("src-tauri") {
@@ -66,6 +78,8 @@ fn start_backend() {
     let _ = Command::new(&python)
         .args(["-m", "uvicorn", "api_server:app", "--host", "127.0.0.1", "--port", "8000"])
         .current_dir(&project_root)
+        .env("DATA_DIR", project_root.join("data"))
+        .env("CHROMA_PATH", project_root.join("chroma_db"))
         .spawn();
 
     // 백엔드 포트가 열릴 때까지 최대 ~30초 대기
