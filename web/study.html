@@ -56,6 +56,7 @@
     <span class="sub">스터디 / Study</span>
     <span id="userLabel" class="sub"></span>
     <span class="spacer"></span>
+    <a class="btn" href="/mypage.html">My Page</a>
     <a class="btn" href="/">My Library</a>
   </div>
   <main>
@@ -120,8 +121,19 @@
   async function api(path, opts = {}) {
     const res = await fetch(API + path, opts);
     const body = await res.json().catch(() => null);
-    if (!res.ok) throw new Error((body && body.detail) || 'HTTP ' + res.status);
+    if (!res.ok) {
+      const err = new Error((body && body.detail) || 'HTTP ' + res.status);
+      err.status = res.status;
+      throw err;
+    }
     return body;
+  }
+
+  function loginGate(message) {
+    const gate = document.getElementById('gate');
+    gate.className = 'error';
+    gate.innerHTML = esc(message) +
+      `<div style="margin-top:12px"><a class="btn primary" href="/?next=${encodeURIComponent('/study.html')}">로그인하러 가기</a></div>`;
   }
 
   function strengthClass(s) {
@@ -252,7 +264,7 @@
 
   async function init() {
     const gate = document.getElementById('gate');
-    if (!token()) { gate.className = 'error'; gate.textContent = '로그인이 필요합니다. My Library에서 먼저 로그인해주세요.'; return; }
+    if (!token()) { loginGate('로그인이 필요합니다.'); return; }
     try {
       const me = await api('/auth/me', { headers: headers() });
       if (!me.user.study_enabled) {
@@ -265,6 +277,11 @@
       document.getElementById('app').style.display = 'block';
       loadClaims();
     } catch (e) {
+      if (e.status === 401) {
+        localStorage.removeItem('ln_token');
+        loginGate('로그인이 만료되었습니다. 다시 로그인해주세요.');
+        return;
+      }
       gate.className = 'error';
       gate.textContent = e.message;
     }

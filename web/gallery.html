@@ -430,7 +430,7 @@
         <button id="authTabLogin" class="auth-tab on" onclick="authTab('login')">로그인</button>
         <button id="authTabReg" class="auth-tab" onclick="authTab('register')">회원가입</button>
       </div>
-      <input id="au_email" type="email" placeholder="이메일">
+      <input id="au_email" type="email" placeholder="이메일" onkeydown="if(event.key==='Enter')document.getElementById('au_pw').focus()">
       <input id="au_pw" type="password" placeholder="비밀번호" onkeydown="if(event.key==='Enter')authSubmit()">
       <div id="au_reg_only" hidden>
         <input id="au_name" placeholder="표시 이름 (예: 정유진)">
@@ -889,7 +889,7 @@
     setCrumbs([]);
     const sems = data.semesters || [];
     const view = document.getElementById('view');
-    if(!sems.length){ view.innerHTML = emptyBox('이 사용자명으로 학습된 자료가 없습니다. 상단 사용자명을 확인하세요.'); return; }
+    if(!sems.length){ view.innerHTML = emptyBox('아직 추가한 자료가 없습니다. 오른쪽 위 「＋ 자료 추가」 버튼으로 첫 PDF를 올려보세요.'); return; }
     let opts = sems.map((s,i)=>`<option value="${i}">${esc(s.semester)}</option>`).join('');
     inlineAskCourse = null;
     inlineCourses = [...new Set((sems||[]).flatMap(x => (x.courses||[]).map(c => c.course)))].sort();
@@ -1321,10 +1321,11 @@
     const list = (items) => Array.isArray(items) && items.length
       ? `<ul>${items.map(item => `<li>${esc(item)}</li>`).join("")}</ul>`
       : `<div class="muted">자료에서 뚜렷하게 확인되지 않았습니다.</div>`;
+    const related = renderRelatedConcepts(data.related_concepts, '이어서 볼 연계 개념 — 다른 과목 (누르면 연결 지도)');
     return `<strong>좋았던 점</strong>${list(data.good_points)}
       <strong>더 연결해볼 점</strong>${list(data.missing_links)}
       <strong>다시 생각해볼 질문</strong><div>${esc(data.followup_question || "")}</div>
-      <strong>다시 볼 자료</strong><div>${esc(data.source_hint || "")}</div>`;
+      <strong>다시 볼 자료</strong><div>${esc(data.source_hint || "")}</div>${related}`;
   }
 
   async function requestRecallFeedback(index){
@@ -1667,7 +1668,7 @@
       const d=await r.json();
       if(!r.ok){ st.style.color='#ef4444'; st.textContent=(d.detail||'실패'); return; }
       st.textContent='';
-      ans.innerHTML=`<div class="ask-a">${esc(d.answer||'')}</div>`;
+      ans.innerHTML=`<div class="ask-a">${esc(d.answer||'')}</div>` + (d.related_concepts && d.related_concepts.length ? `<div class="ask-a" style="margin-top:8px">${renderRelatedConcepts(d.related_concepts)}</div>` : '');
     }catch(e){ st.style.color='#ef4444'; st.textContent='서버 미연결 — 질문 실패'; }
   }
   async function askInlineSearch(payload){
@@ -1794,6 +1795,9 @@
     document.getElementById('clinicalReflectionBtn').style.display = user.student_track === 'nursing' ? 'inline-block' : 'none';
     document.getElementById('logoutBtn').style.display = 'inline-block';
     document.getElementById('authOverlay').hidden = true;
+    // 다른 페이지에서 로그인하러 온 경우(?next=/study.html 등) 원래 목적지로 돌려보낸다.
+    const next = new URLSearchParams(location.search).get('next');
+    if (next && next.startsWith('/') && !next.startsWith('//')) { location.replace(next); return; }
     ensureInitialHistory();
     loadHome(false);
   }

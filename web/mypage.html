@@ -74,7 +74,6 @@
     <a class="brand" href="/">LinkNote</a>
     <span id="userLabel" class="sub"></span>
     <span class="spacer"></span>
-    <a id="studyLink" class="btn" href="/study.html" style="display:none; border-color:#bbf7d0; background:#f0fdf4; color:#15803d;">스터디 / Study</a>
     <button onclick="logout()">Logout</button>
   </div>
   <main>
@@ -82,6 +81,7 @@
       <div>
         <h1>My Page</h1>
       </div>
+      <a id="studyHeroBtn" class="btn primary" href="/study.html" style="display:none; padding:10px 18px; font-size:.9rem; align-self:center;">📚 스터디 열기</a>
     </div>
     <div id="app" class="empty">불러오는 중...</div>
   </main>
@@ -101,8 +101,17 @@
   async function getJSON(path){
     const r = await fetch(API + path, { headers: headers() });
     const d = await r.json().catch(()=>({}));
-    if(!r.ok) throw new Error(`${path} returned ${r.status} ${d.detail || r.statusText}`);
+    if(!r.ok){
+      const err = new Error(`${path} returned ${r.status} ${d.detail || r.statusText}`);
+      err.status = r.status;
+      throw err;
+    }
     return d;
+  }
+  function loginGate(app, message){
+    app.className = 'error';
+    app.innerHTML = esc(message) +
+      `<div style="margin-top:12px"><a class="btn primary" href="/?next=${encodeURIComponent('/mypage.html')}">로그인하러 가기</a></div>`;
   }
   async function postJSON(path, body){
     const r = await fetch(API + path, {
@@ -236,19 +245,65 @@
       <p class="sub">최근 학습 <b>${esc(dateText(recent))}</b></p>
     </div>`;
   }
-  function render(summary, me, memory, clinical, memories){
+  function dueChip(item){
+    const url = `/concept-graph.html?mode=connection&concept=${encodeURIComponent(item.concept || '')}&course=${encodeURIComponent(item.course || '')}&unit=${encodeURIComponent(item.unit || '')}`;
+    return `<a class="chip" style="text-decoration:none;" href="${url}" title="개념 연결 보기">${esc(item.concept || '')}</a>`;
+  }
+  function suggestionChip(item){
+    const url = `/concept-graph.html?mode=connection&concept=${encodeURIComponent(item.concept || '')}&course=${encodeURIComponent(item.course || '')}&unit=${encodeURIComponent(item.unit || '')}`;
+    const tip = `${item.from_concept || ''}(${item.from_course || ''})와 연결` + (item.reason ? ` — ${item.reason}` : '');
+    return `<a class="chip" style="text-decoration:none;" href="${url}" title="${esc(tip)}">${esc(item.concept || '')} · ${esc(item.course || '')}</a>`;
+  }
+  function uploadItem(u){
+    return `<div class="item"><strong>${esc(u.title || u.filename)}</strong><small>${esc([u.semester, u.course].filter(Boolean).join(' · '))}</small></div>`;
+  }
+  function render(summary, me, memory, clinical, memories, due, suggest){
     const account = summary.account || me.user || {};
     const library = summary.library || {};
     const learning = summary.learning || {};
     const memorySummary = memory || {};
     const isNursing = (account.student_track || 'general') === 'nursing';
     const clinicalItems = Array.isArray(clinical?.items) ? clinical.items : [];
+    const dueItems = Array.isArray(due?.items) ? due.items.filter(d => d.is_due) : [];
+    const suggestions = Array.isArray(suggest?.items) ? suggest.items : [];
+    const recentUploads = Array.isArray(library.recent_uploads) ? library.recent_uploads : [];
     currentMemories = Array.isArray(memories?.items) ? memories.items : [];
     totalMemoryCount = Number(memories?.total || currentMemories.length || 0);
     selectedMemoryIds = new Set([...selectedMemoryIds].filter(id => currentMemories.some(item => item.id === id)));
     document.getElementById('userLabel').textContent = account.display_name || account.email || '';
     document.getElementById('app').className = 'grid';
     document.getElementById('app').innerHTML = `
+      <section class="wide"><h2>오늘의 학습</h2>
+        ${dueItems.length
+          ? `<p class="sub" style="margin-bottom:8px">복습 대기 개념 ${dueItems.length}개 — 개념을 누르면 연결 지도로 이동합니다.</p>
+             <div class="chips">${dueItems.slice(0, 8).map(dueChip).join('')}</div>`
+          : `<p class="sub">지금 복습 대기 개념이 없어요. 설명해보기를 사용하면 복습 일정이 만들어집니다.</p>`}
+        ${suggestions.length
+          ? `<div style="margin-top:14px"><span class="sub" style="font-weight:700">연계 학습 제안</span>
+             <p class="sub" style="margin:4px 0 8px">지금 복습할 개념과 다른 과목에서 연결된 개념입니다. 함께 보면 연계 학습에 도움이 됩니다.</p>
+             <div class="chips">${suggestions.map(suggestionChip).join('')}</div></div>`
+          : ''}
+        <div class="actions" style="margin-top:12px">
+          <a class="btn primary" href="/">My Library · 자료 보기</a>
+          <a class="btn" href="/concept-graph.html">개념 지도</a>
+        </div>
+      </section>
+      <section><h2>학습 현황</h2>
+        <div class="stats">
+          ${stat('자료(PDF)', library.pdf_count ?? 0)}
+          ${stat('과목', library.course_count ?? 0)}
+          ${stat('단원', library.unit_count ?? 0)}
+          ${stat('추출된 개념', learning.concept_count ?? 0)}
+          ${stat('개념 연결', learning.graph_edge_count ?? 0)}
+          ${stat('설명한 개념', learning.concepts_explained_count ?? 0)}
+        </div>
+        <p class="sub" style="margin-top:10px">실제 기록된 학습 데이터만 집계합니다.</p>
+      </section>
+      <section><h2>최근 추가한 자료</h2>
+        <div class="list" style="margin-top:0">
+          ${recentUploads.length ? recentUploads.map(uploadItem).join('') : '<div class="item">아직 추가한 자료가 없습니다. My Library에서 PDF를 올리면 여기에 표시됩니다.</div>'}
+        </div>
+      </section>
       <section class="wide"><h2>계정 정보</h2>
         <div class="kv">
           ${row("Email", account.email)}
@@ -334,21 +389,28 @@
   }
   async function init(){
     const app = document.getElementById('app');
-    if(!token()) { app.className='error'; app.textContent='로그인이 필요합니다. My Library에서 먼저 로그인해주세요.'; return; }
+    if(!token()) { loginGate(app, '로그인이 필요합니다.'); return; }
     try {
       const me = await getJSON('/auth/me');
-      if((me.user || {}).study_enabled) document.getElementById('studyLink').style.display = 'inline-block';
-      const [summary, memory, memories] = await Promise.all([
+      if((me.user || {}).study_enabled) document.getElementById('studyHeroBtn').style.display = 'inline-block';
+      const [summary, memory, memories, due, suggest] = await Promise.all([
         getJSON('/me/summary'),
         getJSON('/learning-memory/summary'),
         getJSON('/learning-memory?limit=200').catch(()=>({ items: [] })),
+        getJSON('/review/due?limit=8').catch(()=>({ items: [] })),
+        getJSON('/learning/suggestions?limit=6').catch(()=>({ items: [] })),
       ]);
       let clinical = { items: [] };
       if(((me.user || {}).student_track || 'general') === 'nursing'){
         clinical = await getJSON('/clinical-reflections?limit=5').catch(()=>({ items: [] }));
       }
-      render(summary, me, memory, clinical, memories);
+      render(summary, me, memory, clinical, memories, due, suggest);
     } catch(e) {
+      if(e.status === 401){
+        localStorage.removeItem('ln_token');
+        loginGate(app, '로그인이 만료되었습니다. 다시 로그인해주세요.');
+        return;
+      }
       app.className='error';
       app.textContent = 'My Page를 불러오지 못했습니다: ' + e.message;
     }

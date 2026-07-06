@@ -117,6 +117,8 @@ class AskResponse(BaseModel):
     answer: str
     sources: List[Dict[str, Any]]
     scope_label: str
+    # 다른 과목으로 이어지는 연계 개념 제안 (저장된 개념 그래프 조회만, 추가 LLM 호출 없음)
+    related_concepts: List[Dict[str, Any]] = []
 
 
 class AskSearchRequest(BaseModel):
@@ -414,6 +416,8 @@ class RecallFeedbackResponse(BaseModel):
     missing_links: List[str]
     followup_question: str
     source_hint: str
+    # 방금 설명한 개념에서 다른 과목으로 이어지는 추후 학습 제안 (개념 그래프 조회만)
+    related_concepts: List[Dict[str, Any]] = []
 
 
 class LearningSessionStartRequest(BaseModel):
@@ -1985,7 +1989,13 @@ async def ask(request: AskRequest, data_user_id: str = Depends(current_uid)) -> 
 
     scope_label = get_filter_label(request.search_filter.dict() if request.search_filter else None)
 
-    return AskResponse(answer=answer, sources=sources, scope_label=scope_label)
+    # 과목간 연계는 답을 바꾸지 않고 '제안'으로만 곁들인다.
+    try:
+        related = _related_cross_concepts(data_user_id, f"{request.question}\n{answer}", limit=5)
+    except Exception:
+        related = []
+
+    return AskResponse(answer=answer, sources=sources, scope_label=scope_label, related_concepts=related)
 
 
 @app.post("/ingest", response_model=IngestResponse)
@@ -2360,6 +2370,13 @@ async def recall_feedback(
     if not feedback.source_hint:
         first = source_chunks[0]
         feedback.source_hint = f"{first.get('course', course)} · {first.get('unit', unit)} · {first.get('filename', '')} p.{first.get('page', '')} 근처를 다시 보세요."
+
+    # 추후 학습 제안: 방금 설명한 개념(+'더 연결해볼 점')을 시드로 다른 과목 연계 개념 제안.
+    try:
+        seed = " ".join([concept, answer_text] + list(feedback.missing_links or []))
+        feedback.related_concepts = _related_cross_concepts(user_id, seed, limit=4)
+    except Exception:
+        feedback.related_concepts = []
 
     payload_for_persist = payload.copy(update={"user_id": data_user_id})
     try:
@@ -2935,6 +2952,28 @@ async def review_due(
             "due_at": node.get("due_at"),
         })
     return {"items": items}
+
+
+@app.get("/learning/suggestions")
+async def learning_suggestions(limit: int = 6, data_user_id: str = Depends(current_uid)) -> Dict[str, Any]:
+    """추후 학습 제안: 복습 대기·최근 학습 개념에서 다른 과목으로 이어지는 연계 개념.
+
+    판단·평가가 아니라 저장된 개념 그래프의 교차 링크를 그대로 보여주는 제안이다.
+    """
+    seed_names: List[str] = []
+    try:
+        nodes = _build_concept_overview_nodes(data_user_id)
+        due = [n for n in nodes if n.get("is_due")]
+        pool = due or sorted(nodes, key=lambda n: -int(n.get("review_priority") or 0))[:10]
+        seed_names += [str(n.get("label") or "") for n in pool]
+    except Exception:
+        pass
+    traces = [t for t in _load_recall_traces() if t.get("user_id") == data_user_id]
+    traces.sort(key=lambda t: str(t.get("created_at") or ""), reverse=True)
+    seed_names += [str(t.get("concept") or "") for t in traces[:10]]
+
+    seed_text = " ".join(name for name in seed_names if name)
+    return {"items": _related_cross_concepts(data_user_id, seed_text, limit=max(1, min(20, limit)))}
 
 
 @app.get("/me/summary")

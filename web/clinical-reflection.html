@@ -162,7 +162,7 @@
   }
   async function init(){
     const app = document.getElementById('app');
-    if(!token()) { app.innerHTML = '<section class="wide"><div class="error">로그인이 필요합니다. My Library에서 먼저 로그인해주세요.</div></section>'; return; }
+    if(!token()) { app.innerHTML = '<section class="wide"><div class="error">로그인이 필요합니다.<div style="margin-top:12px"><a class="btn primary" href="/?next=%2Fclinical-reflection.html" style="text-decoration:none">로그인하러 가기</a></div></div></section>'; return; }
     try {
       const me = await getJSON('/auth/me');
       const user = me.user || {};
