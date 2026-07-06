@@ -21,7 +21,7 @@ except Exception:
 
 DATA_USER_ID = "정유진"  # users.json 의 data_user_id
 UPLOADS = os.path.join(os.getenv("DATA_DIR", "./data"), "uploads")
-MAP_CSV = "recovery_mapping.csv"
+MAP_CSV = "material_registry.csv" if os.path.exists("material_registry.csv") else "recovery_mapping.csv"
 DRY = "--dry-run" in sys.argv
 
 

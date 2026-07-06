@@ -964,11 +964,12 @@
     const mode = localStorage.getItem(_uSortKey()) || 'ga';
     const arr = [...units];
     if(mode==='ga') arr.sort((a,b)=> (a.unit||'').localeCompare(b.unit||'','ko'));
+    else if(mode==='reg') arr.sort((a,b)=> (a.registered_at||'').localeCompare(b.registered_at||'') || (a.unit||'').localeCompare(b.unit||'','ko'));
     else if(mode==='custom'){
       let ord=[]; try{ ord=JSON.parse(localStorage.getItem(_uOrderKey())||'[]'); }catch(e){}
       const idx=u=>{ const k=ord.indexOf(u.unit); return k<0?9999:k; };
       arr.sort((a,b)=> idx(a)-idx(b));
-    } // 'reg' = 서버 기본순 그대로
+    } // 'reg' = 등록순(registered_at), 'custom' = 드래그 저장
     return arr;
   }
   function changeUnitSort(){ localStorage.setItem(_uSortKey(), document.getElementById('unitSortSel').value); if(lastUnitsData) renderUnits(state.course, lastUnitsData); }

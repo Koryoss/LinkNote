@@ -74,6 +74,7 @@ app.add_middleware(
 
 
 import auth as _auth
+import registry as _registry
 
 
 def current_user(authorization: Optional[str] = Header(None)) -> Dict[str, Any]:
@@ -2052,6 +2053,9 @@ async def units(semester: str, course: str, data_user_id: str = Depends(current_
     if not units:
         return {"status": "empty", "units": []}
 
+    reg = _registry.unit_registered_at(semester, course)
+    for u in units:
+        u["registered_at"] = reg.get(u["unit"], "")
     return {"status": "ready", "units": units}
 
 

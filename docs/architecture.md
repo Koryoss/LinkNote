@@ -1,91 +1,107 @@
 # LinkNote Architecture Notes
 
-This document records small architecture decisions that affect data ownership and local file access.
+This document describes the current LinkNote repository shape and records a file audit for the next SCiyl-inspired active learning stage. It is intentionally documentation-only: no recall API, schema, UI button, or runtime behavior is implemented here.
 
-## Frontend Entry Points
+## Current Development Stage
 
-- `web/gallery.html` is the current main UI served at `/`.
-- `web/mypage.html` is the read-only My Page.
-- `web/learning-memory.html` is the primary Learning Memory hub.
-- `web/concept-graph.html` is the read-only Full Knowledge Map advanced view.
-- `web/app.js` is a legacy experimental frontend and should not be used for authenticated production flow.
+LinkNote is currently in a local-first, single-user evaluation stage.
 
-## Ownership For Protected Data
+The active development surface is centered on:
 
-Protected APIs must derive the active learning-data namespace from the auth token:
+- PDF upload and ingestion
+- PDF chunking
+- ChromaDB indexing
+- Retrieval-augmented generation (RAG)
+- Concept extraction
+- Concept graph construction
+- Gallery and study UI experiments
 
-```text
-Authorization token -> current_user/current_uid() -> data_user_id
-```
+`user_id` exists in parts of the codebase, but it should be treated as a temporary identifier for local testing and evaluation. It is not yet a full authentication account, multi-user storage boundary, or production user database key.
 
-Frontend-provided `user_id` must not control protected data access. Any remaining `user_id` request fields are compatibility-only unless a route explicitly documents them as response/stored metadata.
+The near-term priority is stabilizing the learning workflow: document ingestion, retrieval, concept extraction, graph navigation, and user-facing study flows. A full account system, authentication model, and user-specific database design are intentionally deferred to a later phase.
 
-The active Gallery UI should not send `user_id` in protected API query strings, JSON bodies, or upload forms. Upload, question, recall, library, timetable, concept, and chunk requests should rely on the `Authorization` header. Hidden or displayed user labels in the frontend are presentation/legacy compatibility only and are not authority for data access.
+## Current File And Folder Roles
 
-New protected features should not introduce frontend-provided `user_id` request fields. If a backend model keeps a `user_id` property for compatibility, it should be optional/deprecated and overwritten or ignored in favor of `current_uid()`.
+The following inventory is based on the current LinkNote structure targeted by this documentation pass. Before deleting or moving files, verify references with `rg` and run the app/test flow.
 
-## Question Modes
+| Path | Role |
+| --- | --- |
+| `api_server.py` | Main backend API entry point for local/server execution. Expected to coordinate upload, RAG, concept, graph, and UI-facing endpoints. |
+| `app.py` | App entry point or earlier prototype runtime. Keep until its relationship to `api_server.py` is confirmed. |
+| `auth.py` | Lightweight identity helper. At this stage, `user_id` should remain a temporary local identifier rather than a full auth system. |
+| `rag.py` | Retrieval and answer-generation logic around indexed document chunks. |
+| `pdf_loader.py` | PDF ingestion and text/chunk extraction support. |
+| `reset_db.py` | Local database/index reset utility for development. Treat as a dev tool, not production runtime behavior. |
+| `requirements.txt` | Python dependency list for backend/local runtime. |
+| `render.yaml` | Render deployment configuration. Keep aligned with the actual deploy target. |
+| `web/` | Web frontend surface. Likely contains the browser UI for gallery, graph, and study workflows. |
+| `desktop/` | Desktop app surface and packaging/runtime code. |
+| `providers/` | Provider abstraction layer for model APIs, storage providers, or other integrations. |
+| `data/` | Local JSON or generated data artifacts. Future lightweight recall traces can start here, but this pass does not add them. |
+| `chroma_db/` | Local ChromaDB persistence directory for indexed chunks/embeddings. Usually should be treated as generated local state. |
+| Existing documentation files | README, notes, prompt docs, deployment notes, or experiment records. These should be merged into `docs/` or `prompts/` when still useful. |
 
-The gallery question UI separates search from generated answers:
+## File Audit
 
-- `빠른 검색` calls `POST /ask/search`.
-- `AI 답변` calls the existing `POST /ask` flow.
+This audit does not delete or move files. It classifies current repository areas by likely responsibility and recommends the next cleanup action.
 
-`/ask/search` uses `Authorization` -> `current_uid()` -> `data_user_id`, searches only the current user's owned chunks, concepts, and Recall/Learning Memory records, and returns related sources without calling GPT chat/completion. The current implementation is local keyword/metadata search, so it also does not require `OPENAI_API_KEY` for page load or search-only results.
+### A. Core Runtime Files
 
-Search-only results are cached in `data/search_cache.json` by `data_user_id`, normalized question, search filter, and scope. Sensitive patient/clinical-looking queries are not cached. Repeating the same owned search can return `from_cache = true`.
+| Path | Current role | Reference status | Move/delete impact | Recommended action |
+| --- | --- | --- | --- | --- |
+| `api_server.py` | Backend API runtime and local server entry point. | Expected to be directly executed or deployed. Confirm with README/deploy scripts. | High impact if renamed or moved. | Keep in root until a service/module split is planned and tested. |
+| `app.py` | App/prototype entry point or alternate runtime. | Needs verification against README, Render, and local run commands. | Medium to high if still used by local workflows. | Keep for now; document whether it is current, legacy, or Streamlit/prototype. |
+| `auth.py` | Lightweight user identity helper. | Expected import from API or UI-serving code. | Medium; changing semantics could break local `user_id` flows. | Keep lightweight. Do not expand into full auth during the recall planning phase. |
+| `rag.py` | RAG retrieval and answer logic. | Expected import from API server or app entry point. | High; core learning workflow depends on it. | Keep. Later move under `services/rag.py` only after import migration. |
+| `pdf_loader.py` | PDF text extraction/chunk input helper. | Expected import from ingestion endpoints/scripts. | High for upload/indexing. | Keep. Later move under a services or ingestion module after tests. |
+| `requirements.txt` | Python dependencies. | Used by local setup and deployment. | High if missing or stale. | Keep in root. Audit dependency drift separately. |
+| `render.yaml` | Deployment config. | Used by Render deployments if active. | Medium/high if Render is current deploy path. | Keep; document active deployment path in `docs/deployment.md` later. |
+| `web/` | Web UI. | Runtime frontend. | High. | Keep. Do not reorganize until route/build commands are documented. |
+| `desktop/` | Desktop app. | Runtime desktop surface. | High if actively used. | Keep. Document desktop-specific build and dev commands. |
+| `providers/` | Integration/provider abstraction. | Likely imported by backend or desktop/web bridges. | Medium/high. | Keep; add provider contract docs later. |
+| `data/` | Local generated and seed data. | May be read by concept graph or prototypes. | Medium; deleting can remove local evaluation data. | Keep; separate generated, seed, and future recall trace files. |
+| `chroma_db/` | Local vector index persistence. | Read by ChromaDB runtime. | Medium; deleting resets local index. | Keep as generated storage. Consider `.gitignore` if committed accidentally. |
 
-Single-document style search uses the selected semester/course/unit/file filter when present. Multi-document search ignores the UI course filter and searches across the current user's owned materials.
+### B. Documentation To Keep Or Merge
 
-## My Page Presentation
+| Path | Current role | Reference status | Move/delete impact | Recommended action |
+| --- | --- | --- | --- | --- |
+| `README.md` | Project entry documentation. | Primary human entry point. | High for onboarding. | Keep concise. Link to focused docs instead of carrying all architecture detail. |
+| `docs/architecture.md` | Architecture and audit notes. | Human reference. | Low runtime impact. | Keep as the canonical structure overview. |
+| `docs/roadmap.md` | Development roadmap and SCiyl-inspired phases. | Human planning reference. | Low runtime impact. | Keep as the canonical next-stage plan. |
+| `docs/file-organization.md` | Cleanup criteria and target structure. | Human planning reference. | Low runtime impact. | Keep for future cleanup PRs. |
+| Existing deployment notes | Deployment/run instructions. | Useful if still accurate. | Low runtime impact, high onboarding impact. | Merge into `docs/deployment.md` if duplicated across README/notes. |
+| Existing API notes | Endpoint descriptions or examples. | Useful for backend/frontend coordination. | Low runtime impact. | Merge into `docs/api.md` when endpoints stabilize. |
 
-`web/mypage.html` is learner-oriented. The default view emphasizes a Learning Dashboard, recent learning activity, Learning Memory, explanation count, and next study actions rather than internal storage details.
+### C. Prompt / AI Development Files
 
-Account implementation metadata such as `account_id`, `data_user_id`, maintainer status, legacy namespace status, and migration status is still available for debugging, but it is hidden by default under a collapsed Developer Information section. Backend ownership behavior and response fields are unchanged.
+| Path | Current role | Reference status | Move/delete impact | Recommended action |
+| --- | --- | --- | --- | --- |
+| Concept extraction prompts | Prompts used to extract concepts from chunks. | May be embedded in Python files or standalone notes. | Medium if code reads prompt files directly. | Move or mirror into `prompts/concepts.md` after confirming references. |
+| Concept graph prompts | Prompts for graph node/link generation. | May be embedded or documented. | Medium if runtime-loaded. | Move or mirror into `prompts/concept_graph.md`. |
+| RAG answer prompts | Prompts for answer generation. | May be embedded in `rag.py` or provider code. | Medium/high if runtime-loaded. | Keep near code until prompt loading strategy is clear; document in `prompts/`. |
+| Future recall feedback prompts | Not implemented yet. | No runtime reference should exist in this pass. | No current runtime impact. | Plan as `prompts/recall_feedback.md`, but do not wire into code yet. |
+| Experiment prompt notes | Development-only prompt trials. | Usually not imported. | Low if archived correctly. | Move to `prompts/experiments/` or merge useful parts into canonical prompt docs. |
 
-## Learning Dashboard And Knowledge Exploration
+### D. Cleanup Candidates
 
-My Page links to Learning Memory as the primary hub. Learning Memory now opens as a Learning Dashboard and links to `web/concept-graph.html` only for Knowledge Exploration. The page reads `GET /concept-graph/overview`, which derives ownership from `Authorization` -> `current_uid()` -> `data_user_id`.
+| Path | Current role | Reference status | Move/delete impact | Recommended action |
+| --- | --- | --- | --- | --- |
+| Duplicate README sections | Repeated architecture, deployment, or roadmap text. | Human-only unless copied into scripts. | Low runtime impact. | Merge into focused docs and keep README short. |
+| Old prototype docs | Historical experiment notes. | Likely human-only. | Low runtime impact. | Archive under `docs/archive/` if still useful; delete only after review. |
+| Generated local artifacts in `data/` | Local outputs, test data, extracted concepts, graph JSON. | May be read by prototypes. | Medium if examples depend on them. | Split into `data/examples/`, `data/generated/`, or document regeneration steps. |
+| Committed `chroma_db/` contents | Vector index state. | Runtime can use it locally, but it is generated. | Medium locally; low if regenerable. | Treat as storage, not source. Confirm `.gitignore` and regeneration workflow before cleanup. |
+| One-off reset or migration scripts | Development utilities. | May not be imported. | Medium if maintainers rely on them manually. | Keep if used in the next 3 months; otherwise move to `scripts/` or archive. |
+| Unreferenced prompt drafts | Prompt experiments not used by runtime. | Usually not imported. | Low. | Move to `prompts/experiments/` or remove after review. |
 
-The Full Knowledge Map destination is read-only. It uses existing `data/concept_index.json`, `data/concept_links.json`, and recall metadata. Viewing the graph does not call GPT, OpenAI embeddings, reindex ChromaDB, or rebuild concept graph data.
+## Cleanup Verification Checklist
 
-The default Full Knowledge Map view caps visible nodes and prioritizes learner-useful Learning States (`NEW`, `LEARNING`, `REVIEW`, `MASTERED`) with Core and Bridge shown as secondary graph roles. `GET /concept-graph/overview` computes the ranking metadata on the backend from existing graph files and Learning Memory metadata, then the frontend renders that read-only result.
+Before moving or deleting any file:
 
-Each overview node may include deterministic learning metadata such as `learning_state`, `review_priority`, `review_reason`, `degree`, `weighted_degree`, `connected_count`, `centrality_score`, `bridge_score`, `memory_score`, `review_score`, `priority_score`, `node_types`, `why_shown`, and `recommended_action`. Each overview edge may include `normalized_weight`, `edge_type`, and a human-readable `reason`. These fields are computed without GPT/OpenAI calls and without rebuilding or reindexing stored graph data.
+- Check whether it will be used in the next 3 months.
+- Check whether it is directly required to run the app.
+- Check whether any code imports or references it.
+- Check whether the content duplicates README or `docs/`.
+- Classify it as an experimental prompt, runtime prompt, developer note, or user-facing doc.
+- Decide whether deletion is safe or whether the file should move to `docs/`, `prompts/`, `scripts/`, or `archive/`.
 
-### Concept Connections Learning Actions
-
-Clicking a Concept Connections node opens a learning action panel rather than only a metadata detail view. The panel is intended to help the learner decide what to do next from the selected concept:
-
-- focus the concept connections around that concept with Connection Map
-- open Learning Memory with `concept`, `course`, and `unit` query parameters
-- run related-material quick search through `POST /ask/search`
-- return to Gallery with course/unit context
-- open the future `설명해보기` flow with concept/course/unit query parameters
-
-The quick search action is search-only. It calls `/ask/search`, shows related concepts, chunks, and Learning Memory matches, and does not call `/ask`, GPT, OpenAI chat/completions, graph generation, ChromaDB reindexing, or concept graph rebuilds. Full Knowledge Map page load still only reads existing graph metadata.
-
-Selected nodes are highlighted locally in the SVG. Connected edges and neighboring nodes are emphasized using already loaded visible graph data; unrelated visible edges are de-emphasized.
-
-### Dashboard Progressive Disclosure
-
-Learning Memory does not show the full map first. The default mode is now the Learning Dashboard: Today's Review, Learning Progress, and Continue Learning. `Start Review` is the primary action. Review Map sits below the dashboard as a small decision aid with course/unit/review-needed filters.
-
-Knowledge Exploration lives in `web/concept-graph.html`. It may expose graph details such as node connections, edge relationships, missing links, and graph filters. The daily dashboard should not foreground node count, edge count, central concept, learning state internals, review priority explanations, or unexplained concept lists. Viewing or switching graph modes does not call GPT/OpenAI.
-
-## PDF Preview Access
-
-`GET /file` accepts a query token because PDF iframe previews cannot attach custom request headers.
-
-The backend still resolves that query token to the current `data_user_id`, validates the requested filename, checks the user's existing library/chunk metadata for ownership, and only then resolves a physical file in `data/uploads`.
-
-Existing uploads remain in place. The storage layout is not changed:
-
-- metadata may store the original filename, such as `lecture.pdf`
-- `data/uploads` may store a UUID-prefixed file, such as `<uuid>_lecture.pdf`
-
-The server may match the exact stored filename or UUID-prefixed suffix only after ownership has been verified. Unknown filenames, missing/invalid tokens, path traversal, and files not owned by the current `data_user_id` must not be served.
-
-## Data Preservation
-
-Ownership hardening must not delete, move, rename, rebuild, re-index, clean up, or migrate existing uploaded files or analysis data.
