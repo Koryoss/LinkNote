@@ -7,11 +7,12 @@ const checkBtn = document.getElementById("check-backend");
 async function checkBackend() {
   statusEl.textContent = "Checking local API...";
   try {
-    const response = await fetch(`${API_URL}/auth/config`);
+    const response = await fetch(`${API_URL}/health`);
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    statusEl.textContent = "Local API is running. The desktop window will show the gallery.";
+    const data = await response.json();
+    statusEl.textContent = `Local API is running (${data.ok ? "healthy" : "ready"}).`;
   } catch (error) {
-    statusEl.textContent = "Local API is not reachable. Run the backend first, then reopen the desktop app.";
+    statusEl.textContent = "Local API is not reachable. The app will try to start it automatically on launch.";
   }
 }
 
