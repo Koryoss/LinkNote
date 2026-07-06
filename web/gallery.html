@@ -273,19 +273,15 @@
   .search-item:first-of-type { border-top:none; padding-top:0; margin-top:0; }
   .search-meta { display:block; color:#64748b; font-size:0.74rem; margin-bottom:3px; }
   .cost-label { display:inline-flex; align-items:center; border:1px solid #dbeafe; background:#eff6ff; color:#1d4ed8; border-radius:999px; padding:3px 8px; font-size:0.72rem; font-weight:700; }
-  .iq { margin: 6px 24px 14px; background:#fff; border:1px solid #e8ebf2; border-radius:14px; padding:14px 16px; box-shadow:0 6px 18px rgba(15,23,42,0.05); }
-  .iq-title { display:flex; flex-direction:column; gap:3px; font-weight:800; font-size:0.92rem; margin-bottom:10px; color:#111827; }
-  .iq-title .muted { font-size:0.76rem; font-weight:600; color:#64748b; }
+  .iq { margin: 6px 24px 8px; background:#fff; border:1px solid #e8ebf2; border-radius:12px; padding:9px 12px; box-shadow:0 4px 12px rgba(15,23,42,0.04); }
   .iq-row { display:flex; gap:8px; flex-wrap:wrap; }
-  .iq-row input { flex:1; min-width:180px; border:1px solid #d8dee9; border-radius:8px; padding:8px 10px; font-size:0.88rem; }
-  .iq-row select { border:1px solid #d8dee9; border-radius:8px; padding:8px 10px; font-size:0.85rem; }
-  .iq-row button { border:none; background:#2563eb; color:#fff; border-radius:8px; padding:8px 16px; cursor:pointer; font-size:0.88rem; }
-  .iq-status { font-size:0.8rem; margin-top:8px; min-height:1em; }
-  .iq-help { margin-top:8px; font-size:0.76rem; color:#64748b; line-height:1.5; }
-  .iq-ex { margin-top:9px; font-size:0.78rem; color:#64748b; line-height:1.7; }
-  .iq-ex-title { font-weight:800; color:#475569; margin-bottom:5px; }
-  .iq-chip-row { display:flex; flex-wrap:wrap; gap:6px; margin-top:5px; }
-  .iq-chip { display:inline-flex; align-items:center; border:1px solid #dbeafe; background:#eff6ff; color:#1d4ed8; border-radius:999px; padding:4px 9px; cursor:pointer; font-weight:700; text-decoration:none; line-height:1.35; }
+  .iq-row input { flex:1; min-width:180px; border:1px solid #d8dee9; border-radius:8px; padding:7px 10px; font-size:0.86rem; }
+  .iq-row select { border:1px solid #d8dee9; border-radius:8px; padding:7px 10px; font-size:0.83rem; }
+  .iq-row button { border:none; background:#2563eb; color:#fff; border-radius:8px; padding:7px 14px; cursor:pointer; font-size:0.86rem; }
+  .iq-status { font-size:0.78rem; margin-top:6px; min-height:0.9em; }
+  .iq-ex { margin-top:7px; font-size:0.75rem; color:#64748b; line-height:1.5; display:flex; align-items:center; gap:8px; min-width:0; }
+  .iq-ex-title { flex:0 0 auto; font-weight:800; color:#475569; }
+  .iq-chip { display:inline-flex; align-items:center; flex:0 1 auto; min-width:0; border:1px solid #dbeafe; background:#eff6ff; color:#1d4ed8; border-radius:999px; padding:3px 8px; cursor:pointer; font-weight:700; text-decoration:none; line-height:1.25; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .iq-chip:hover { border-color:#93c5fd; background:#dbeafe; }
   .units-head { display:flex; align-items:center; justify-content:space-between; gap:12px; margin:22px 24px 6px; }
   .units-head .section-title { margin:0; }
@@ -1466,33 +1462,26 @@
   let inlineLastSearch = null;
   function iqFill(t){ const el=document.getElementById('iq_q'); if(el){ el.value=t; el.focus(); } }
   function inlineQuestionHTML(scopeLabel){
-    const scopeText = inlineAskCourse ? esc(inlineAskCourse) : (scopeLabel || '전체 자료');
     const courseSelect = (!inlineAskCourse && inlineCourses && inlineCourses.length)
       ? `<select id="iq_course"><option value="">전체 과목</option>` +
         inlineCourses.map(c=>`<option value="${esc(c)}">${esc(c)}</option>`).join('') + `</select>`
       : '';
     return `<div class="iq">
-      <div class="iq-title">❓ 자료에 질문하기 <span class="muted">검색 범위: ${scopeText}</span></div>
       <div class="iq-row">
         <input id="iq_q" placeholder="궁금한 개념이나 자료를 입력하세요. 예: 산화환원 관련 자료 찾아줘" onkeydown="if(event.key==='Enter')askInline()">
-        <select id="iq_answer_mode" onchange="iqUpdateModeNote()"><option value="search">빠른 검색</option><option value="ai">AI 답변</option></select>
+        <select id="iq_answer_mode"><option value="search">빠른 검색</option><option value="ai">AI 답변</option></select>
         <select id="iq_mode" onchange="iqToggleCourse()"><option value="single">단일 자료 검색</option><option value="connections">여러 자료 검색</option></select>
         ${courseSelect ? `<span id="iq_course_wrap">${courseSelect}</span>` : ''}
         <button onclick="askInline()">질문</button>
       </div>
-      <div id="iq_mode_note" class="iq-help">빠른 검색은 저장된 자료·개념·Learning Memory를 먼저 찾아줍니다. GPT 답변은 생성하지 않아요.</div>
       <div class="iq-ex">
         <div class="iq-ex-title">예시 질문</div>
-        <div class="iq-chip-row">
-          <a class="iq-chip" onclick="iqFill('산화환원 관련 자료 찾아줘')">산화환원 관련 자료 찾아줘</a>
-          <a class="iq-chip" onclick="iqFill('이 개념이 나온 PDF 찾아줘')">이 개념이 나온 PDF 찾아줘</a>
-          <a class="iq-chip" onclick="iqFill('최근 업로드한 화학 자료 보여줘')">최근 업로드한 화학 자료 보여줘</a>
-        </div>
-        <div class="iq-chip-row">
-          <a class="iq-chip" onclick="iqFill('이걸 쉽게 설명해줘')">이걸 쉽게 설명해줘</a>
-          <a class="iq-chip" onclick="iqFill('시험에 나올 포인트로 정리해줘')">시험 포인트 정리해줘</a>
-          <a class="iq-chip" onclick="iqFill('다른 과목 자료와 연결해서 설명해줘')">다른 과목 자료와 연결해서 설명해줘</a>
-        </div>
+        <a class="iq-chip" onclick="iqFill('산화환원 관련 자료 찾아줘')">산화환원 관련 자료 찾아줘</a>
+        <a class="iq-chip" onclick="iqFill('이 개념이 나온 PDF 찾아줘')">이 개념이 나온 PDF 찾아줘</a>
+        <a class="iq-chip" onclick="iqFill('최근 업로드한 화학 자료 보여줘')">최근 업로드한 화학 자료 보여줘</a>
+        <a class="iq-chip" onclick="iqFill('이걸 쉽게 설명해줘')">이걸 쉽게 설명해줘</a>
+        <a class="iq-chip" onclick="iqFill('시험에 나올 포인트로 정리해줘')">시험 포인트 정리해줘</a>
+        <a class="iq-chip" onclick="iqFill('다른 과목 자료와 연결해서 설명해줘')">다른 과목 자료와 연결해서 설명해줘</a>
       </div>
       <div id="iq_status" class="iq-status"></div>
       <div id="iq_answer"></div>
@@ -1509,13 +1498,6 @@
       scope: mode === 'connections' ? 'multi' : 'single',
       search_filter: course ? {course: course} : null
     };
-  }
-  function iqUpdateModeNote(){
-    const el=document.getElementById('iq_answer_mode'), note=document.getElementById('iq_mode_note');
-    if(!el||!note) return;
-    note.textContent = el.value === 'ai'
-      ? 'AI 답변은 검색 결과를 바탕으로 설명을 생성합니다. GPT 호출/API 비용이 발생할 수 있어요.'
-      : '빠른 검색은 저장된 자료·개념·Learning Memory를 먼저 찾아줍니다. GPT 답변은 생성하지 않아요.';
   }
   async function askInline(forceAI=false){
     const st=document.getElementById('iq_status');
@@ -1573,7 +1555,6 @@
     const m=document.getElementById('iq_mode'), w=document.getElementById('iq_course_wrap');
     if(!m||!w) return;
     w.style.display=(m.value==='single')?'':'none';
-    iqUpdateModeNote();
   }
   async function loadUnitDoc(sem, course, unit){
     const sel=document.getElementById('doc_sel'), fr=document.getElementById('doc_frame');
