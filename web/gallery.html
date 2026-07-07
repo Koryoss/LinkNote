@@ -334,9 +334,11 @@
   .auth-status { font-size:0.82rem; margin-top:12px; min-height:1em; text-align:center; }
   .recall-panel { margin:12px 0 0; background:#fff; border:1px solid #e8ebf2; border-radius:14px; padding:14px 16px; box-shadow:0 6px 18px rgba(15,23,42,0.05); }
   .recall-head { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:10px; }
+  .recall-panel.is-collapsed .recall-head { margin-bottom:0; }
   .recall-title { font-weight:700; font-size:0.9rem; color:#1f2937; }
-  .recall-history-toggle { border:0; background:transparent; color:#64748b; font-size:0.78rem; cursor:pointer; padding:3px 0; font-weight:700; }
-  .recall-history-toggle:hover { color:#2563eb; }
+  .recall-head-actions { display:flex; align-items:center; gap:10px; flex-wrap:wrap; justify-content:flex-end; }
+  .recall-history-toggle, .recall-collapse-toggle { border:0; background:transparent; color:#64748b; font-size:0.78rem; cursor:pointer; padding:3px 0; font-weight:700; }
+  .recall-history-toggle:hover, .recall-collapse-toggle:hover { color:#2563eb; }
   .recall-concept { color:#2563eb; }
   .recall-panel textarea { width:100%; min-height:92px; resize:vertical; border:1px solid #d8dee9; border-radius:10px; padding:10px 12px; font-size:0.88rem; line-height:1.5; }
   .recall-actions { display:flex; align-items:center; gap:8px; margin-top:8px; flex-wrap:wrap; }
@@ -1218,18 +1220,43 @@
     return `<div id="recallPanel" class="recall-panel" hidden>
       <div class="recall-head">
         <div class="recall-title">설명해보기 · <span id="recallConcept" class="recall-concept"></span></div>
-        <button id="recallHistoryToggle" class="recall-history-toggle" onclick="toggleRecallHistory()">최근 Learning Memory</button>
+        <div class="recall-head-actions">
+          <button id="recallHistoryToggle" class="recall-history-toggle" onclick="toggleRecallHistory()">최근 Learning Memory</button>
+          <button id="recallCollapseToggle" class="recall-collapse-toggle" onclick="toggleRecallPanelBody()">접기</button>
+        </div>
       </div>
-      <textarea id="recallAnswer" placeholder="이 개념을 내 말로 설명해보세요."></textarea>
-      <div class="recall-actions">
-        <button onclick="saveRecallTrace()">저장</button>
-        <span id="recallStatus" class="recall-status"></span>
+      <div id="recallPanelBody" class="recall-body">
+        <textarea id="recallAnswer" placeholder="이 개념을 내 말로 설명해보세요."></textarea>
+        <div class="recall-actions">
+          <button onclick="saveRecallTrace()">저장</button>
+          <span id="recallStatus" class="recall-status"></span>
+        </div>
+        <div id="recallList" class="recall-list"></div>
       </div>
-      <div id="recallList" class="recall-list"></div>
     </div>`;
   }
 
   let selectedRecallConcept = "";
+  let recallPanelCollapsed = localStorage.getItem('ln_recall_panel_collapsed') === '1';
+
+  function setRecallPanelCollapsed(collapsed){
+    recallPanelCollapsed = !!collapsed;
+    localStorage.setItem('ln_recall_panel_collapsed', recallPanelCollapsed ? '1' : '0');
+    const panel = document.getElementById('recallPanel');
+    const body = document.getElementById('recallPanelBody');
+    const toggle = document.getElementById('recallCollapseToggle');
+    if(panel) panel.classList.toggle('is-collapsed', recallPanelCollapsed);
+    if(body) body.hidden = recallPanelCollapsed;
+    if(toggle){
+      toggle.textContent = recallPanelCollapsed ? '열기' : '접기';
+      toggle.title = recallPanelCollapsed ? '설명해보기 칸 열기' : '설명해보기 칸 접기';
+    }
+  }
+
+  function toggleRecallPanelBody(){
+    setRecallPanelCollapsed(!recallPanelCollapsed);
+  }
+
   function recallQuery(concept){
     const params = new URLSearchParams({
       semester: state.semester || "",
@@ -1248,6 +1275,7 @@
     recallHistoryExpanded = false;
     document.getElementById("recallConcept").textContent = selectedRecallConcept;
     document.getElementById("recallAnswer").value = "";
+    setRecallPanelCollapsed(recallPanelCollapsed);
     await loadRecallTraces(selectedRecallConcept);
   }
 
