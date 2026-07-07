@@ -428,6 +428,19 @@
       <div id="up_status" class="modal-status"></div>
     </div>
   </div>
+  <div id="renameBackdrop" class="modal-backdrop" hidden onclick="closeRenameUnit()"></div>
+  <div id="renameModal" class="modal" hidden>
+    <div class="modal-head">
+      <strong>단원명 수정</strong>
+      <span class="modal-x" onclick="closeRenameUnit()">×</span>
+    </div>
+    <div class="modal-pane">
+      <label>새 단원명</label>
+      <input id="renameUnitInput" placeholder="새 단원명을 입력하세요" onkeydown="if(event.key==='Enter')submitRenameUnit()">
+      <button type="button" onclick="submitRenameUnit()">수정 저장</button>
+      <div id="renameUnitStatus" class="modal-status"></div>
+    </div>
+  </div>
   <!-- 로그인 / 회원가입 오버레이 -->
   <div id="authOverlay" class="auth-overlay" hidden>
     <div class="auth-card">
@@ -1055,7 +1068,7 @@
     const view = document.getElementById('view');
     const note = notReady ? '<span class="badge-demo">개념 추출 전 · 예시</span>' : (demo ? '<span class="badge-demo">데모</span>' : '');
     inlineAskCourse = state.course;
-    view.innerHTML = `<div class="section-title">${esc(unit)} · 개념 지도 ${note} <button class="mini-btn" onclick="renameUnitPrompt()">✏️ 단원명 수정</button></div>
+    view.innerHTML = `<div class="section-title">${esc(unit)} · 개념 지도 ${note} <button id="renameUnitBtn" type="button" class="mini-btn" onclick="openRenameUnitModal(event)">단원명 수정</button></div>
       <div class="unit-cols" id="unitCols">
         <div class="doc-panel"><div class="doc-head">${clinicalEnabled()
             ? `<button class="doc-tab on" id="docTabDoc" onclick="docTab('doc')">📄 원문</button><button class="doc-tab" id="docTabClin" onclick="docTab('clinical')">🩺 임상 검증</button>`
@@ -1760,15 +1773,51 @@
     const tok=localStorage.getItem('ln_token')||'';
     fr.src=`${API}/file?filename=${encodeURIComponent(f)}&token=${encodeURIComponent(tok)}#page=${page||1}`;
   }
-  async function renameUnitPrompt(){
-    const old=state.unit; if(!old) return;
-    const nv=(prompt('새 단원명을 입력하세요:', old)||'').trim();
-    if(!nv || nv===old) return;
+  function openRenameUnitModal(event){
+    if(event){ event.preventDefault(); event.stopPropagation(); }
+    const old = state.unit || '';
+    if(!old) return;
+    const backdrop = document.getElementById('renameBackdrop');
+    const modal = document.getElementById('renameModal');
+    const input = document.getElementById('renameUnitInput');
+    const status = document.getElementById('renameUnitStatus');
+    if(status){ status.style.color = '#64748b'; status.textContent = ''; }
+    if(input){ input.value = old; }
+    if(backdrop) backdrop.hidden = false;
+    if(modal) modal.hidden = false;
+    setTimeout(()=>{ if(input){ input.focus(); input.select(); } }, 0);
+  }
+  function closeRenameUnit(){
+    const backdrop = document.getElementById('renameBackdrop');
+    const modal = document.getElementById('renameModal');
+    if(backdrop) backdrop.hidden = true;
+    if(modal) modal.hidden = true;
+  }
+  async function submitRenameUnit(){
+    const old = state.unit || '';
+    const input = document.getElementById('renameUnitInput');
+    const status = document.getElementById('renameUnitStatus');
+    const nv = (input ? input.value : '').trim();
+    if(!old) return;
+    if(!nv){ if(status){ status.style.color = '#ef4444'; status.textContent = '새 단원명을 입력하세요.'; } return; }
+    if(nv === old){ closeRenameUnit(); return; }
+    if(status){ status.style.color = '#2563eb'; status.textContent = '수정 중...'; }
     try{
-      const r=await fetch(API+'/rename-unit',{method:'POST',headers:authHeaders({'Content-Type':'application/json'}),
-        body:JSON.stringify({semester:state.semester, course:state.course, old_unit:old, new_unit:nv})});
-      if(r.ok){ openUnit(nv); } else { alert('단원명 변경 실패'); }
-    }catch(e){ alert('서버 미연결 — 변경 실패'); }
+      const r = await fetch(API + '/rename-unit', {
+        method:'POST',
+        headers:authHeaders({'Content-Type':'application/json'}),
+        body:JSON.stringify({semester:state.semester, course:state.course, old_unit:old, new_unit:nv})
+      });
+      const d = await r.json().catch(()=>({}));
+      if(!r.ok){
+        if(status){ status.style.color = '#ef4444'; status.textContent = d.detail || '단원명 변경 실패'; }
+        return;
+      }
+      closeRenameUnit();
+      openUnit(nv);
+    }catch(e){
+      if(status){ status.style.color = '#ef4444'; status.textContent = '서버에 연결할 수 없습니다.'; }
+    }
   }
   function _fileRowHTML(){
     return `<div class="up-row"><input type="file" class="up_f" accept="application/pdf" onchange="onFilePick(this)"><span class="up-x" onclick="removeFileRow(this)" title="제거">×</span></div>`;

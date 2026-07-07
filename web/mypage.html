@@ -61,6 +61,9 @@
   details.dev summary { cursor:pointer; color:#475569; font-weight:800; }
   details.dev .kv { margin-top:12px; }
   .badge { display:inline-block; border:1px solid #bfdbfe; background:#eff6ff; color:#1d4ed8; border-radius:999px; padding:3px 9px; font-size:.75rem; font-weight:800; }
+  .track-card { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+  .track-card h2 { margin-bottom:0; }
+  .track-badge { text-transform:lowercase; border-color:#c8d6f1; background:#fff; color:#2563eb; font-size:.86rem; padding:6px 12px; }
   .nursing-card { display:none; border-color:#bfdbfe; background:#f8fbff; }
   .nursing-card.on { display:block; }
   .empty, .error { border:1px dashed #d8dee9; border-radius:12px; padding:18px; color:#64748b; background:#fff; }
@@ -266,7 +269,6 @@
     const clinicalItems = Array.isArray(clinical?.items) ? clinical.items : [];
     const dueItems = Array.isArray(due?.items) ? due.items.filter(d => d.is_due) : [];
     const suggestions = Array.isArray(suggest?.items) ? suggest.items : [];
-    const recentUploads = Array.isArray(library.recent_uploads) ? library.recent_uploads : [];
     currentMemories = Array.isArray(memories?.items) ? memories.items : [];
     totalMemoryCount = Number(memories?.total || currentMemories.length || 0);
     selectedMemoryIds = new Set([...selectedMemoryIds].filter(id => currentMemories.some(item => item.id === id)));
@@ -288,29 +290,9 @@
           <a class="btn" href="/concept-graph.html">개념 지도</a>
         </div>
       </section>
-      <section><h2>학습 현황</h2>
-        <div class="stats">
-          ${stat('자료(PDF)', library.pdf_count ?? 0)}
-          ${stat('과목', library.course_count ?? 0)}
-          ${stat('단원', library.unit_count ?? 0)}
-          ${stat('추출된 개념', learning.concept_count ?? 0)}
-          ${stat('개념 연결', learning.graph_edge_count ?? 0)}
-          ${stat('설명한 개념', learning.concepts_explained_count ?? 0)}
-        </div>
-        <p class="sub" style="margin-top:10px">실제 기록된 학습 데이터만 집계합니다.</p>
-      </section>
-      <section><h2>최근 추가한 자료</h2>
-        <div class="list" style="margin-top:0">
-          ${recentUploads.length ? recentUploads.map(uploadItem).join('') : '<div class="item">아직 추가한 자료가 없습니다. My Library에서 PDF를 올리면 여기에 표시됩니다.</div>'}
-        </div>
-      </section>
-      <section class="wide"><h2>계정 정보</h2>
-        <div class="kv">
-          ${row("Email", account.email)}
-          ${row("Display name", account.display_name)}
-          ${row("Student track", account.student_track || "general")}
-        </div>
-        ${snapshotHTML(learning, memorySummary)}
+      <section class="wide track-card">
+        <h2>Student track</h2>
+        <span class="badge track-badge">${esc(account.student_track || "general")}</span>
       </section>
       <section class="wide"><h2>Learning Memory <span class="sub">현재 ${currentMemories.length}개 표시 · 전체 ${totalMemoryCount}개</span></h2>
         ${memoryBulkControlsHTML()}
