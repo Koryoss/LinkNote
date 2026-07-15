@@ -1751,7 +1751,7 @@
     return `<div class="search-result">
       <div class="ask-a">관련 자료를 찾았어요. AI 답변을 생성할까요?<br><span class="cost-label">${esc(scopeLabel)} · ${esc(d.intent_label || '일반 검색')} · ${d.semantic_search_used ? '의미+키워드 검색' : '키워드 검색'} · ${d.from_cache ? '캐시 결과' : '새 검색'}</span></div>
       <div class="search-card"><h4>관련 개념</h4>${renderSearchList(d.related_concepts, '관련 개념을 찾지 못했습니다.', x=>`<div class="search-item" data-result-type="concept" data-result-id="${esc(x.concept||'')}" data-course="${esc(x.course||'')}" data-concept="${esc(x.concept||'')}" onclick="recordSearchEventFromElement(this)"><strong>${esc(x.concept)}</strong><span class="search-meta">${esc(x.course)} · ${esc(x.unit)} · ${esc(x.score || 0)}점</span>${esc(x.reason||'')}</div>`)}</div>
-      <div class="search-card"><h4>관련 문서 / Chunk</h4>${renderSearchList(d.sources, '관련 chunk를 찾지 못했습니다.', x=>`<div class="search-item" data-result-type="source" data-result-id="${esc(x.id||x.filename||'')}" data-course="${esc(x.course||'')}" data-concept="${esc((x.matched_concepts||[])[0]||'')}" onclick="recordSearchEventFromElement(this)"><strong>${esc(x.filename || '파일명 없음')}</strong><span class="search-meta">${esc(x.course)} · ${esc(x.unit)} · p.${esc(x.page || '-')} · ${esc(x.score || 0)}점</span>${esc(x.reason || '')}<br>${esc(x.chunk_preview || '')}</div>`)}</div>
+      <div class="search-card"><h4>관련 문서 / Chunk</h4>${renderSearchList(d.sources, '관련 chunk를 찾지 못했습니다.', x=>`<div class="search-item" data-result-type="source" data-result-id="${esc(x.id||x.filename||'')}" data-course="${esc(x.course||'')}" data-concept="${esc((x.matched_concepts||[])[0]||'')}" data-filename="${esc(x.filename||'')}" data-page="${esc(x.page||1)}" onclick="recordSearchEventFromElement(this)"><strong>${esc(x.filename || '파일명 없음')}</strong><span class="search-meta">${esc(x.course)} · ${esc(x.unit)} · p.${esc(x.page || '-')} · ${esc(x.score || 0)}점</span>${esc(x.reason || '')}<br>${esc(x.chunk_preview || '')}</div>`)}</div>
       <div class="search-card"><h4>Learning Memory / Recall</h4>${renderSearchList(d.learning_memory_matches, '관련 Learning Memory/Recall 기록이 없습니다.', x=>`<div class="search-item" data-result-type="learning_memory" data-result-id="${esc(x.id||'')}" data-course="${esc(x.course||'')}" data-concept="${esc(x.concept||'')}" onclick="recordSearchEventFromElement(this)"><strong>${esc(x.concept || '개념 미지정')}</strong><span class="search-meta">${esc(x.course)} · ${esc(x.unit)} · ${esc(x.score || 0)}점</span>${esc(x.reason || '')}<br>${esc(x.improved_summary || x.answer_preview || '')}</div>`)}</div>
       <button onclick="recordSearchEvent('helpful')">도움됨</button>
       ${d.can_generate_ai_answer ? `<button onclick="askInline(true)">AI 답변 생성</button> <span class="ask-mode-note">API 비용이 발생할 수 있습니다.</span>` : ''}
@@ -1760,6 +1760,14 @@
   function recordSearchEventFromElement(el){
     if(!el) return;
     recordSearchEvent('result_opened', el.dataset.resultType||'', el.dataset.resultId||'', el.dataset.course||'', el.dataset.concept||'');
+    if(el.dataset.resultType === 'source' && el.dataset.filename){
+      const tok=localStorage.getItem('ln_token')||'';
+      window.open(`${API}/file?filename=${encodeURIComponent(el.dataset.filename)}&token=${encodeURIComponent(tok)}#page=${encodeURIComponent(el.dataset.page||1)}`,'_blank','noopener');
+    }else if(el.dataset.resultType === 'concept'){
+      window.location.href=`/concept-graph.html?concept=${encodeURIComponent(el.dataset.concept||'')}&course=${encodeURIComponent(el.dataset.course||'')}`;
+    }else if(el.dataset.resultType === 'learning_memory'){
+      window.location.href='/learning-memory.html';
+    }
   }
   async function recordSearchEvent(eventType, resultType='', resultId='', course='', concept='', searchResult=null){
     const d=searchResult || inlineLastSearchResult;
