@@ -30,6 +30,7 @@ The following inventory is based on the current LinkNote structure targeted by t
 | `app.py` | App entry point or earlier prototype runtime. Keep until its relationship to `api_server.py` is confirmed. |
 | `auth.py` | Lightweight identity helper. At this stage, `user_id` should remain a temporary local identifier rather than a full auth system. |
 | `rag.py` | Retrieval and answer-generation logic around indexed document chunks. |
+| `search_engine.py` | Deterministic search intent, alias expansion, hybrid scoring, score reasons, and bounded personalization. |
 | `pdf_loader.py` | PDF ingestion and text/chunk extraction support. |
 | `reset_db.py` | Local database/index reset utility for development. Treat as a dev tool, not production runtime behavior. |
 | `requirements.txt` | Python dependency list for backend/local runtime. |
@@ -40,6 +41,8 @@ The following inventory is based on the current LinkNote structure targeted by t
 | `data/` | Local JSON or generated data artifacts. Future lightweight recall traces can start here, but this pass does not add them. |
 | `chroma_db/` | Local ChromaDB persistence directory for indexed chunks/embeddings. Usually should be treated as generated local state. |
 | Existing documentation files | README, notes, prompt docs, deployment notes, or experiment records. These should be merged into `docs/` or `prompts/` when still useful. |
+
+Current search-only state is generated locally: `data/search_cache.json`, `data/search_events.json`, and `data/search_profiles.json` are runtime data under the already ignored `data/` boundary. They must not be committed or treated as shared evaluation fixtures. Stable search evaluation inputs belong under `tests/fixtures/`.
 
 ## File Audit
 
@@ -104,4 +107,3 @@ Before moving or deleting any file:
 - Check whether the content duplicates README or `docs/`.
 - Classify it as an experimental prompt, runtime prompt, developer note, or user-facing doc.
 - Decide whether deletion is safe or whether the file should move to `docs/`, `prompts/`, `scripts/`, or `archive/`.
-

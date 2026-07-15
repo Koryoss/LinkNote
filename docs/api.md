@@ -33,7 +33,10 @@ Important current-state note:
 
 | Method | Path | Purpose |
 | --- | --- | --- |
-| `POST` | `/ask/search` | Search related chunks, concepts, and Learning Memory/Recall records without generating a GPT answer. Uses token-derived `data_user_id`. |
+| `POST` | `/ask/search` | GPT-free hybrid search across chunks, concepts, and structured Learning Memory. Returns intent, scope reason, score components, and algorithm version. |
+| `POST` | `/ask/search/events` | Store a minimal authenticated search interaction used for bounded local personalization. Sensitive question text is not stored. |
+| `GET` | `/search/profile` | Return the authenticated user's local aliases and aggregate course/concept preference counts. |
+| `POST` | `/search/profile/aliases` | Add a user-local alias for a concept without changing shared concept extraction data. |
 | `POST` | `/ask` | Answer a question from indexed source chunks. Supports normal and connection-focused modes and calls the configured answer-generation provider. |
 | `POST` | `/ingest` | Upload a PDF, extract text, chunk/index pages, and optionally build concepts for the submitted unit. |
 | `GET` | `/library` | Return the current user's indexed library overview. |
@@ -41,6 +44,8 @@ Important current-state note:
 | `GET` | `/chunks` | Inspect indexed chunks with optional filters and pagination. |
 | `GET` | `/file` | Serve an uploaded PDF file for preview. Uses a query token for iframe access and verifies the requested filename belongs to the current `data_user_id`. |
 | `POST` | `/rename-unit` | Rename a unit in ChromaDB metadata and update concept JSON when present. |
+
+`POST /ask/search` currently reports `algorithm_version = hybrid_personalized_v1`. The source score combines semantic similarity (40%), keyword match (25%), concept match (15%), learning relevance (14%), and long-term preference (6%). Learning relevance plus preference is capped by design at 20%, so personalized history cannot outrank clearly relevant evidence by itself. If embedding lookup fails, the endpoint returns keyword/concept/Learning Memory results with `semantic_search_used = false` rather than failing the entire search.
 
 ## Timetable Endpoints
 

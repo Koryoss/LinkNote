@@ -215,6 +215,8 @@ LinkNote는 아직 PostgreSQL 같은 서버 DB가 아니라 로컬 JSON + Chroma
 | `data/learning_memory_summaries.json` | AI Summary endpoints | 명시적으로 생성한 AI Summary |
 | `data/clinical_reflections.json` | Clinical Reflection | 간호 실습 회고 기록 |
 | `data/search_cache.json` | `/ask/search` | 사용자/질문/필터별 search-only cache |
+| `data/search_events.json` | `/ask/search/events` | 최대 5,000개의 로컬 검색 행동 이벤트 |
+| `data/search_profiles.json` | search personalization | 사용자별 개념 alias와 과목/개념 선호 집계 |
 
 ### Uploaded files
 
@@ -312,7 +314,16 @@ My Library에는 두 모드가 있다.
 | 빠른 검색 | `POST /ask/search` | 없음 | 관련 chunks, concepts, Learning Memory/Recall 찾기 |
 | AI 답변 | `POST /ask` | 있음 | 자료 기반 답변 생성 |
 
-`/ask/search`는 search-only endpoint다. 저장된 자료, concept index, Learning Memory를 local keyword/metadata 방식으로 찾고 GPT 답변은 생성하지 않는다. 민감/임상처럼 보이는 query는 cache하지 않는다.
+`/ask/search`는 `hybrid_personalized_v1` search-only endpoint다. GPT 답변은 생성하지 않으며 다음 순서로 동작한다.
+
+1. 한국어 조사 정규화와 사용자별 concept alias를 포함해 검색어를 확장한다.
+2. 질문을 definition, comparison, mechanism, review, connection, source location, personal memory, general intent로 분류한다.
+3. 명시 필터를 우선하고, 필터가 없으면 의도에 따라 single/multi 범위를 결정한다.
+4. ChromaDB 의미 검색과 로컬 keyword/concept 검색을 합친다. embedding 실패 시 keyword fallback으로 계속 동작한다.
+5. Learning Memory의 내 설명, AI 피드백, 개선 요약, Missing Links, Follow-up Question, strengths를 필드별로 검색한다.
+6. semantic 40%, keyword 25%, concept 15%, learning relevance 14%, preference 6%로 source 점수를 계산하고 이유와 score components를 반환한다.
+
+개인화는 `learning + preference <= 20%`로 제한한다. `/ask/search/events`는 result opened, refined, helpful, AI answer requested, explanation started 이벤트만 저장한다. 민감/임상 query 원문은 cache나 event에 남기지 않는다. `tests/fixtures/search_cases.json`과 `tests/test_search_engine.py`가 대표 질문의 의도, 범위, 핵심어, 개인화 상한을 고정한다.
 
 `/ask`는 `mode`에 따라 다음 함수를 사용한다.
 
@@ -983,6 +994,9 @@ Legacy experimental frontend. 현재 authenticated production flow의 기준 파
 | Method | Path | 설명 |
 | --- | --- | --- |
 | `POST` | `/ask/search` | GPT 없는 빠른 검색 |
+| `POST` | `/ask/search/events` | 검색 행동 기록 |
+| `GET` | `/search/profile` | 로컬 검색 프로필 조회 |
+| `POST` | `/search/profile/aliases` | 개인별 concept alias 추가 |
 | `POST` | `/ask` | 자료 기반 AI 답변 |
 | `POST` | `/ingest` | PDF 업로드, chunk/index |
 | `GET` | `/library` | 현재 user library overview |

@@ -38,6 +38,22 @@ from rag import (
     search_relevant_chunks,
     concept_occurrences_for_unit,
 )
+from search_engine import (
+    INTENT_LABELS,
+    SEARCH_ALGORITHM_VERSION,
+    classify_intent,
+    expand_tokens,
+    learning_score,
+    matched_fields,
+    normalized_keyword_score,
+    preference_score,
+    raw_text_score,
+    resolve_scope,
+    score_reason,
+    semantic_score,
+    tokenize,
+    weighted_score,
+)
 
 DATA_DIR = os.getenv("DATA_DIR", "./data")
 UPLOAD_DIR = os.path.join(DATA_DIR, "uploads")
@@ -51,6 +67,8 @@ CLINICAL_REFLECTIONS_PATH = os.path.join(DATA_DIR, "clinical_reflections.json")
 STUDY_CLAIMS_PATH = os.path.join(DATA_DIR, "study_claims.json")
 CLINICAL_VERIFICATIONS_PATH = os.path.join(DATA_DIR, "clinical_verifications.json")
 SEARCH_CACHE_PATH = os.path.join(DATA_DIR, "search_cache.json")
+SEARCH_EVENTS_PATH = os.path.join(DATA_DIR, "search_events.json")
+SEARCH_PROFILES_PATH = os.path.join(DATA_DIR, "search_profiles.json")
 CONCEPT_INDEX_PATH = os.path.join(DATA_DIR, "concept_index.json")
 CONCEPT_LINKS_PATH = os.path.join(DATA_DIR, "concept_links.json")
 MAINTAINER_EMAIL = "kory124@snu.ac.kr"
@@ -126,6 +144,24 @@ class AskSearchRequest(BaseModel):
     search_filter: Optional[SearchFilter] = None
     scope: Optional[str] = "auto"
     limit: Optional[int] = 5
+    surface: Optional[str] = "library"
+    current_concept: Optional[str] = None
+
+
+class SearchEventCreate(BaseModel):
+    search_id: str
+    event_type: str
+    result_type: Optional[str] = None
+    result_id: Optional[str] = None
+    question: Optional[str] = None
+    intent: Optional[str] = None
+    course: Optional[str] = None
+    concept: Optional[str] = None
+
+
+class SearchAliasCreate(BaseModel):
+    concept: str
+    alias: str
 
 
 class IngestResponse(BaseModel):
@@ -1715,31 +1751,105 @@ def _filter_for_chroma(search_filter: Dict[str, str], scope: str) -> Dict[str, s
 
 
 def _tokens(text: str) -> List[str]:
-    return [
-        token.lower()
-        for token in re.findall(r"[0-9A-Za-z가-힣]+", text or "")
-        if len(token.strip()) >= 2
-    ]
+    return tokenize(text)
 
 
 def _text_score(text: str, tokens: List[str]) -> float:
-    if not tokens:
-        return 0.0
-    haystack = str(text or "").lower()
-    score = 0.0
-    for token in tokens:
-        if token in haystack:
-            score += 1.0
-        score += min(haystack.count(token), 3) * 0.2
-    return round(score, 4)
+    return raw_text_score(text, tokens)
 
 
-def _search_cache_key(user_id: str, question: str, search_filter: Dict[str, str], scope: str) -> str:
+def _load_search_profiles() -> Dict[str, Any]:
+    data = _load_json_file(SEARCH_PROFILES_PATH)
+    return data if isinstance(data, dict) else {}
+
+
+def _save_search_profiles(data: Dict[str, Any]) -> None:
+    os.makedirs(os.path.dirname(SEARCH_PROFILES_PATH), exist_ok=True)
+    _save_json_file(SEARCH_PROFILES_PATH, data)
+
+
+def _search_profile(user_id: str) -> Dict[str, Any]:
+    profile = _load_search_profiles().get(user_id, {})
+    return profile if isinstance(profile, dict) else {}
+
+
+def _list_aliases(value: Any) -> List[str]:
+    if isinstance(value, list):
+        return [str(item).strip() for item in value if str(item).strip()]
+    if isinstance(value, str) and value.strip():
+        return [part.strip() for part in re.split(r"[,;/]", value) if part.strip()]
+    return []
+
+
+def _build_user_alias_map(user_id: str, concepts: List[Dict[str, Any]], profile: Dict[str, Any]) -> Dict[str, List[str]]:
+    groups: List[List[str]] = []
+    for item in concepts:
+        canonical = str(item.get("name") or item.get("keyword") or item.get("concept") or "").strip()
+        aliases = []
+        for key in ["aliases", "synonyms", "alias"]:
+            aliases.extend(_list_aliases(item.get(key)))
+        if canonical:
+            groups.append([canonical, *aliases])
+
+    saved_aliases = profile.get("aliases") if isinstance(profile.get("aliases"), dict) else {}
+    for canonical, aliases in saved_aliases.items():
+        groups.append([str(canonical), *_list_aliases(aliases)])
+
+    alias_map: Dict[str, Set[str]] = {}
+    for group in groups:
+        group_tokens = []
+        for phrase in group:
+            group_tokens.extend(tokenize(phrase))
+        for token in group_tokens:
+            alias_map.setdefault(token, set()).update(value for value in group_tokens if value != token)
+    return {key: sorted(values) for key, values in alias_map.items()}
+
+
+def _learning_metadata_for_user(user_id: str) -> Dict[str, Dict[str, Any]]:
+    metadata: Dict[str, Dict[str, Any]] = {}
+    for item in _load_recall_traces():
+        if not isinstance(item, dict) or item.get("user_id") != user_id or item.get("feedback_type"):
+            continue
+        key = _concept_key(item.get("concept"))
+        if not key:
+            continue
+        entry = metadata.setdefault(key, {
+            "concept": str(item.get("concept") or ""),
+            "recall_count": 0,
+            "last_recalled_at": None,
+            "missing_links_count": 0,
+        })
+        entry["recall_count"] += 1
+        created_at = str(item.get("created_at") or "")
+        if created_at and (not entry["last_recalled_at"] or created_at > entry["last_recalled_at"]):
+            entry["last_recalled_at"] = created_at
+        entry["missing_links_count"] += len(_memory_list_field(item, "missing_links"))
+
+    for entry in metadata.values():
+        state = _learning_state_from_recall(
+            int(entry["recall_count"]), entry.get("last_recalled_at"), int(entry["missing_links_count"])
+        )
+        entry["learning_state"] = state
+        entry["review_priority"] = _review_priority_for_state(
+            state, int(entry["recall_count"]), entry.get("last_recalled_at"), int(entry["missing_links_count"])
+        )
+    return metadata
+
+
+def _search_cache_key(
+    user_id: str,
+    question: str,
+    search_filter: Dict[str, str],
+    scope: str,
+    profile_revision: str = "",
+) -> str:
     payload = {
+        "algorithm_version": SEARCH_ALGORITHM_VERSION,
         "user_id": user_id,
         "question": " ".join((question or "").lower().split()),
         "search_filter": search_filter,
         "scope": scope,
+        "profile_revision": profile_revision,
     }
     raw = json.dumps(payload, ensure_ascii=False, sort_keys=True)
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
@@ -1799,41 +1909,132 @@ def _matches_filter_context(item: Dict[str, Any], search_filter: Dict[str, str],
     return True
 
 
-def _search_related_concepts(user_id: str, tokens: List[str], search_filter: Dict[str, str], scope: str, limit: int) -> List[Dict[str, Any]]:
+def _concept_learning_metadata(item: Dict[str, Any], learning_metadata: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
+    return learning_metadata.get(
+        _concept_key(item.get("name") or item.get("keyword") or item.get("concept")),
+        {"learning_state": "NEW", "review_priority": 70},
+    )
+
+
+def _search_related_concepts(
+    user_id: str,
+    tokens: List[str],
+    search_filter: Dict[str, str],
+    scope: str,
+    limit: int,
+    concepts_data: List[Dict[str, Any]],
+    learning_metadata: Dict[str, Dict[str, Any]],
+    profile: Dict[str, Any],
+) -> List[Dict[str, Any]]:
     concepts = []
-    for item in _iter_user_concepts_with_context(user_id):
+    for item in concepts_data:
         if not _matches_filter_context(item, search_filter, scope):
             continue
         concept = str(item.get("name") or item.get("keyword") or item.get("concept") or "").strip()
-        text = " ".join(str(item.get(k, "")) for k in ["name", "keyword", "definition", "description", "summary"])
-        score = _text_score(text, tokens)
-        if score <= 0 and concept and any(token in concept.lower() for token in tokens):
-            score = 1.0
-        if score <= 0:
+        fields = {
+            "개념명": " ".join(str(item.get(k, "")) for k in ["name", "keyword"]),
+            "개념 설명": " ".join(str(item.get(k, "")) for k in ["definition", "description", "summary"]),
+            "동의어": " ".join(_list_aliases(item.get("aliases")) + _list_aliases(item.get("synonyms"))),
+        }
+        text = " ".join(fields.values())
+        keyword = normalized_keyword_score(text, tokens)
+        concept_match = 1.0 if concept and any(token in concept.lower() for token in tokens) else keyword
+        learning_meta = _concept_learning_metadata(item, learning_metadata)
+        components = {
+            "semantic": 0.0,
+            "keyword": keyword,
+            "concept": concept_match,
+            "learning": learning_score(learning_meta),
+            "preference": preference_score(profile, str(item.get("course") or ""), concept),
+        }
+        final_score = weighted_score(components, {
+            "semantic": 0.0, "keyword": 0.45, "concept": 0.30, "learning": 0.18, "preference": 0.07,
+        })
+        if keyword <= 0 and concept_match <= 0:
             continue
+        matched = matched_fields(fields, tokens)
         concepts.append({
             "concept": concept,
             "course": item.get("course", ""),
             "unit": item.get("unit", ""),
-            "reason": "질문 키워드가 개념명 또는 설명과 일치합니다.",
-            "_score": score,
+            "reason": score_reason(components, matched),
+            "score": round(final_score * 100, 1),
+            "score_components": components,
+            "matched_fields": matched,
+            "learning_state": learning_meta.get("learning_state", "NEW"),
+            "review_priority": learning_meta.get("review_priority", 0),
+            "_score": final_score,
         })
     concepts.sort(key=lambda item: item["_score"], reverse=True)
     return [{k: v for k, v in item.items() if k != "_score"} for item in concepts[:limit]]
 
 
-def _search_sources(user_id: str, tokens: List[str], search_filter: Dict[str, str], scope: str, limit: int) -> List[Dict[str, Any]]:
+def _search_sources(
+    user_id: str,
+    question: str,
+    tokens: List[str],
+    search_filter: Dict[str, str],
+    scope: str,
+    limit: int,
+    concepts_data: List[Dict[str, Any]],
+    learning_metadata: Dict[str, Dict[str, Any]],
+    profile: Dict[str, Any],
+) -> tuple[List[Dict[str, Any]], bool]:
     chroma_filter = _filter_for_chroma(search_filter, scope)
     data = get_chunks(user_id=user_id, limit=5000, offset=0, search_filter=chroma_filter, full=True)
+    semantic_by_id: Dict[str, Dict[str, Any]] = {}
+    semantic_used = False
+    try:
+        semantic_candidates = search_relevant_chunks(
+            question,
+            n_results=max(20, limit * 4),
+            search_filter=chroma_filter,
+            user_id=user_id,
+            rich=False,
+        )
+        semantic_by_id = {str(item.get("id")): item for item in semantic_candidates if item.get("id")}
+        semantic_used = bool(semantic_by_id)
+    except Exception as exc:
+        logger.info("search-only semantic fallback: %s", exc)
+
+    concept_terms = []
+    for concept_item in concepts_data:
+        name = str(concept_item.get("name") or concept_item.get("keyword") or "").strip()
+        if name:
+            concept_terms.append((name, _concept_learning_metadata(concept_item, learning_metadata)))
+
     scored: List[Dict[str, Any]] = []
     for item in data.get("items", []):
         if not _matches_filter_context(item, search_filter, scope):
             continue
         text = " ".join(str(item.get(k, "")) for k in ["semester", "course", "unit", "title", "filename", "text"])
-        score = _text_score(text, tokens)
-        if score <= 0 and tokens:
+        keyword = normalized_keyword_score(text, tokens)
+        semantic_item = semantic_by_id.get(str(item.get("id")), {})
+        semantic = semantic_score(semantic_item.get("distance")) if semantic_item else 0.0
+        matched_concepts = [(name, meta) for name, meta in concept_terms if name.lower() in text.lower()]
+        concept_match = 1.0 if matched_concepts else 0.0
+        learning_meta = max(
+            (meta for _, meta in matched_concepts),
+            key=lambda meta: int(meta.get("review_priority") or 0),
+            default={},
+        )
+        components = {
+            "semantic": semantic,
+            "keyword": keyword,
+            "concept": concept_match,
+            "learning": learning_score(learning_meta),
+            "preference": preference_score(profile, str(item.get("course") or ""), matched_concepts[0][0] if matched_concepts else ""),
+        }
+        final_score = weighted_score(components)
+        if keyword <= 0 and semantic <= 0:
             continue
+        matched = matched_fields({
+            "자료명": " ".join(str(item.get(k, "")) for k in ["title", "filename"]),
+            "과목/단원": " ".join(str(item.get(k, "")) for k in ["semester", "course", "unit"]),
+            "본문": str(item.get("text", "")),
+        }, tokens)
         scored.append({
+            "id": item.get("id", ""),
             "semester": item.get("semester", ""),
             "course": item.get("course", ""),
             "unit": item.get("unit", ""),
@@ -1841,11 +2042,15 @@ def _search_sources(user_id: str, tokens: List[str], search_filter: Dict[str, st
             "page": item.get("page"),
             "chunk_index": item.get("chunk_index"),
             "chunk_preview": str(item.get("text", ""))[:420],
-            "score": score,
-            "_sort": score,
+            "score": round(final_score * 100, 1),
+            "score_components": components,
+            "matched_fields": matched,
+            "reason": score_reason(components, matched),
+            "matched_concepts": [name for name, _ in matched_concepts[:3]],
+            "_sort": final_score,
         })
     scored.sort(key=lambda item: (-item["_sort"], str(item.get("course", "")), str(item.get("filename", "")), int(item.get("page") or 0)))
-    return [{k: v for k, v in item.items() if k != "_sort"} for item in scored[:limit]]
+    return ([{k: v for k, v in item.items() if k != "_sort"} for item in scored[:limit]], semantic_used)
 
 
 def _memory_list_field(item: Dict[str, Any], key: str) -> List[str]:
@@ -1870,31 +2075,64 @@ def _memory_text_field(item: Dict[str, Any], key: str) -> str:
     return ""
 
 
-def _search_learning_memory(user_id: str, tokens: List[str], search_filter: Dict[str, str], scope: str, limit: int) -> List[Dict[str, Any]]:
+def _search_learning_memory(
+    user_id: str,
+    tokens: List[str],
+    search_filter: Dict[str, str],
+    scope: str,
+    limit: int,
+    learning_metadata: Dict[str, Dict[str, Any]],
+    profile: Dict[str, Any],
+) -> List[Dict[str, Any]]:
     matches: List[Dict[str, Any]] = []
     for item in _load_recall_traces():
-        if not isinstance(item, dict) or item.get("user_id") != user_id:
+        if not isinstance(item, dict) or item.get("user_id") != user_id or item.get("feedback_type"):
             continue
         if not _matches_filter_context(item, search_filter, scope):
             continue
-        text = " ".join([
-            str(item.get("concept", "")),
-            str(item.get("answer_text", "")),
-            str(item.get("feedback_text", "")),
-            _memory_text_field(item, "improved_summary"),
-            " ".join(_memory_list_field(item, "missing_links")),
-        ])
-        score = _text_score(text, tokens)
-        if score <= 0 and tokens:
+        fields = {
+            "개념": str(item.get("concept", "")),
+            "내 설명": str(item.get("answer_text", "")),
+            "AI 피드백": str(item.get("feedback_text", "")),
+            "개선 요약": _memory_text_field(item, "improved_summary"),
+            "Missing Links": " ".join(_memory_list_field(item, "missing_links")),
+            "Follow-up Question": _memory_text_field(item, "follow_up_question"),
+            "잘 설명한 점": " ".join(_memory_list_field(item, "strengths")),
+        }
+        text = " ".join(fields.values())
+        keyword = normalized_keyword_score(text, tokens)
+        matched = matched_fields(fields, tokens)
+        concept = str(item.get("concept") or "")
+        learning_meta = learning_metadata.get(_concept_key(concept), {})
+        components = {
+            "semantic": 0.0,
+            "keyword": keyword,
+            "concept": 1.0 if "개념" in matched else 0.0,
+            "learning": learning_score(learning_meta),
+            "preference": preference_score(profile, str(item.get("course") or ""), concept),
+        }
+        final_score = weighted_score(components, {
+            "semantic": 0.0, "keyword": 0.50, "concept": 0.22, "learning": 0.20, "preference": 0.08,
+        })
+        if keyword <= 0:
             continue
         matches.append({
-            "concept": item.get("concept", ""),
+            "id": item.get("id", ""),
+            "concept": concept,
             "course": item.get("course", ""),
             "unit": item.get("unit", ""),
             "answer_preview": str(item.get("answer_text", ""))[:220],
             "improved_summary": _memory_text_field(item, "improved_summary"),
+            "missing_links": _memory_list_field(item, "missing_links"),
+            "follow_up_question": _memory_text_field(item, "follow_up_question"),
             "created_at": item.get("created_at", ""),
-            "_score": score,
+            "score": round(final_score * 100, 1),
+            "score_components": components,
+            "matched_fields": matched,
+            "reason": score_reason(components, matched),
+            "learning_state": learning_meta.get("learning_state", "NEW"),
+            "review_priority": learning_meta.get("review_priority", 0),
+            "_score": final_score,
         })
     matches.sort(key=lambda item: (-item["_score"], str(item.get("created_at", ""))))
     return [{k: v for k, v in item.items() if k != "_score"} for item in matches[:limit]]
@@ -1904,28 +2142,47 @@ def _build_search_only_response(user_id: str, request: AskSearchRequest) -> Dict
     question = request.question.strip()
     requested_scope = (request.scope or "auto").strip().lower()
     search_filter = _normalize_search_filter(request.search_filter)
-    scope = "single" if requested_scope == "single" or (requested_scope == "auto" and search_filter) else "multi"
-    if requested_scope == "multi":
-        scope = "multi"
+    intent = classify_intent(question)
+    scope, scope_reason = resolve_scope(requested_scope, search_filter, intent)
     limit = max(1, min(int(request.limit or 5), 12))
-    cache_key = _search_cache_key(user_id, question, search_filter, scope)
+    profile = _search_profile(user_id)
+    concepts_data = _iter_user_concepts_with_context(user_id)
+    alias_map = _build_user_alias_map(user_id, concepts_data, profile)
+    base_tokens = tokenize(question)
+    tokens = expand_tokens(base_tokens, alias_map)
+    learning_metadata = _learning_metadata_for_user(user_id)
+    cache_key = _search_cache_key(user_id, question, search_filter, scope, str(profile.get("updated_at") or ""))
     can_cache = not _is_sensitive_search(question)
     if can_cache:
         cached = _load_search_cache().get(cache_key)
         if isinstance(cached, dict) and cached.get("user_id") == user_id:
             result = dict(cached.get("result") or {})
             result["from_cache"] = True
+            result["search_id"] = uuid.uuid4().hex
             return result
 
-    tokens = _tokens(question)
+    sources, semantic_used = _search_sources(
+        user_id, question, tokens, search_filter, scope, limit, concepts_data, learning_metadata, profile
+    )
     result = {
+        "search_id": uuid.uuid4().hex,
         "question": question,
         "mode": "search_only",
         "scope": scope,
+        "scope_reason": scope_reason,
+        "intent": intent,
+        "intent_label": INTENT_LABELS.get(intent, INTENT_LABELS["general"]),
+        "algorithm_version": SEARCH_ALGORITHM_VERSION,
+        "semantic_search_used": semantic_used,
+        "expanded_terms": [token for token in tokens if token not in base_tokens],
         "from_cache": False,
-        "related_concepts": _search_related_concepts(user_id, tokens, search_filter, scope, limit),
-        "sources": _search_sources(user_id, tokens, search_filter, scope, limit),
-        "learning_memory_matches": _search_learning_memory(user_id, tokens, search_filter, scope, limit),
+        "related_concepts": _search_related_concepts(
+            user_id, tokens, search_filter, scope, limit, concepts_data, learning_metadata, profile
+        ),
+        "sources": sources,
+        "learning_memory_matches": _search_learning_memory(
+            user_id, tokens, search_filter, scope, limit, learning_metadata, profile
+        ),
         "can_generate_ai_answer": True,
     }
     if can_cache:
@@ -1937,6 +2194,71 @@ def _build_search_only_response(user_id: str, request: AskSearchRequest) -> Dict
         }
         _save_search_cache(cache)
     return result
+
+
+_SEARCH_EVENT_TYPES = {"result_opened", "search_refined", "helpful", "ai_answer_requested", "explanation_started"}
+
+
+def _record_search_event(user_id: str, payload: SearchEventCreate) -> Dict[str, Any]:
+    event_type = payload.event_type.strip().lower()
+    if event_type not in _SEARCH_EVENT_TYPES:
+        raise HTTPException(status_code=400, detail="지원하지 않는 search event입니다.")
+    question = str(payload.question or "").strip()
+    event = {
+        "id": uuid.uuid4().hex,
+        "search_id": payload.search_id.strip(),
+        "user_id": user_id,
+        "event_type": event_type,
+        "result_type": str(payload.result_type or "").strip(),
+        "result_id": str(payload.result_id or "").strip(),
+        "intent": str(payload.intent or "").strip(),
+        "course": str(payload.course or "").strip(),
+        "concept": str(payload.concept or "").strip(),
+        "question": "" if _is_sensitive_search(question) else question,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    events = _load_json_file(SEARCH_EVENTS_PATH)
+    events = [item for item in events if isinstance(item, dict)] if isinstance(events, list) else []
+    events.append(event)
+    os.makedirs(os.path.dirname(SEARCH_EVENTS_PATH), exist_ok=True)
+    _save_json_file(SEARCH_EVENTS_PATH, events[-5000:])
+
+    if event_type in {"result_opened", "helpful", "explanation_started"}:
+        profiles = _load_search_profiles()
+        profile = profiles.get(user_id, {}) if isinstance(profiles.get(user_id), dict) else {}
+        course_counts = profile.get("course_counts") if isinstance(profile.get("course_counts"), dict) else {}
+        concept_counts = profile.get("concept_counts") if isinstance(profile.get("concept_counts"), dict) else {}
+        if event["course"]:
+            course_counts[event["course"]] = min(1000, int(course_counts.get(event["course"], 0) or 0) + 1)
+        if event["concept"]:
+            concept_counts[event["concept"]] = min(1000, int(concept_counts.get(event["concept"], 0) or 0) + 1)
+        profile.update({
+            "course_counts": course_counts,
+            "concept_counts": concept_counts,
+            "updated_at": event["created_at"],
+        })
+        profiles[user_id] = profile
+        _save_search_profiles(profiles)
+    return {"ok": True, "event_id": event["id"]}
+
+
+def _save_search_alias(user_id: str, concept: str, alias: str) -> Dict[str, Any]:
+    canonical = concept.strip()
+    normalized_alias = alias.strip()
+    if len(canonical) < 2 or len(normalized_alias) < 2:
+        raise HTTPException(status_code=400, detail="concept와 alias는 두 글자 이상이어야 합니다.")
+    profiles = _load_search_profiles()
+    profile = profiles.get(user_id, {}) if isinstance(profiles.get(user_id), dict) else {}
+    aliases = profile.get("aliases") if isinstance(profile.get("aliases"), dict) else {}
+    values = _list_aliases(aliases.get(canonical))
+    if normalized_alias not in values and normalized_alias != canonical:
+        values.append(normalized_alias)
+    aliases[canonical] = values[:20]
+    profile["aliases"] = aliases
+    profile["updated_at"] = datetime.now(timezone.utc).isoformat()
+    profiles[user_id] = profile
+    _save_search_profiles(profiles)
+    return {"ok": True, "concept": canonical, "aliases": values[:20]}
 
 
 def _build_timetable_response(uid: str) -> TimetableResponse:
@@ -1965,6 +2287,27 @@ async def ask_search(request: AskSearchRequest, data_user_id: str = Depends(curr
     if not request.question.strip():
         raise HTTPException(status_code=400, detail="question이 필요합니다.")
     return _build_search_only_response(data_user_id, request)
+
+
+@app.post("/ask/search/events")
+async def create_search_event(request: SearchEventCreate, data_user_id: str = Depends(current_uid)) -> Dict[str, Any]:
+    return _record_search_event(data_user_id, request)
+
+
+@app.get("/search/profile")
+async def get_search_profile(data_user_id: str = Depends(current_uid)) -> Dict[str, Any]:
+    profile = _search_profile(data_user_id)
+    return {
+        "aliases": profile.get("aliases", {}),
+        "course_counts": profile.get("course_counts", {}),
+        "concept_counts": profile.get("concept_counts", {}),
+        "updated_at": profile.get("updated_at"),
+    }
+
+
+@app.post("/search/profile/aliases")
+async def create_search_alias(request: SearchAliasCreate, data_user_id: str = Depends(current_uid)) -> Dict[str, Any]:
+    return _save_search_alias(data_user_id, request.concept, request.alias)
 
 
 @app.post("/ask", response_model=AskResponse)

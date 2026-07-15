@@ -55,10 +55,10 @@ Current frontend entry points:
 
 My Library has two question modes:
 
-- `빠른 검색`: finds related chunks, concepts, and Learning Memory/Recall matches through `POST /ask/search` without generating a GPT answer.
+- `빠른 검색`: uses GPT-free hybrid retrieval across ChromaDB chunks, extracted concepts, and structured Learning Memory fields through `POST /ask/search`.
 - `AI 답변`: uses the existing `POST /ask` flow and calls the configured answer-generation provider.
 
-Search-only supports single-document style filters and multi-document search across the current user's owned materials. It uses token-derived `data_user_id`, local keyword/metadata matching, and a per-user `data/search_cache.json` cache.
+The current search-only algorithm is `hybrid_personalized_v1`. It combines semantic similarity, keyword and concept matches, learning state, and a bounded user preference signal. It classifies question intent, explains result scores, searches Learning Memory by field, and falls back to keyword search when embeddings are unavailable. Search events and aliases remain local to the token-derived `data_user_id`; personalization cannot contribute more than 20% of ranking. See [Current search algorithm](docs/search-algorithm.md).
 
 ```text
 linknote/
@@ -66,6 +66,7 @@ linknote/
 ├── app.py
 ├── auth.py
 ├── rag.py
+├── search_engine.py
 ├── pdf_loader.py
 ├── reset_db.py
 ├── requirements.txt
@@ -85,7 +86,10 @@ linknote/
 │   ├── concepts.json
 │   ├── concept_index.json
 │   ├── concept_links.json
-│   └── recall_traces.json        # local recall trace store
+│   ├── recall_traces.json        # local recall trace store
+│   ├── search_cache.json         # generated search cache
+│   ├── search_events.json        # generated local search events
+│   └── search_profiles.json      # generated user aliases/preferences
 │
 ├── chroma_db/
 │
@@ -106,6 +110,7 @@ Note: the current `desktop-app` branch contains `web/app.js` and `web/gallery.ht
 - `app.py`: Streamlit/local app surface and legacy local UI reference.
 - `auth.py`: Lightweight local identity helper. This should stay small until full authentication is planned.
 - `rag.py`: Retrieval and answer-generation logic.
+- `search_engine.py`: GPT-free intent classification, token/alias expansion, hybrid scoring, and bounded personalization helpers.
 - `pdf_loader.py`: PDF text extraction and ingestion support.
 - `reset_db.py`: Local development utility for clearing generated state.
 - `providers/`: Model provider layer for Ollama, OpenAI, or hybrid configurations.
@@ -222,6 +227,7 @@ See [Recall and Learning Memory](docs/recall-learning-memory.md).
 - [API notes](docs/api.md)
 - [Development guide](docs/development-guide.md)
 - [Deployment notes](docs/deployment.md)
+- [Current search algorithm](docs/search-algorithm.md)
 - [Recall and Learning Memory](docs/recall-learning-memory.md)
 - [Repository audit](docs/repository-audit.md)
 
