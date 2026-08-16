@@ -38,6 +38,8 @@ from rag import (
     get_units,
     search_relevant_chunks,
     concept_occurrences_for_unit,
+    concept_source_chunks_for_unit,
+    _concept_occurrences_for_terms_from_chunks,
 )
 from search_engine import (
     INTENT_LABELS,
@@ -2535,6 +2537,7 @@ async def ingest(
         title=title.strip(),
         user_id=data_user_id,
         unit=unit.strip(),
+        stored_filename=unique_name,
     )
 
     # 업로드 시 해당 단원 개념 자동 추출(개념 지도용). 실패해도 업로드는 성공 처리.
@@ -2702,26 +2705,48 @@ async def reindex_concepts(payload: dict, data_user_id: str = Depends(current_ui
 
 
 def _augment_concepts_with_page_locations(concepts: List[Dict[str, Any]], user_id: str, semester: str, course: str, unit: str) -> List[Dict[str, Any]]:
+    try:
+        source_chunks = concept_source_chunks_for_unit(user_id, semester, course, unit)
+    except Exception:
+        source_chunks = []
+
+    def safe_page(raw: Any) -> Optional[int]:
+        try:
+            page = int(raw)
+        except (TypeError, ValueError):
+            return None
+        return page if page > 0 else None
+
     out = []
     for concept in concepts:
         item = dict(concept)
-        occurrences = item.get("occurrences") if isinstance(item.get("occurrences"), list) else []
-        if not occurrences:
-            keyword = str(item.get("keyword") or item.get("name") or "").strip()
-            try:
-                occurrences = concept_occurrences_for_unit(user_id, semester, course, unit, keyword)
-                if not occurrences and keyword != str(item.get("name") or "").strip():
-                    occurrences = concept_occurrences_for_unit(user_id, semester, course, unit, str(item.get("name") or "").strip())
-            except Exception:
-                occurrences = []
+        saved_occurrences = item.get("occurrences") if isinstance(item.get("occurrences"), list) else []
+        terms = [item.get("keyword"), item.get("name")]
+        for list_key in ("aliases", "synonyms", "alias"):
+            value = item.get(list_key)
+            terms.extend(value if isinstance(value, list) else [value] if isinstance(value, str) else [])
+        discovered_occurrences = _concept_occurrences_for_terms_from_chunks(terms, source_chunks)
+
+        occurrence_map: Dict[tuple[str, int], Dict[str, Any]] = {}
+        for entry in [*discovered_occurrences, *saved_occurrences]:
+            if not isinstance(entry, dict):
+                continue
+            page = safe_page(entry.get("page"))
+            if page is None:
+                continue
+            key = (str(entry.get("filename") or ""), page)
+            merged = {**occurrence_map.get(key, {}), **entry}
+            merged["page"] = page
+            occurrence_map[key] = merged
+
+        occurrences = list(occurrence_map.values())
         if occurrences:
-            occurrences = [x for x in occurrences if isinstance(x, dict)]
-            occurrences.sort(key=lambda x: (int(x.get("page") or 0), str(x.get("filename") or "")))
+            occurrences.sort(key=lambda x: (str(x.get("filename") or ""), int(x["page"])))
             item["occurrences"] = occurrences
-            item["pages"] = sorted({x.get("page") for x in occurrences if x.get("page") is not None})
+            item["pages"] = sorted({int(x["page"]) for x in occurrences})
             first = occurrences[0]
-            item["filename"] = item.get("filename") or first.get("filename")
-            item["page"] = item.get("page") or first.get("page")
+            item["filename"] = first.get("filename") or item.get("filename")
+            item["page"] = first.get("page") or item.get("page")
         out.append(item)
     return out
 
@@ -2745,6 +2770,151 @@ async def concepts(semester: str, course: str, unit: str, data_user_id: str = De
 
     recalled = _augment_concepts_with_recall(concepts, data_user_id, semester, course, unit)
     return {"status": "ready", "concepts": _augment_concepts_with_page_locations(recalled, data_user_id, semester, course, unit)}
+
+
+@app.get("/study-workspace")
+async def study_workspace(
+    semester: str,
+    course: str,
+    unit: str,
+    filename: str,
+    data_user_id: str = Depends(current_uid),
+) -> Dict[str, Any]:
+    """Return ordered pages, concepts, notes, and source availability for one owned file."""
+    semester = (semester or "").strip()
+    course = (course or "").strip()
+    unit = (unit or "").strip()
+    filename = (filename or "").strip()
+    if not all((semester, course, unit, filename)):
+        raise HTTPException(status_code=400, detail="semester, course, unit, filename이 필요합니다.")
+
+    source_filter = {"semester": semester, "course": course, "unit": unit, "filename": filename}
+    chunks_data = get_chunks(
+        user_id=data_user_id,
+        limit=100000,
+        search_filter=source_filter,
+        full=True,
+    )
+    items = chunks_data.get("items", [])
+    if not int(chunks_data.get("total") or len(items)):
+        raise HTTPException(status_code=404, detail="해당 자료를 찾을 수 없습니다.")
+
+    pages_map: Dict[int, List[Dict[str, Any]]] = {}
+    for chunk in items:
+        try:
+            page = int(chunk.get("page"))
+        except (TypeError, ValueError):
+            continue
+        if page > 0:
+            pages_map.setdefault(page, []).append(chunk)
+
+    def safe_chunk_index(chunk: Dict[str, Any]) -> int:
+        try:
+            return int(chunk.get("chunk_index") or 0)
+        except (TypeError, ValueError):
+            return 0
+
+    pages = []
+    for page in sorted(pages_map):
+        page_chunks = sorted(pages_map[page], key=safe_chunk_index)
+        parts = []
+        for chunk in page_chunks:
+            text = str(
+                chunk.get("chunk_preview")
+                or chunk.get("chunk_text")
+                or chunk.get("text")
+                or ""
+            ).strip()
+            if text:
+                parts.append(text)
+        title = next(
+            (
+                str(chunk.get("title") or "").strip()
+                for chunk in page_chunks
+                if len(str(chunk.get("title") or "").strip()) >= 3
+                and not str(chunk.get("title") or "").strip().lower().startswith(f"p.{page}")
+            ),
+            f"p.{page}",
+        )
+        pages.append({
+            "page": page,
+            "title": title,
+            "text_preview": " · ".join(parts)[:700],
+            "concepts": [],
+        })
+
+    concepts_data = _load_json_file(CONCEPTS_PATH)
+    raw_concepts = (
+        concepts_data.get(data_user_id, {})
+        .get(semester, {})
+        .get(course, {})
+        .get(unit, [])
+    )
+    if not isinstance(raw_concepts, list):
+        raw_concepts = []
+    recalled = _augment_concepts_with_recall(raw_concepts, data_user_id, semester, course, unit)
+    augmented = _augment_concepts_with_page_locations(recalled, data_user_id, semester, course, unit)
+
+    final_concepts = []
+    for stored_index, concept in enumerate(augmented):
+        occurrences = []
+        for raw_occurrence in concept.get("occurrences") or []:
+            if not isinstance(raw_occurrence, dict):
+                continue
+            if str(raw_occurrence.get("filename") or "").strip() != filename:
+                continue
+            try:
+                occurrence_page = int(raw_occurrence.get("page"))
+            except (TypeError, ValueError):
+                continue
+            if occurrence_page <= 0:
+                continue
+            occurrence = dict(raw_occurrence)
+            occurrence["page"] = occurrence_page
+            occurrences.append(occurrence)
+        if not occurrences:
+            continue
+        occurrence_pages = sorted({occurrence["page"] for occurrence in occurrences})
+        concept_name = str(concept.get("name") or "").strip()
+        note_list = _get_concept_notes_for_user(data_user_id, {
+            "semester": semester,
+            "course": course,
+            "unit": unit,
+            "filename": filename,
+            "concept": concept_name,
+        })
+        final_concepts.append({
+            "name": concept_name,
+            "definition": concept.get("definition") or concept.get("desc") or "",
+            "first_page": occurrence_pages[0],
+            "pages": occurrence_pages,
+            "occurrences": occurrences,
+            "note": note_list[0] if note_list else None,
+            "_stored_index": stored_index,
+        })
+
+    final_concepts.sort(key=lambda concept: (concept["first_page"], concept["_stored_index"]))
+    for concept in final_concepts:
+        concept.pop("_stored_index", None)
+    for page in pages:
+        page["concepts"] = [
+            concept["name"] for concept in final_concepts
+            if page["page"] in concept["pages"]
+        ]
+
+    source_path = _resolve_owned_upload_path(
+        data_user_id=data_user_id,
+        requested_filename=filename,
+        semester=semester,
+        course=course,
+        unit=unit,
+    )
+    return {
+        "scope": source_filter,
+        "source_available": bool(source_path),
+        "pages": pages,
+        "concepts": final_concepts,
+    }
 
 
 @app.post("/recall-traces", response_model=RecallTraceResponse)
@@ -2971,24 +3141,93 @@ def _matching_upload_paths(filename: str) -> List[str]:
     return sorted(matches)
 
 
-def _resolve_owned_upload_path(data_user_id: str, requested_filename: str) -> Optional[str]:
-    safe_filename = _normalize_filename(requested_filename)
-    if safe_filename not in _filenames_owned_by_user(data_user_id):
+def _upload_content_signature(path: str) -> tuple[int, str]:
+    digest = hashlib.sha256()
+    with open(path, "rb") as upload_file:
+        for chunk in iter(lambda: upload_file.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return os.path.getsize(path), digest.hexdigest()
+
+
+def _pick_unambiguous_upload_path(paths: List[str]) -> Optional[str]:
+    unique_paths = sorted(set(paths))
+    if len(unique_paths) == 1:
+        return unique_paths[0]
+    if len(unique_paths) > 1:
+        signatures = {_upload_content_signature(path) for path in unique_paths}
+        if len(signatures) == 1:
+            return unique_paths[0]
+    return None
+
+
+def _resolve_owned_upload_path(
+    data_user_id: str,
+    requested_filename: str,
+    semester: str = "",
+    course: str = "",
+    unit: str = "",
+) -> Optional[str]:
+    """Resolve only source files directly referenced by chunks in the owned scope."""
+    try:
+        safe_filename = _normalize_filename(requested_filename)
+    except HTTPException:
         return None
 
-    matches = _matching_upload_paths(safe_filename)
-    if len(matches) == 1:
-        return matches[0]
-    if len(matches) > 1:
-        logger.warning("Ambiguous upload preview for data_user_id=%s filename=%s", data_user_id, safe_filename)
+    search_filter: Dict[str, Any] = {"filename": safe_filename}
+    for key, value in (("semester", semester), ("course", course), ("unit", unit)):
+        if str(value or "").strip():
+            search_filter[key] = str(value).strip()
+    chunks = get_chunks(
+        user_id=data_user_id,
+        limit=10000,
+        search_filter=search_filter,
+        full=False,
+    )
+    if not chunks.get("total"):
+        return None
+
+    stored_names = {
+        str(item.get("stored_filename") or "").strip()
+        for item in chunks.get("items", [])
+        if str(item.get("stored_filename") or "").strip()
+    }
+    stored_paths = [path for stored in stored_names if (path := _safe_upload_path(stored))]
+    if path := _pick_unambiguous_upload_path(stored_paths):
+        return path
+    if stored_names:
+        logger.warning(
+            "Owned stored_filename(s) unavailable or ambiguous for user=%s filename=%s",
+            data_user_id,
+            safe_filename,
+        )
+        return None
+
+    if _matching_upload_paths(safe_filename):
+        logger.warning(
+            "Legacy filename matches are not returned without attributable ownership for user=%s filename=%s",
+            data_user_id,
+            safe_filename,
+        )
     return None
 
 
 @app.get("/file")
-async def serve_file(filename: str, token: str = ""):
+async def serve_file(
+    filename: str,
+    token: str = "",
+    semester: str = "",
+    course: str = "",
+    unit: str = "",
+):
     """업로드된 원본 PDF preview. 쿼리 토큰에서 도출한 data_user_id 소유 파일만 반환."""
     data_user_id = _uid_from_token(token)
-    if path := _resolve_owned_upload_path(data_user_id, filename):
+    if path := _resolve_owned_upload_path(
+        data_user_id=data_user_id,
+        requested_filename=filename,
+        semester=semester,
+        course=course,
+        unit=unit,
+    ):
         return FileResponse(path, media_type="application/pdf")
     raise HTTPException(status_code=404, detail="파일을 찾을 수 없습니다.")
 
