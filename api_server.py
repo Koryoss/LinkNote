@@ -7,6 +7,7 @@ import re
 import hashlib
 import time
 import uuid
+import threading
 from collections import Counter
 from datetime import datetime, timezone, timedelta
 from typing import Any, Dict, List, Optional, Set
@@ -15,7 +16,7 @@ from fastapi import FastAPI, File, Form, HTTPException, UploadFile, Depends, Hea
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 import unicodedata
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from providers.openai_provider import generate_answer as generate_openai_answer
 
@@ -69,6 +70,7 @@ CLINICAL_VERIFICATIONS_PATH = os.path.join(DATA_DIR, "clinical_verifications.jso
 SEARCH_CACHE_PATH = os.path.join(DATA_DIR, "search_cache.json")
 SEARCH_EVENTS_PATH = os.path.join(DATA_DIR, "search_events.json")
 SEARCH_PROFILES_PATH = os.path.join(DATA_DIR, "search_profiles.json")
+CONCEPT_NOTES_PATH = os.path.join(DATA_DIR, "concept_notes.json")
 CONCEPT_INDEX_PATH = os.path.join(DATA_DIR, "concept_index.json")
 CONCEPT_LINKS_PATH = os.path.join(DATA_DIR, "concept_links.json")
 MAINTAINER_EMAIL = "kory124@snu.ac.kr"
@@ -146,6 +148,16 @@ class AskSearchRequest(BaseModel):
     limit: Optional[int] = 5
     surface: Optional[str] = "library"
     current_concept: Optional[str] = None
+
+
+class ConceptNoteUpsertRequest(BaseModel):
+    semester: str
+    course: str
+    unit: str
+    filename: str
+    concept: str
+    note_text: str = ""
+    source_pages: List[Any] = Field(default_factory=list)
 
 
 class SearchEventCreate(BaseModel):
@@ -246,6 +258,153 @@ def _save_json_file(path: str, data: Any) -> None:
             json.dump(data, f, ensure_ascii=False, indent=2)
     except OSError:
         pass
+
+
+_concept_notes_lock = threading.RLock()
+
+
+def _load_concept_notes() -> List[Dict[str, Any]]:
+    data = _load_json_file(CONCEPT_NOTES_PATH)
+    return data if isinstance(data, list) else []
+
+
+def _save_concept_notes(items: List[Dict[str, Any]]) -> None:
+    with _concept_notes_lock:
+        parent_dir = os.path.dirname(CONCEPT_NOTES_PATH)
+        os.makedirs(parent_dir, exist_ok=True)
+        temp_path = f"{CONCEPT_NOTES_PATH}.{uuid.uuid4().hex}.tmp"
+        try:
+            with open(temp_path, "w", encoding="utf-8") as file:
+                json.dump(items, file, ensure_ascii=False, indent=2)
+                file.flush()
+                os.fsync(file.fileno())
+            os.replace(temp_path, CONCEPT_NOTES_PATH)
+        except OSError as exc:
+            try:
+                if os.path.exists(temp_path):
+                    os.remove(temp_path)
+            except OSError:
+                pass
+            raise HTTPException(
+                status_code=500,
+                detail="개념 노트를 저장하지 못했습니다.",
+            ) from exc
+
+
+def _normalize_source_pages(pages: Any) -> List[int]:
+    if not isinstance(pages, (list, tuple)):
+        return []
+    normalized = []
+    for page in pages:
+        try:
+            page_number = int(page)
+        except (TypeError, ValueError):
+            continue
+        if page_number > 0:
+            normalized.append(page_number)
+    return sorted(set(normalized))
+
+
+def _clean_note_text(text: Any) -> str:
+    if text is None:
+        return ""
+    return str(text or "").replace("\r\n", "\n").replace("\r", "\n").strip()
+
+
+def _get_concept_notes_for_user(
+    user_id: str,
+    filters: Optional[Dict[str, Any]] = None,
+) -> List[Dict[str, Any]]:
+    filters = filters or {}
+    items = []
+    with _concept_notes_lock:
+        for note in _load_concept_notes():
+            if not isinstance(note, dict) or note.get("user_id") != user_id:
+                continue
+            if all(
+                not filters.get(key)
+                or str(note.get(key) or "").strip() == str(filters[key]).strip()
+                for key in ("semester", "course", "unit", "filename", "concept")
+            ):
+                items.append(dict(note))
+    return items
+
+
+def _upsert_concept_note(
+    user_id: str,
+    payload: Dict[str, Any],
+) -> Dict[str, Any]:
+    identity = {
+        key: str(payload.get(key) or "").strip()
+        for key in ("semester", "course", "unit", "filename", "concept")
+    }
+    if not all(identity.values()):
+        raise HTTPException(
+            status_code=400,
+            detail="semester, course, unit, filename, concept는 모두 필요합니다.",
+        )
+
+    now = datetime.now(timezone.utc).isoformat()
+    with _concept_notes_lock:
+        notes = _load_concept_notes()
+        matched_index = next(
+            (
+                index
+                for index, note in enumerate(notes)
+                if isinstance(note, dict)
+                and note.get("user_id") == user_id
+                and all(
+                    str(note.get(key) or "").strip() == value
+                    for key, value in identity.items()
+                )
+            ),
+            None,
+        )
+        note_text = _clean_note_text(payload.get("note_text"))
+        source_pages = _normalize_source_pages(payload.get("source_pages"))
+
+        if matched_index is not None:
+            note = dict(notes[matched_index])
+            note.update(
+                note_text=note_text,
+                source_pages=source_pages,
+                updated_at=now,
+            )
+            notes[matched_index] = note
+        else:
+            note = {
+                "id": uuid.uuid4().hex,
+                "user_id": user_id,
+                **identity,
+                "note_text": note_text,
+                "source_pages": source_pages,
+                "created_at": now,
+                "updated_at": now,
+            }
+            notes.append(note)
+        _save_concept_notes(notes)
+    return note
+
+
+def _delete_concept_note_for_user(user_id: str, note_id: str) -> bool:
+    with _concept_notes_lock:
+        notes = _load_concept_notes()
+        kept = []
+        deleted = False
+        for note in notes:
+            if not isinstance(note, dict):
+                kept.append(note)
+                continue
+            if (
+                str(note.get("id") or "") == str(note_id or "")
+                and note.get("user_id") == user_id
+            ):
+                deleted = True
+                continue
+            kept.append(note)
+        if deleted:
+            _save_concept_notes(kept)
+        return deleted
 
 
 def _load_timetable() -> List[Dict[str, Any]]:
@@ -3145,6 +3304,50 @@ async def concept_graph_overview(
         "ranking_info": _ranking_info(),
     }
 
+
+
+@app.get("/concept-notes")
+async def concept_notes_get(
+    semester: Optional[str] = None,
+    course: Optional[str] = None,
+    unit: Optional[str] = None,
+    filename: Optional[str] = None,
+    concept: Optional[str] = None,
+    data_user_id: str = Depends(current_uid),
+) -> Dict[str, Any]:
+    filters = {
+        key: value.strip()
+        for key, value in {
+            "semester": semester,
+            "course": course,
+            "unit": unit,
+            "filename": filename,
+            "concept": concept,
+        }.items()
+        if value and value.strip()
+    }
+    return {
+        "items": _get_concept_notes_for_user(data_user_id, filters),
+    }
+
+
+@app.put("/concept-notes")
+async def concept_notes_put(
+    payload: ConceptNoteUpsertRequest,
+    data_user_id: str = Depends(current_uid),
+) -> Dict[str, Any]:
+    note = _upsert_concept_note(data_user_id, payload.dict())
+    return {"ok": True, "note": note}
+
+
+@app.delete("/concept-notes/{note_id}")
+async def concept_notes_delete(
+    note_id: str,
+    data_user_id: str = Depends(current_uid),
+) -> Dict[str, Any]:
+    if not _delete_concept_note_for_user(data_user_id, note_id):
+        raise HTTPException(status_code=404, detail="노트를 찾을 수 없습니다.")
+    return {"ok": True}
 
 
 @app.post("/learning-session/start")
