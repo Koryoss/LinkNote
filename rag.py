@@ -2,6 +2,7 @@ import chromadb
 import json
 import os
 import re
+import unicodedata
 from providers.hybrid_provider import embed_text, generate_answer
 
 chroma_client = chromadb.PersistentClient(path=os.getenv("CHROMA_PATH", "./chroma_db"))
@@ -27,6 +28,7 @@ def add_pdf_pages_to_db(
     title: str,
     user_id: str,
     unit: str = "",
+    stored_filename: str = "",
 ):
     ids, documents, metadatas, embeddings = [], [], [], []
     for page in pages:
@@ -36,10 +38,13 @@ def add_pdf_pages_to_db(
             chunk_id = f"{user_id}-{semester}-{course}-{title}-{filename}-p{page_number}-c{chunk_index}"
             ids.append(chunk_id)
             documents.append(chunk)
-            metadatas.append({
+            metadata = {
                 "user_id": user_id, "semester": semester, "course": course, "title": title,
                 "filename": filename, "page": page_number, "chunk_index": chunk_index, "unit": unit
-            })
+            }
+            if stored_filename:
+                metadata["stored_filename"] = stored_filename
+            metadatas.append(metadata)
             embeddings.append(embed_text(chunk))
     if ids:
         collection.upsert(ids=ids, documents=documents, metadatas=metadatas, embeddings=embeddings)
@@ -61,7 +66,7 @@ def _build_where_filter(search_filter=None, user_id=None):
     conditions = []
     if user_id:
         conditions.append({"user_id": user_id})
-    for key in ["semester", "course", "filename"]:
+    for key in ["semester", "course", "unit", "filename"]:
         if value := (search_filter.get(key) if search_filter else None):
             conditions.append({key: value})
     if not conditions: return None
@@ -100,10 +105,17 @@ def _concept_occurrences_from_chunks(keyword, chunks):
     needle = str(keyword or "").strip()
     if not needle:
         return out
+    normalized_needle = unicodedata.normalize("NFKC", needle).casefold()
     for c in chunks:
-        if needle not in (c.get("text") or ""):
+        source_text = unicodedata.normalize("NFKC", str(c.get("text") or "")).casefold()
+        if normalized_needle not in source_text:
             continue
-        page = c.get("page")
+        try:
+            page = int(c.get("page"))
+        except (TypeError, ValueError):
+            continue
+        if page <= 0:
+            continue
         filename = c.get("filename")
         key = (filename or "", page)
         if key in seen:
@@ -114,16 +126,39 @@ def _concept_occurrences_from_chunks(keyword, chunks):
     return out
 
 
-def concept_occurrences_for_unit(user_id, semester, course, unit, keyword):
-    where_filter = _build_where_filter({"semester": semester, "course": course}, user_id=user_id)
+def _concept_occurrences_for_terms_from_chunks(terms, chunks):
+    """Return every unique positive source page containing an explicit concept term."""
+    merged = {}
+    for term in terms:
+        normalized = unicodedata.normalize("NFKC", str(term or "")).casefold().strip()
+        if len(normalized) < 2:
+            continue
+        for occurrence in _concept_occurrences_from_chunks(term, chunks):
+            key = (occurrence.get("filename") or "", occurrence.get("page"))
+            merged.setdefault(key, occurrence)
+    return sorted(
+        merged.values(),
+        key=lambda item: (str(item.get("filename") or ""), int(item.get("page") or 0)),
+    )
+
+
+def concept_source_chunks_for_unit(user_id, semester, course, unit):
+    """Load a unit's source text once for deterministic occurrence backfilling."""
+    where_filter = _build_where_filter(
+        {"semester": semester, "course": course, "unit": unit},
+        user_id=user_id,
+    )
     if not where_filter:
         return []
     results = collection.get(where=where_filter, include=["metadatas", "documents"])
-    chunks = [
-        {"text": doc or "", "page": meta.get("page"), "filename": meta.get("filename")}
-        for meta, doc in zip(results.get("metadatas", []), results.get("documents", []))
-        if (meta.get("unit") or "").strip() == unit
+    return [
+        {"text": document or "", "page": metadata.get("page"), "filename": metadata.get("filename")}
+        for metadata, document in zip(results.get("metadatas", []), results.get("documents", []))
     ]
+
+
+def concept_occurrences_for_unit(user_id, semester, course, unit, keyword):
+    chunks = concept_source_chunks_for_unit(user_id, semester, course, unit)
     return _concept_occurrences_from_chunks(keyword, chunks)
 
 
