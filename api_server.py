@@ -116,25 +116,8 @@ app.add_middleware(
 )
 
 
-try:
-    import auth as _auth
-except Exception:
-    class _AuthStub:
-        @staticmethod
-        def verify_token(token):
-            return token or ""
-        @staticmethod
-        def get_user_by_id(uid):
-            return {"data_user_id": uid, "email": uid}
-        @staticmethod
-        def public_user(user):
-            return user
-    _auth = _AuthStub()
-
-try:
-    import registry as _registry
-except Exception:
-    _registry = None
+import auth as _auth
+import registry as _registry
 
 
 def current_user(authorization: Optional[str] = Header(None)) -> Dict[str, Any]:
@@ -5198,21 +5181,7 @@ async def clinical_reflections(
 
 
 # ============== 계정 / 인증 (Stage C-1) ==============
-from fastapi import Header
-try:
-    import auth as _auth
-except Exception:
-    class _AuthStub:
-        @staticmethod
-        def verify_token(token):
-            return token or ""
-        @staticmethod
-        def get_user_by_id(uid):
-            return {"data_user_id": uid, "email": uid}
-        @staticmethod
-        def public_user(user):
-            return user
-    _auth = _AuthStub()
+# _auth와 Header는 파일 상단에서 이미 import되어 있다 (중복 정의·조용한 인증 폴백 제거).
 
 
 # ============== 스터디 (허용 계정 전용) ==============

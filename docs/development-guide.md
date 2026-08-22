@@ -318,7 +318,7 @@ My Library에는 두 모드가 있다.
 | 빠른 검색 | `POST /ask/search` | 없음 | 관련 chunks, concepts, Learning Memory/Recall 찾기 |
 | AI 답변 | `POST /ask` | 있음 | 자료 기반 답변 생성 |
 
-`/ask/search`는 `hybrid_personalized_v2` search-only endpoint다. GPT 답변은 생성하지 않으며 다음 순서로 동작한다.
+`/ask/search`는 `hybrid_personalized_v4` search-only endpoint다. GPT 답변은 생성하지 않으며 다음 순서로 동작한다.
 
 1. 한국어 조사 정규화와 사용자별 concept alias를 포함해 검색어를 확장한다. 추출 개념의 한국어 `name`, 본문 `keyword`, 영문명·약어 `aliases`는 양방향 용어 그룹으로 취급한다.
 2. 질문을 definition, comparison, mechanism, review, connection, source location, personal memory, general intent로 분류한다.

@@ -51,7 +51,7 @@ Important current-state note:
 
 New desktop uploads use `/ingest/batch`. OpenAI embeddings are sent in bounded groups (`EMBED_BATCH_SIZE`, default 64), concept MAP calls use at most `CONCEPT_MAX_WORKERS=3`, and OCR uses at most `OCR_MAX_WORKERS=2`. Content-addressed PDF, page, and embedding results are stored in `data/analysis_cache.sqlite3` (override with `ANALYSIS_CACHE_PATH`) so identical content is not analyzed again. The legacy single-file `/ingest` endpoint remains available for compatibility.
 
-`POST /ask/search` currently reports `algorithm_version = hybrid_personalized_v2`. Source ranking combines semantic similarity (40%), keyword match (25%), query-matched concept evidence (15%), learning relevance (14%), and long-term preference (6%). Learning relevance plus preference is capped by design at 20%, and chunk results require direct keyword/concept evidence or strong semantic evidence. The API keeps the raw score for diagnostics, while user-facing pages show `직접 일치` or `관련성 높음`. If embedding lookup fails, the endpoint continues with direct keyword/concept and Learning Memory results.
+`POST /ask/search` currently reports `algorithm_version = hybrid_personalized_v4`. Source ranking combines semantic similarity (40%), keyword match (25%), query-matched concept evidence (15%), learning relevance (14%), and long-term preference (6%). Learning relevance plus preference is capped by design at 20%, and chunk results require direct keyword/concept evidence or strong semantic evidence. The API keeps the raw score for diagnostics, while user-facing pages show `직접 일치` or `관련성 높음`. If embedding lookup fails, the endpoint continues with direct keyword/concept and Learning Memory results.
 
 ## Timetable Endpoints
 
