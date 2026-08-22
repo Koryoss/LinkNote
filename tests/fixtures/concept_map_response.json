@@ -1,0 +1,32 @@
+[
+  {
+    "name": "서맥",
+    "keyword": "Bradycardia",
+    "aliases": ["느린맥"],
+    "importance": 4,
+    "related": ["Tachycardia"],
+    "evidence": [
+      {
+        "filename": "[Week 10] 심혈관계 질환 II.pdf",
+        "page": 4,
+        "surface": "Bradycardia",
+        "evidence_span": "분당 60회 미만의 느린 심박동"
+      }
+    ]
+  },
+  {
+    "name": "빈맥",
+    "keyword": "Tachycardia",
+    "aliases": ["빠른맥"],
+    "importance": 4,
+    "related": ["Bradycardia"],
+    "evidence": [
+      {
+        "filename": "[Week 10] 심혈관계 질환 II.pdf",
+        "page": 4,
+        "surface": "Tachycardia",
+        "evidence_span": "분당 100회 이상의 빠른 심박동"
+      }
+    ]
+  }
+]

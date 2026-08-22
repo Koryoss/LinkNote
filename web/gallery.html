@@ -114,7 +114,8 @@
     animation: pop .4s cubic-bezier(.2,.7,.3,1) both; }
   .node:hover { box-shadow: 0 8px 22px rgba(15,23,42,0.14); }
   .node.dragging { cursor: grabbing; box-shadow: 0 14px 32px rgba(15,23,42,0.20); transition: none; z-index: 5; }
-  .node .nm { font-weight: 700; } .node .pg { font-size: 0.66rem; color: #9ca3af; margin-top: 2px; }
+  .node .nm { max-width:220px; overflow:hidden; text-overflow:ellipsis; font-weight:700; }
+  .node .pg { max-width:220px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:.66rem; line-height:1.25; color:#9ca3af; margin-top:2px; }
   .node.core { border-color:#c7d6ff; background:linear-gradient(135deg,#f3f7ff,#fff); } .node.core .nm { color:#1e3a8a; }
   .node.recall-none { border-color:#d1d5db; background:#f8fafc; color:#475569; }
   .node.recall-none .nm { color:#475569; }
@@ -134,8 +135,25 @@
   .doc-frame { width:100%; flex:1 1 auto; min-height:0; border:0; display:block; background:#f8fafc; }
   .doc-head { display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
   .doc-head select { max-width:150px; border:1px solid #d8dee9; border-radius:6px; padding:3px 6px; font-size:0.72rem; }
+  .concept-page-nav { flex:1 0 100%; display:flex; align-items:center; gap:6px; min-width:0; padding-top:7px; border-top:1px solid #e5e7eb; }
+  .concept-page-nav[hidden] { display:none; }
+  .concept-page-name { max-width:112px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#1e3a8a; font-size:.72rem; }
+  .concept-page-arrow { width:25px; height:25px; padding:0; border:1px solid #cbd5e1; border-radius:6px; background:#fff; color:#2563eb; cursor:pointer; font-weight:800; }
+  .concept-page-arrow:disabled { color:#cbd5e1; cursor:default; }
+  .concept-page-position { color:#64748b; font-size:.68rem; white-space:nowrap; }
+  .concept-page-list { display:flex; gap:4px; min-width:0; overflow-x:auto; padding-bottom:2px; }
+  .concept-page-chip { flex:0 0 auto; border:1px solid #dbe3ef; border-radius:999px; background:#fff; color:#64748b; padding:3px 7px; font-size:.66rem; cursor:pointer; }
+  .concept-page-chip.on { border-color:#2563eb; background:#eff6ff; color:#1d4ed8; font-weight:700; }
   .mini-btn { border:1px solid #d8dee9; background:#fff; color:#475569; border-radius:6px; padding:3px 8px; font-size:0.72rem; cursor:pointer; margin-left:8px; font-weight:600; }
   .mini-btn:hover { border-color:#2563eb; color:#2563eb; }
+  .mini-btn.danger { color:#b91c1c; border-color:#fecaca; }
+  .mini-btn.danger:hover { color:#991b1b; border-color:#ef4444; background:#fff7f7; }
+  .unit-files { margin-top:10px; display:flex; flex-direction:column; gap:6px; }
+  .unit-file-row { display:flex; align-items:center; gap:6px; padding:7px 8px; border:1px solid #e5e7eb; border-radius:8px; background:#fff; }
+  .unit-file-name { min-width:0; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:.72rem; color:#475569; }
+  .unit-file-action { border:1px solid #cbd5e1; border-radius:6px; background:#fff; padding:3px 7px; color:#475569; font-size:.68rem; cursor:pointer; }
+  .unit-file-action:hover { border-color:#2563eb; color:#2563eb; }
+  .unit-file-action.danger { color:#b91c1c; border-color:#fecaca; }
   .drill-bar { display:flex; align-items:center; gap:8px; margin:14px 0; }
   .graph-panel { margin:12px 0; border-radius:16px; background:#fff; }
   .graph-head { display:flex; align-items:center; justify-content:space-between; gap:10px; padding:9px 12px; border:1px solid #eef1f6; border-bottom:0; border-radius:16px 16px 0 0; background:#f8fafc; }
@@ -204,7 +222,7 @@
   .art-canvas { border-radius:2px; box-shadow: inset 0 0 0 1px rgba(0,0,0,.06); }
   .art-mat { background:#faf7f1; padding:10px; border-radius:4px; box-shadow: inset 0 0 0 4px #fff; }
   .art-label { text-align:center; margin-top:10px; }
-  .art-title { font-weight:700; color:#1f2937; font-size:0.88rem; line-height:1.25; word-break:keep-all; overflow-wrap:anywhere; max-width:160px;
+  .art-title { font-weight:700; color:#1f2937; font-size:0.88rem; line-height:1.25; word-break:normal; overflow-wrap:anywhere; max-width:160px;
     display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; }
   .art-sub { font-size:0.72rem; color:#9b8e79; margin-top:3px; }
   .sz-l .art-canvas{ width:168px; height:126px; } .sz-m .art-canvas{ width:138px; height:104px; }
@@ -281,8 +299,19 @@
   .modal-pane input, .modal-pane textarea, .modal-pane select { width:100%; border:1px solid #d8dee9; border-radius:8px; padding:8px 10px; font-size:0.88rem; }
   .modal-pane > button { margin-top:14px; width:100%; border:none; background:#2563eb; color:#fff; border-radius:8px; padding:10px; font-size:0.9rem; cursor:pointer; }
   .modal-status { font-size:0.8rem; margin-top:10px; min-height:1em; }
-  .up-row { display:flex; align-items:center; gap:8px; margin-bottom:6px; }
-  .up-row input[type=file] { flex:1; font-size:0.82rem; }
+  .semester-choices { display:flex; flex-wrap:wrap; gap:7px; margin-top:5px; }
+  .semester-choice { width:auto !important; border:1px solid #d8dee9; background:#fff; color:#475569;
+    border-radius:999px; padding:7px 12px; font-size:0.82rem; font-weight:700; cursor:pointer; }
+  .semester-choice.on { border-color:#2563eb; background:#eff6ff; color:#1d4ed8; }
+  .upload-dropzone { margin-top:5px; border:2px dashed #bfdbfe; background:#f8fbff; border-radius:12px;
+    padding:18px 12px; text-align:center; color:#475569; cursor:pointer; transition:.15s ease; }
+  .upload-dropzone:hover, .upload-dropzone.drag-over { border-color:#2563eb; background:#eff6ff; }
+  .upload-dropzone strong { display:block; color:#1e3a8a; margin-bottom:3px; }
+  .upload-file-list { display:grid; gap:6px; margin-top:8px; }
+  .up-row { display:flex; align-items:center; gap:8px; border:1px solid #e5e7eb; border-radius:8px;
+    background:#fff; padding:7px 9px; font-size:0.8rem; }
+  .up-row .up-name { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .up-row .up-size { color:#94a3b8; flex:0 0 auto; }
   .up-x { cursor:pointer; color:#cbd5e1; font-weight:700; padding:0 4px; }
   .up-x:hover { color:#ef4444; }
   .ask-a { background:#f8fafc; border:1px solid #eef1f6; border-radius:10px; padding:12px; font-size:0.88rem; line-height:1.55; white-space:pre-wrap; margin-top:12px; }
@@ -418,13 +447,26 @@
     </div>
     <div id="paneUpload" class="modal-pane">
       <div id="up_full_fields">
-        <label>학기</label><input id="up_sem" placeholder="예: 2026-1">
+        <label>학기</label>
+        <div id="up_sem_choices" class="semester-choices" role="group" aria-label="학기 선택"></div>
+        <input id="up_sem" type="hidden">
         <label>과목</label><input id="up_course" placeholder="예: 병태생리학 1">
       </div>
-      <label>자료명</label><input id="up_title" placeholder="예: 9장 강의자료">
-      <label>단원 (My Library 단원 카드가 됩니다)</label><input id="up_unit" placeholder="예: 신부전">
-      <label>PDF 파일 (선택하면 칸이 자동 추가돼요)</label><div id="up_files"></div>
-      <button onclick="doUpload()">업로드 &amp; 학습</button>
+      <label>자료명 (선택 · 비우면 각 파일명 사용)</label><input id="up_title" placeholder="예: 9장 강의자료">
+      <label>단원 (비우면 PDF 파일명이 단원 카드가 됩니다)</label><input id="up_unit" placeholder="예: 신부전">
+      <label>PDF 파일</label>
+      <div id="up_dropzone" class="upload-dropzone" tabindex="0"
+           onclick="document.getElementById('up_file_picker').click()"
+           onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();document.getElementById('up_file_picker').click()}"
+           ondragover="uploadDragOver(event)" ondragleave="uploadDragLeave(event)" ondrop="uploadDrop(event)">
+        <input id="up_file_picker" type="file" accept="application/pdf,.pdf" multiple hidden
+               onchange="addUploadFiles(this.files)">
+        <strong>PDF 여러 개를 여기에 드래그하세요</strong>
+        <span>또는 눌러서 한 번에 선택</span>
+      </div>
+      <div id="up_files" class="upload-file-list"></div>
+      <button id="up_submit" onclick="doUpload()">업로드 &amp; 학습</button>
+      <progress id="up_progress" value="0" max="100" hidden style="width:100%;margin-top:10px"></progress>
       <div id="up_status" class="modal-status"></div>
     </div>
   </div>
@@ -439,6 +481,38 @@
       <input id="renameUnitInput" placeholder="새 단원명을 입력하세요" onkeydown="if(event.key==='Enter')submitRenameUnit()">
       <button type="button" onclick="submitRenameUnit()">수정 저장</button>
       <div id="renameUnitStatus" class="modal-status"></div>
+    </div>
+  </div>
+  <div id="moveFileBackdrop" class="modal-backdrop" hidden onclick="closeMoveFileModal()"></div>
+  <div id="moveFileModal" class="modal" hidden>
+    <div class="modal-head">
+      <strong>자료 위치 변경</strong>
+      <span class="modal-x" onclick="closeMoveFileModal()">×</span>
+    </div>
+    <div class="modal-pane">
+      <div id="moveFileName" class="course-side-text"></div>
+      <label>이동할 학기</label>
+      <select id="moveFileSemester"></select>
+      <label>이동할 과목</label>
+      <input id="moveFileCourse" list="moveFileCourseList" placeholder="과목명을 선택하거나 입력하세요">
+      <datalist id="moveFileCourseList"></datalist>
+      <label>이동할 단원</label>
+      <input id="moveFileUnit" placeholder="단원명을 입력하세요" onkeydown="if(event.key==='Enter')submitMoveFile()">
+      <button type="button" onclick="submitMoveFile()">이 위치로 이동</button>
+      <div id="moveFileStatus" class="modal-status"></div>
+    </div>
+  </div>
+  <div id="deleteFileBackdrop" class="modal-backdrop" hidden onclick="closeDeleteFileModal()"></div>
+  <div id="deleteFileModal" class="modal" hidden>
+    <div class="modal-head">
+      <strong>자료 삭제</strong>
+      <span class="modal-x" onclick="closeDeleteFileModal()">×</span>
+    </div>
+    <div class="modal-pane">
+      <div id="deleteFileMessage" class="course-side-text"></div>
+      <p class="course-side-text">검색 자료에서도 함께 제거됩니다. 이 작업은 되돌릴 수 없습니다.</p>
+      <button id="deleteFileSubmit" type="button" style="background:#dc2626" onclick="submitDeleteFile()">삭제 확인</button>
+      <div id="deleteFileStatus" class="modal-status"></div>
     </div>
   </div>
   <!-- 로그인 / 회원가입 오버레이 -->
@@ -569,6 +643,16 @@
     renderConfirmPanel();
   }
 
+  function semesterSortValue(value){
+    const match = /^(\d{4})-(\d+)$/.exec(String(value || '').trim());
+    return match ? Number(match[1]) * 10 + Number(match[2]) : -1;
+  }
+  function sortSemestersLatestFirst(values){
+    return [...values].sort((a, b) =>
+      semesterSortValue(b) - semesterSortValue(a) || String(b).localeCompare(String(a), 'ko')
+    );
+  }
+
   const TT_WEEKDAYS = ['월','화','수','목','금'];
   function _ttMin(t){ const m=/(\d{1,2}):(\d{2})/.exec(t||''); return m ? (+m[1]*60 + +m[2]) : null; }
   function _ttRange(e){ const p=(e.time||'').split('-'); return [_ttMin(p[0]), _ttMin(p[1])]; }
@@ -582,7 +666,7 @@
       return;
     }
     const withIdx = list.map((e, i) => Object.assign({}, e, { _i: i }));
-    const semesters = [...new Set(withIdx.map(e => e.semester || '학기 미정'))].sort();
+    const semesters = sortSemestersLatestFirst([...new Set(withIdx.map(e => e.semester || '학기 미정'))]);
     // My Library에서 고른 학기를 기본값으로(없으면 첫 학기)
     let current = (state.semester && semesters.includes(state.semester)) ? state.semester : semesters[0];
 
@@ -709,7 +793,7 @@
         if(!courses.some(c => norm(c.course) === norm(name))) courses.push({ course: name, files: [] });
       });
     });
-    [...semMap.entries()].sort((a,b)=> a[0]<b[0]?-1:1).forEach(([semester, courses]) => {
+    [...semMap.entries()].sort((a,b)=> semesterSortValue(b[0])-semesterSortValue(a[0]) || b[0].localeCompare(a[0], 'ko')).forEach(([semester, courses]) => {
       courses.sort((a,b)=> a.course<b.course?-1:1);
       out.semesters.push({ semester, courses });
     });
@@ -887,9 +971,9 @@
         <rect x="92" y="106" width="16" height="22" fill="${c[2]}"/></g>`;
     }
 
-    const sun = `<g stroke="${ink}" stroke-width="4" stroke-linecap="round" fill="none">
+    const sun = hash % 4 === 0 ? `<g stroke="${ink}" stroke-width="4" stroke-linecap="round" fill="none">
         <circle cx="30" cy="28" r="10" fill="${c[0]}"/>
-        <path d="M30 10 V3 M30 53 V46 M12 28 H5 M55 28 H48 M17 15 L12 10 M43 15 L48 10 M17 41 L12 46 M43 41 L48 46"/></g>`;
+        <path d="M30 10 V3 M30 53 V46 M12 28 H5 M55 28 H48 M17 15 L12 10 M43 15 L48 10 M17 41 L12 46 M43 41 L48 46"/></g>` : '';
     const ground = `<path d="M12 140 q18 -9 36 0 t36 0 t36 0 t36 0" fill="none" stroke="${ink}" stroke-width="4" stroke-linecap="round" opacity="0.6"/>`;
 
     const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 150">
@@ -900,13 +984,24 @@
     return `url('data:image/svg+xml;base64,${base64}')`;
   }
 
+  const ART_SAFE_AREA_COURSES = new Set([
+    '간호대학생을위한정신약물의이해',
+    '보건커뮤니케이션과건강교육',
+  ]);
+  function artScale(name){
+    const normalized = String(name || '').replace(/\s+/g, '');
+    return ART_SAFE_AREA_COURSES.has(normalized) ? '72%' : '82%';
+  }
+
   function artStyle(name){
-    return `background: ${artDoodle(name)} center / 82% no-repeat, ${artColor(name)};`;
+    return `background: ${artDoodle(name)} center / ${artScale(name)} no-repeat, ${artColor(name)};`;
   }
 
   function renderHome(data){
     setCrumbs([]);
-    const sems = data.semesters || [];
+    const sems = [...(data.semesters || [])].sort((a,b) =>
+      semesterSortValue(b.semester)-semesterSortValue(a.semester) || b.semester.localeCompare(a.semester, 'ko')
+    );
     const view = document.getElementById('view');
     if(!sems.length){ view.innerHTML = emptyBox('아직 추가한 자료가 없습니다. 오른쪽 위 「＋ 자료 추가」 버튼으로 첫 PDF를 올려보세요.'); return; }
     let opts = sems.map((s,i)=>`<option value="${i}">${esc(s.semester)}</option>`).join('');
@@ -1044,6 +1139,12 @@
              ondragstart="unitDragStart(event)" ondragend="unitDragEnd(event)" ondragover="unitDragOver(event)" ondrop="unitDrop(event)">
           <div><div class="ctag">⠿ 단원</div><div class="ctitle">${esc(u.unit)}</div></div>
           <div class="cmeta">파일 ${u.file_count||0} · 페이지 ${u.page_count||0}</div>
+          <div class="unit-files">${(u.files||[]).map(filename=>`
+            <div class="unit-file-row" onclick="event.stopPropagation()">
+              <span class="unit-file-name" title="${esc(filename)}">📄 ${esc(filename)}</span>
+              <button type="button" class="unit-file-action" data-filename="${esc(filename)}" data-unit="${esc(u.unit)}" onclick="openMoveFileFromButton(event)">이동</button>
+              <button type="button" class="unit-file-action danger" data-filename="${esc(filename)}" data-unit="${esc(u.unit)}" onclick="deleteFileFromButton(event)">삭제</button>
+            </div>`).join('')}</div>
         </div>`).join('')}</div>`;
   }
 
@@ -1072,7 +1173,7 @@
       <div class="unit-cols" id="unitCols">
         <div class="doc-panel"><div class="doc-head">${clinicalEnabled()
             ? `<button class="doc-tab on" id="docTabDoc" onclick="docTab('doc')">📄 원문</button><button class="doc-tab" id="docTabClin" onclick="docTab('clinical')">🩺 임상 검증</button>`
-            : `<span class="doc-title">📄 파일 원문</span>`}<select id="doc_sel" onchange="docShow()"></select><button class="mini-btn" onclick="toggleDocPanel()" id="docToggleBtn">PDF 닫기</button></div><iframe id="doc_frame" class="doc-frame" title="원문 PDF"></iframe>${clinicalEnabled() ? clinicalPanelHTML() : ''}</div>
+            : `<span class="doc-title">📄 파일 원문</span>`}<select id="doc_sel" onchange="docShow()"></select><button class="mini-btn" onclick="openMoveFileModal(event)">자료 이동</button><button class="mini-btn danger" onclick="deleteCurrentFile(event)">자료 삭제</button><button class="mini-btn" onclick="toggleDocPanel()" id="docToggleBtn">PDF 닫기</button><div id="concept_page_nav" class="concept-page-nav" hidden></div></div><iframe id="doc_frame" class="doc-frame" title="원문 PDF"></iframe>${clinicalEnabled() ? clinicalPanelHTML() : ''}</div>
         <div class="unit-main">${inlineQuestionHTML(state.course)}<div class="drill-bar"><button class="mini-btn" onclick="startRecallForActive()">설명해보기</button><span class="muted" style="font-size:.72rem">개념 클릭 = 연관 펼치기</span></div>${recallPanelHTML()}<div class="graph-panel" id="graphPanel"><div class="graph-head"><span class="graph-title">개념 지도</span><button class="mini-btn" onclick="toggleGraphPanel()" id="graphToggleBtn">지도 닫기</button></div><div id="canvas"><div class="graph-tools"><button class="mini-btn" onclick="drillReset()">핵심만</button><button class="mini-btn" onclick="drillAll()">전체 보기</button></div><svg id="lines"></svg></div></div></div>
       </div>`;
     drillVisible = null;
@@ -1453,6 +1554,8 @@
   let lastNodes = null;
   let lastCore = null;
   let drillVisible = null;
+  const CONCEPT_NODE_PAGE_LIMIT = 6;
+  const CONCEPT_TOOLTIP_PAGE_LIMIT = 10;
   function graphReviewPriority(node){
     if(Number.isFinite(Number(node?.review_priority))) return Number(node.review_priority);
     if(String(node?.learning_state || '').toUpperCase() === 'NEW') return 70;
@@ -1464,17 +1567,60 @@
   }
   function drillReset(){ drillVisible=null; if(lastNodes) layoutNodes(lastNodes); }
   function drillAll(){ if(lastNodes){ drillVisible=new Set(lastNodes.map(n=>n.name)); layoutNodes(lastNodes); } }
-  function conceptPrimaryOccurrence(n){
-    const occurrences = Array.isArray(n.occurrences) ? n.occurrences.filter(x=>x && (x.page || x.filename)) : [];
-    occurrences.sort((a,b)=>(Number(a.page||0)-Number(b.page||0)) || String(a.filename||"").localeCompare(String(b.filename||"")));
-    const first = occurrences[0] || {};
-    return { filename:first.filename || n.filename, page:first.page || n.page || 1 };
+  function conceptOccurrences(n){
+    const values = Array.isArray(n?.occurrences) ? [...n.occurrences] : [];
+    if(n?.page || n?.filename) values.push({ filename:n.filename, page:n.page });
+    const seen = new Set();
+    return values
+      .filter(x=>x && Number(x.page)>0)
+      .map(x=>({ ...x, filename:x.filename || n.filename || '', page:Number(x.page) }))
+      .filter(x=>{ const key=`${x.filename}\u0000${x.page}`; if(seen.has(key)) return false; seen.add(key); return true; })
+      .sort((a,b)=>String(a.filename||'').localeCompare(String(b.filename||'')) || a.page-b.page);
   }
   function conceptPageSummary(n){
-    const occurrences = Array.isArray(n.occurrences) ? n.occurrences.filter(x=>x && x.page) : [];
-    const pages = occurrences.length ? [...new Set(occurrences.map(x=>Number(x.page)).filter(Boolean))].sort((a,b)=>a-b) : (n.page ? [Number(n.page)] : []);
+    const pages = [...new Set(conceptOccurrences(n).map(x=>x.page))].sort((a,b)=>a-b);
     if(!pages.length) return "페이지 정보 없음";
-    return "나오는 페이지 " + pages.map(p=>`p.${p}`).join(", ");
+    return `나오는 페이지 ${conceptPagePreview(pages, CONCEPT_TOOLTIP_PAGE_LIMIT)} · 총 ${pages.length}쪽`;
+  }
+  function conceptPagePreview(pages, limit){
+    const visiblePages = pages.slice(0, Math.max(1, Number(limit) || 1));
+    const hiddenCount = Math.max(0, pages.length - visiblePages.length);
+    const preview = visiblePages.map((page,index)=>`${index===0?'p.':''}${page}`).join(' · ');
+    return hiddenCount ? `${preview} · 외 ${hiddenCount}쪽` : preview;
+  }
+  function conceptPageInline(n){
+    const pages = [...new Set(conceptOccurrences(n).map(x=>x.page))].sort((a,b)=>a-b);
+    return conceptPagePreview(pages, CONCEPT_NODE_PAGE_LIMIT);
+  }
+  let activeConceptOccurrences = [];
+  let activeConceptOccurrenceIndex = 0;
+  let activeOccurrenceConceptName = '';
+  function renderConceptPageNavigator(){
+    const nav = document.getElementById('concept_page_nav');
+    if(!nav) return;
+    if(!activeConceptOccurrences.length){ nav.hidden=true; nav.innerHTML=''; return; }
+    nav.hidden=false;
+    nav.innerHTML = `<span class="concept-page-name" title="${esc(activeOccurrenceConceptName)}">${esc(activeOccurrenceConceptName)}</span>` +
+      `<button type="button" class="concept-page-arrow" aria-label="이전 출현 페이지" onclick="stepConceptOccurrence(-1)" ${activeConceptOccurrenceIndex===0?'disabled':''}>‹</button>` +
+      `<span class="concept-page-position">${activeConceptOccurrenceIndex+1}/${activeConceptOccurrences.length}</span>` +
+      `<button type="button" class="concept-page-arrow" aria-label="다음 출현 페이지" onclick="stepConceptOccurrence(1)" ${activeConceptOccurrenceIndex===activeConceptOccurrences.length-1?'disabled':''}>›</button>` +
+      `<div class="concept-page-list">${activeConceptOccurrences.map((item,index)=>`<button type="button" class="concept-page-chip${index===activeConceptOccurrenceIndex?' on':''}" title="${esc(item.filename||'')} · p.${item.page}" onclick="showConceptOccurrence(${index})">p.${item.page}</button>`).join('')}</div>`;
+    nav.querySelector('.concept-page-chip.on')?.scrollIntoView({ block:'nearest', inline:'nearest' });
+  }
+  function showConceptOccurrence(index){
+    if(!activeConceptOccurrences.length) return;
+    activeConceptOccurrenceIndex = Math.max(0, Math.min(Number(index)||0, activeConceptOccurrences.length-1));
+    const occurrence = activeConceptOccurrences[activeConceptOccurrenceIndex];
+    docShow(occurrence.filename, occurrence.page);
+    renderConceptPageNavigator();
+  }
+  function stepConceptOccurrence(delta){ showConceptOccurrence(activeConceptOccurrenceIndex + Number(delta||0)); }
+  function showConceptOccurrences(n){
+    activeConceptOccurrences = conceptOccurrences(n);
+    activeConceptOccurrenceIndex = 0;
+    activeOccurrenceConceptName = n?.name || n?.keyword || '개념';
+    renderConceptPageNavigator();
+    if(activeConceptOccurrences.length) showConceptOccurrence(0);
   }
   function expandNode(n, nodes){
     const rel=(n.links||[]).filter(t=>nodes.some(x=>x.name===t));
@@ -1482,8 +1628,7 @@
     rel.forEach(t=>{ if(!drillVisible.has(t)){ drillVisible.add(t); changed=true; } });
     if(changed){ drillVisible.add(n.name); layoutNodes(nodes); }
     selectNode(n.name, nodes.filter(x=>drillVisible.has(x.name)));
-    const target = conceptPrimaryOccurrence(n);
-    if(target.filename) docShow(target.filename, target.page || 1);
+    showConceptOccurrences(n);
   }
   function layoutNodes(nodes){
     lastNodes = nodes;
@@ -1528,11 +1673,11 @@
       const recallClass = recallCount <= 0 ? ' recall-none' : ` recall-${Math.min(4, recallCount)}`;
       const stateLabel = recallCount <= 0 ? '미설명' : `설명 ${recallCount}회`;
       const stateBadge = `<div class="state-badge">${esc(stateLabel)}</div>`;
-      const target = conceptPrimaryOccurrence(n);
       el.className = `node w${w}` + (n===core?' core':'') + (hasMore?' has-more':'') + recallClass;
       el.style.left = pos[n.name].x+'px'; el.style.top = pos[n.name].y+'px';
       el.style.animationDelay = (i*0.05)+'s';
-      el.innerHTML = `<div class="nm">${esc(n.name)}</div>` + (target.page?`<div class="pg">p.${esc(String(target.page))}</div>`:'') + stateBadge + (hasMore?`<div class="more">＋</div>`:'');
+      const pageText = conceptPageInline(n);
+      el.innerHTML = `<div class="nm">${esc(n.name)}</div>` + (pageText?`<div class="pg">${esc(pageText)}</div>`:'') + stateBadge + (hasMore?`<div class="more">＋</div>`:'');
       el.addEventListener('mouseenter', (e)=>{ if(!dragging) showTip(n, e); });
       el.addEventListener('mousemove', (e)=>{ if(!dragging) moveTip(e); });
       el.addEventListener('mouseleave', hideTip);
@@ -1639,16 +1784,41 @@
     } catch(e){ /* 서버 미연결 시 무시 */ }
   }
   function _showAdd(){ document.getElementById('addModal').hidden=false; document.getElementById('addBackdrop').hidden=false; }
+  function availableUploadSemesters(){
+    const values = ['2026-2'];
+    (latestLibrary && latestLibrary.semesters || []).forEach(s => values.push(s.semester));
+    (Array.isArray(latestTimetable) ? latestTimetable : []).forEach(e => values.push(e.semester));
+    if(state.semester) values.push(state.semester);
+    return sortSemestersLatestFirst([...new Set(values.filter(Boolean))]);
+  }
+  function selectUploadSemester(semester){
+    document.getElementById('up_sem').value = semester || '';
+    document.querySelectorAll('#up_sem_choices .semester-choice').forEach(button => {
+      button.classList.toggle('on', button.dataset.semester === semester);
+      button.setAttribute('aria-pressed', button.dataset.semester === semester ? 'true' : 'false');
+    });
+  }
+  function renderUploadSemesterChoices(preferred=''){
+    const semesters = availableUploadSemesters();
+    const selected = semesters.includes(preferred) ? preferred : semesters[0];
+    const choices = document.getElementById('up_sem_choices');
+    choices.innerHTML = semesters.map(semester =>
+      `<button type="button" class="semester-choice" data-semester="${esc(semester)}" aria-pressed="false"
+        onclick="selectUploadSemester(this.dataset.semester)">${esc(semester)}</button>`
+    ).join('');
+    selectUploadSemester(selected);
+  }
   function openAdd(){
     document.getElementById('up_full_fields').style.display='';
-    ['up_sem','up_course','up_title','up_unit'].forEach(id=>document.getElementById(id).value='');
+    ['up_course','up_title','up_unit'].forEach(id=>document.getElementById(id).value='');
+    renderUploadSemesterChoices('2026-2');
     resetFileRows(); document.getElementById('up_status').textContent='';
     document.getElementById('addTitle').textContent='자료 추가';
     _showAdd();
   }
   function openAddForCourse(){
     document.getElementById('up_full_fields').style.display='none';
-    document.getElementById('up_sem').value = state.semester || '';
+    renderUploadSemesterChoices(state.semester || '2026-2');
     document.getElementById('up_course').value = state.course || '';
     ['up_title','up_unit'].forEach(id=>document.getElementById(id).value='');
     resetFileRows(); document.getElementById('up_status').textContent='';
@@ -1676,7 +1846,6 @@
       </div>
       <div class="iq-ex">
         <div class="iq-ex-title">예시 질문</div>
-        <a class="iq-chip" onclick="iqFill('산화환원 관련 자료 찾아줘')">산화환원 관련 자료 찾아줘</a>
         <a class="iq-chip" onclick="iqFill('이 개념이 나온 PDF 찾아줘')">이 개념이 나온 PDF 찾아줘</a>
         <a class="iq-chip" onclick="iqFill('최근 업로드한 화학 자료 보여줘')">최근 업로드한 화학 자료 보여줘</a>
         <a class="iq-chip" onclick="iqFill('시험에 나올 포인트로 정리해줘')">시험 포인트 정리해줘</a>
@@ -1750,8 +1919,8 @@
     const scopeLabel = d.scope === 'single' ? '단일 자료 검색' : '여러 자료 검색';
     return `<div class="search-result">
       <div class="ask-a">관련 자료를 찾았어요. AI 답변을 생성할까요?<br><span class="cost-label">${esc(scopeLabel)} · ${esc(d.intent_label || '일반 검색')} · ${d.semantic_search_used ? '의미+키워드 검색' : '키워드 검색'} · ${d.from_cache ? '캐시 결과' : '새 검색'}</span></div>
-      <div class="search-card"><h4>관련 개념</h4>${renderSearchList(d.related_concepts, '관련 개념을 찾지 못했습니다.', x=>`<div class="search-item" data-result-type="concept" data-result-id="${esc(x.concept||'')}" data-course="${esc(x.course||'')}" data-concept="${esc(x.concept||'')}" onclick="recordSearchEventFromElement(this)"><strong>${esc(x.concept)}</strong><span class="search-meta">${esc(x.course)} · ${esc(x.unit)} · ${esc(x.score || 0)}점</span>${esc(x.reason||'')}</div>`)}</div>
-      <div class="search-card"><h4>관련 문서 / Chunk</h4>${renderSearchList(d.sources, '관련 chunk를 찾지 못했습니다.', x=>`<div class="search-item" data-result-type="source" data-result-id="${esc(x.id||x.filename||'')}" data-course="${esc(x.course||'')}" data-concept="${esc((x.matched_concepts||[])[0]||'')}" data-filename="${esc(x.filename||'')}" data-page="${esc(x.page||1)}" onclick="recordSearchEventFromElement(this)"><strong>${esc(x.filename || '파일명 없음')}</strong><span class="search-meta">${esc(x.course)} · ${esc(x.unit)} · p.${esc(x.page || '-')} · ${esc(x.score || 0)}점</span>${esc(x.reason || '')}<br>${esc(x.chunk_preview || '')}</div>`)}</div>
+      <div class="search-card"><h4>관련 개념</h4>${renderSearchList(d.related_concepts, '관련 개념을 찾지 못했습니다.', x=>`<div class="search-item" data-result-type="concept" data-result-id="${esc(x.concept||'')}" data-course="${esc(x.course||'')}" data-concept="${esc(x.concept||'')}" onclick="recordSearchEventFromElement(this)"><strong>${esc(x.concept)}</strong><span class="search-meta">${esc(x.course)} · ${esc(x.unit)} · ${x.origin === 'document' ? '문서에서 확인' : `${esc(x.score || 0)}점`}</span>${esc(x.reason||'')}</div>`)}</div>
+      <div class="search-card"><h4>근거 문서 (PDF 원문)</h4>${renderSearchList(d.sources, '직접 관련된 원문을 찾지 못했습니다.', x=>`<div class="search-item" data-result-type="source" data-result-id="${esc(x.id||x.filename||'')}" data-semester="${esc(x.semester||'')}" data-course="${esc(x.course||'')}" data-unit="${esc(x.unit||'')}" data-concept="${esc((x.matched_concepts||[])[0]||'')}" data-filename="${esc(x.filename||'')}" data-page="${esc(x.page||1)}" onclick="recordSearchEventFromElement(this)"><strong>${esc(x.filename || '파일명 없음')}</strong><span class="search-meta">${esc(x.course)} · ${esc(x.unit)} · p.${esc(x.page || '-')} · ${esc(x.relevance_label || '관련성 높음')}</span>${esc(x.reason || '')}<br>${esc(x.chunk_preview || '')}</div>`)}</div>
       <div class="search-card"><h4>Learning Memory / Recall</h4>${renderSearchList(d.learning_memory_matches, '관련 Learning Memory/Recall 기록이 없습니다.', x=>`<div class="search-item" data-result-type="learning_memory" data-result-id="${esc(x.id||'')}" data-course="${esc(x.course||'')}" data-concept="${esc(x.concept||'')}" onclick="recordSearchEventFromElement(this)"><strong>${esc(x.concept || '개념 미지정')}</strong><span class="search-meta">${esc(x.course)} · ${esc(x.unit)} · ${esc(x.score || 0)}점</span>${esc(x.reason || '')}<br>${esc(x.improved_summary || x.answer_preview || '')}</div>`)}</div>
       <button onclick="recordSearchEvent('helpful')">도움됨</button>
       ${d.can_generate_ai_answer ? `<button onclick="askInline(true)">AI 답변 생성</button> <span class="ask-mode-note">API 비용이 발생할 수 있습니다.</span>` : ''}
@@ -1762,7 +1931,11 @@
     recordSearchEvent('result_opened', el.dataset.resultType||'', el.dataset.resultId||'', el.dataset.course||'', el.dataset.concept||'');
     if(el.dataset.resultType === 'source' && el.dataset.filename){
       const tok=localStorage.getItem('ln_token')||'';
-      window.open(`${API}/file?filename=${encodeURIComponent(el.dataset.filename)}&token=${encodeURIComponent(tok)}#page=${encodeURIComponent(el.dataset.page||1)}`,'_blank','noopener');
+      const params=new URLSearchParams({filename:el.dataset.filename,token:tok});
+      if(el.dataset.semester) params.set('semester',el.dataset.semester);
+      if(el.dataset.course) params.set('course',el.dataset.course);
+      if(el.dataset.unit) params.set('unit',el.dataset.unit);
+      window.open(`${API}/file?${params.toString()}#page=${encodeURIComponent(el.dataset.page||1)}`,'_blank','noopener');
     }else if(el.dataset.resultType === 'concept'){
       window.location.href=`/concept-graph.html?concept=${encodeURIComponent(el.dataset.concept||'')}&course=${encodeURIComponent(el.dataset.course||'')}`;
     }else if(el.dataset.resultType === 'learning_memory'){
@@ -1802,7 +1975,135 @@
     const f=filename || (sel?sel.value:''); if(!f) return;
     if(sel && filename) sel.value=filename;
     const tok=localStorage.getItem('ln_token')||'';
-    fr.src=`${API}/file?filename=${encodeURIComponent(f)}&token=${encodeURIComponent(tok)}#page=${page||1}`;
+    const params=new URLSearchParams({filename:f,token:tok});
+    if(state.semester) params.set('semester',state.semester);
+    if(state.course) params.set('course',state.course);
+    if(state.unit) params.set('unit',state.unit);
+    fr.src=`${API}/file?${params.toString()}#page=${page||1}`;
+  }
+  function currentDocumentFilename(){
+    const sel=document.getElementById('doc_sel');
+    return sel ? (sel.value||'').trim() : '';
+  }
+  let managedFileContext = null;
+  let deleteFileContext = null;
+  function openMoveFileFromButton(event){
+    const button=event.currentTarget;
+    openMoveFileModal(event, button.dataset.filename||'', button.dataset.unit||'');
+  }
+  function deleteFileFromButton(event){
+    const button=event.currentTarget;
+    deleteCurrentFile(event, button.dataset.filename||'', button.dataset.unit||'');
+  }
+  function openMoveFileModal(event, requestedFilename='', requestedUnit=''){
+    if(event){ event.preventDefault(); event.stopPropagation(); }
+    const filename=(requestedFilename||currentDocumentFilename()).trim();
+    const sourceUnit=(requestedUnit||state.unit||'').trim();
+    if(!filename){ alert('이동할 자료를 먼저 선택하세요.'); return; }
+    if(!sourceUnit){ alert('자료의 현재 단원을 확인할 수 없습니다.'); return; }
+    managedFileContext={filename,unit:sourceUnit};
+    const semesters=sortSemestersLatestFirst([...new Set([
+      state.semester,
+      ...((latestLibrary&&latestLibrary.semesters)||[]).map(item=>item.semester),
+      ...(latestTimetable||[]).map(item=>item.semester)
+    ].filter(Boolean))]);
+    const semesterSelect=document.getElementById('moveFileSemester');
+    semesterSelect.innerHTML=semesters.map(semester=>
+      `<option value="${esc(semester)}"${semester===state.semester?' selected':''}>${esc(semester)}</option>`
+    ).join('');
+    const courses=[...new Set([
+      ...((latestLibrary&&latestLibrary.semesters)||[]).flatMap(item=>(item.courses||[]).map(course=>course.course)),
+      ...(latestTimetable||[]).map(item=>item.course)
+    ].filter(Boolean))].sort((a,b)=>a.localeCompare(b,'ko'));
+    document.getElementById('moveFileCourseList').innerHTML=courses.map(course=>
+      `<option value="${esc(course)}"></option>`
+    ).join('');
+    document.getElementById('moveFileCourse').value=state.course||'';
+    document.getElementById('moveFileUnit').value=sourceUnit;
+    document.getElementById('moveFileName').textContent=`현재 자료: ${filename} · ${state.course} · ${sourceUnit}`;
+    const status=document.getElementById('moveFileStatus');
+    status.style.color='#64748b'; status.textContent='';
+    document.getElementById('moveFileBackdrop').hidden=false;
+    document.getElementById('moveFileModal').hidden=false;
+    setTimeout(()=>document.getElementById('moveFileCourse').focus(),0);
+  }
+  function closeMoveFileModal(){
+    document.getElementById('moveFileBackdrop').hidden=true;
+    document.getElementById('moveFileModal').hidden=true;
+  }
+  function closeDeleteFileModal(){
+    const submit=document.getElementById('deleteFileSubmit');
+    if(submit && submit.disabled) return;
+    document.getElementById('deleteFileBackdrop').hidden=true;
+    document.getElementById('deleteFileModal').hidden=true;
+    deleteFileContext=null;
+  }
+  async function submitMoveFile(){
+    const context=managedFileContext||{filename:currentDocumentFilename(),unit:state.unit||''};
+    const filename=(context.filename||'').trim();
+    const targetSemester=(document.getElementById('moveFileSemester').value||'').trim();
+    const targetCourse=(document.getElementById('moveFileCourse').value||'').trim();
+    const targetUnit=(document.getElementById('moveFileUnit').value||'').trim();
+    const status=document.getElementById('moveFileStatus');
+    if(!filename || !targetSemester || !targetCourse || !targetUnit){
+      status.style.color='#ef4444'; status.textContent='학기, 과목, 단원을 모두 입력하세요.'; return;
+    }
+    status.style.color='#2563eb'; status.textContent='자료 위치를 변경하는 중…';
+    try{
+      const response=await fetch(API+'/library/file/move',{
+        method:'POST', headers:authHeaders({'Content-Type':'application/json'}),
+        body:JSON.stringify({
+          source:{semester:state.semester,course:state.course,unit:context.unit,filename},
+          target_semester:targetSemester,target_course:targetCourse,target_unit:targetUnit
+        })
+      });
+      const result=await response.json().catch(()=>({}));
+      if(!response.ok){ status.style.color='#ef4444'; status.textContent=result.detail||'자료 이동에 실패했습니다.'; return; }
+      closeMoveFileModal();
+      alert(`${filename}\n${targetSemester} · ${targetCourse} · ${targetUnit}(으)로 이동했습니다.`);
+      await loadHome(false);
+    }catch(error){ status.style.color='#ef4444'; status.textContent='서버에 연결할 수 없습니다.'; }
+  }
+  async function deleteCurrentFile(event, requestedFilename='', requestedUnit=''){
+    if(event){ event.preventDefault(); event.stopPropagation(); }
+    const filename=(requestedFilename||currentDocumentFilename()).trim();
+    const sourceUnit=(requestedUnit||state.unit||'').trim();
+    if(!filename || !sourceUnit) return;
+    deleteFileContext={filename,unit:sourceUnit,semester:state.semester,course:state.course};
+    document.getElementById('deleteFileMessage').textContent=`「${filename}」을 삭제할까요?`;
+    const status=document.getElementById('deleteFileStatus');
+    status.style.color='#64748b'; status.textContent='';
+    const submit=document.getElementById('deleteFileSubmit');
+    submit.disabled=false; submit.textContent='삭제 확인';
+    document.getElementById('deleteFileBackdrop').hidden=false;
+    document.getElementById('deleteFileModal').hidden=false;
+  }
+  async function submitDeleteFile(){
+    const context=deleteFileContext;
+    if(!context) return;
+    const status=document.getElementById('deleteFileStatus');
+    const submit=document.getElementById('deleteFileSubmit');
+    submit.disabled=true; submit.textContent='삭제 중…';
+    status.style.color='#2563eb'; status.textContent='검색 청크와 개념 정보를 정리하고 있습니다.';
+    try{
+      const response=await fetch(API+'/library/file',{
+        method:'DELETE', headers:authHeaders({'Content-Type':'application/json'}),
+        body:JSON.stringify({semester:context.semester,course:context.course,unit:context.unit,filename:context.filename})
+      });
+      const result=await response.json().catch(()=>({}));
+      if(!response.ok){
+        submit.disabled=false; submit.textContent='다시 시도';
+        status.style.color='#ef4444'; status.textContent=result.detail||'자료 삭제에 실패했습니다.'; return;
+      }
+      status.style.color='#16a34a'; status.textContent=`삭제 완료 · 검색 청크 ${result.affected_chunks||0}개 제거`;
+      document.getElementById('deleteFileBackdrop').hidden=true;
+      document.getElementById('deleteFileModal').hidden=true;
+      deleteFileContext=null;
+      await loadHome(false);
+    }catch(error){
+      submit.disabled=false; submit.textContent='다시 시도';
+      status.style.color='#ef4444'; status.textContent='서버에 연결할 수 없습니다.';
+    }
   }
   function openRenameUnitModal(event){
     if(event){ event.preventDefault(); event.stopPropagation(); }
@@ -1850,42 +2151,98 @@
       if(status){ status.style.color = '#ef4444'; status.textContent = '서버에 연결할 수 없습니다.'; }
     }
   }
-  function _fileRowHTML(){
-    return `<div class="up-row"><input type="file" class="up_f" accept="application/pdf" onchange="onFilePick(this)"><span class="up-x" onclick="removeFileRow(this)" title="제거">×</span></div>`;
+  let uploadFiles = [];
+  function fileSizeLabel(bytes){
+    return bytes >= 1048576 ? (bytes/1048576).toFixed(1)+' MB' : Math.max(1, Math.round(bytes/1024))+' KB';
   }
-  function resetFileRows(){ const c=document.getElementById('up_files'); if(c) c.innerHTML=_fileRowHTML(); }
-  function addFileRow(){ const c=document.getElementById('up_files'); if(c) c.insertAdjacentHTML('beforeend', _fileRowHTML()); }
-  function onFilePick(input){
-    const rows=[...document.querySelectorAll('#up_files input.up_f')];
-    if(input.files.length && input===rows[rows.length-1]) addFileRow();
+  function renderUploadFiles(){
+    const c=document.getElementById('up_files');
+    if(!c) return;
+    c.innerHTML=uploadFiles.map((file,index)=>
+      `<div class="up-row"><span class="up-name" title="${esc(file.name)}">${esc(file.name)}</span>
+        <span class="up-size">${fileSizeLabel(file.size)}</span>
+        <span class="up-x" onclick="removeUploadFile(${index})" title="제거">×</span></div>`
+    ).join('');
   }
-  function removeFileRow(x){
-    const c=document.getElementById('up_files'); const row=x.closest('.up-row');
-    if(c.querySelectorAll('.up-row').length>1) row.remove();
-    else row.querySelector('input').value='';
+  function resetFileRows(){
+    uploadFiles=[];
+    const picker=document.getElementById('up_file_picker'); if(picker) picker.value='';
+    const progress=document.getElementById('up_progress'); if(progress){ progress.value=0; progress.hidden=true; }
+    const submit=document.getElementById('up_submit'); if(submit){ submit.disabled=false; submit.textContent='업로드 & 학습'; }
+    renderUploadFiles();
+  }
+  function addUploadFiles(fileList){
+    const st=document.getElementById('up_status');
+    let rejected=0;
+    for(const file of [...(fileList || [])]){
+      if(!(file.type==='application/pdf' || /\.pdf$/i.test(file.name))){ rejected++; continue; }
+      const key=`${file.name}:${file.size}:${file.lastModified}`;
+      if(!uploadFiles.some(existing=>`${existing.name}:${existing.size}:${existing.lastModified}`===key)) uploadFiles.push(file);
+    }
+    renderUploadFiles();
+    const picker=document.getElementById('up_file_picker'); if(picker) picker.value='';
+    if(rejected && st){ st.style.color='#ef4444'; st.textContent=`PDF가 아닌 파일 ${rejected}개는 제외했습니다.`; }
+    else if(st && uploadFiles.length){ st.style.color='#64748b'; st.textContent=`PDF ${uploadFiles.length}개 선택됨`; }
+  }
+  function removeUploadFile(index){ uploadFiles.splice(index,1); renderUploadFiles(); }
+  function uploadDragOver(event){ event.preventDefault(); event.dataTransfer.dropEffect='copy'; event.currentTarget.classList.add('drag-over'); }
+  function uploadDragLeave(event){ event.currentTarget.classList.remove('drag-over'); }
+  function uploadDrop(event){
+    event.preventDefault(); event.currentTarget.classList.remove('drag-over');
+    addUploadFiles(event.dataTransfer.files);
+  }
+  let activeIngestJobId = null;
+  const waitFor = ms => new Promise(resolve=>setTimeout(resolve,ms));
+  async function pollIngestJob(jobId){
+    const st=document.getElementById('up_status');
+    const progress=document.getElementById('up_progress');
+    while(activeIngestJobId===jobId){
+      const response=await fetch(API+`/ingest/jobs/${encodeURIComponent(jobId)}`,{headers:authHeaders()});
+      const job=await response.json().catch(()=>({}));
+      if(!response.ok) throw new Error(job.detail||'분석 상태를 확인할 수 없습니다.');
+      progress.hidden=false; progress.value=Number(job.progress||0);
+      st.style.color='#2563eb';
+      st.textContent=`${job.message||'분석 중'} · ${job.progress||0}%`;
+      if(['complete','partial','failed'].includes(job.status)) return job;
+      await waitFor(700);
+    }
+    throw new Error('분석 상태 확인이 중단되었습니다.');
   }
   async function doUpload(){
     const v=(id)=>document.getElementById(id).value.trim();
-    const files=[...document.querySelectorAll('#up_files input.up_f')].map(i=>i.files[0]).filter(Boolean);
+    const files=[...uploadFiles];
     const st=document.getElementById('up_status');
-    const miss=[]; if(!v('up_sem'))miss.push('학기'); if(!v('up_course'))miss.push('과목'); if(!v('up_title'))miss.push('자료명'); if(!files.length)miss.push('PDF');
+    const progress=document.getElementById('up_progress');
+    const submit=document.getElementById('up_submit');
+    const miss=[]; if(!v('up_sem'))miss.push('학기'); if(!v('up_course'))miss.push('과목'); if(!files.length)miss.push('PDF');
     if(miss.length){ st.style.color='#ef4444'; st.textContent='비어있음: '+miss.join(', '); return; }
-    let okN=0, failN=0;
-    for(let i=0;i<files.length;i++){
-      st.style.color='#2563eb'; st.textContent=`업로드·학습 중… (${i+1}/${files.length}) ${files[i].name}`;
-      const fd=new FormData();
-      fd.append('semester', v('up_sem')); fd.append('course', v('up_course'));
-      fd.append('title', v('up_title')); fd.append('unit', v('up_unit')); fd.append('file', files[i]);
-      try{
-        const r=await fetch(API+'/ingest',{method:'POST', headers: authHeaders(), body:fd});
-        const d=await r.json();
-        if(!r.ok || d.ok===false){ failN++; } else { okN++; }
-      }catch(e){ failN++; }
+    const fd=new FormData();
+    fd.append('semester',v('up_sem')); fd.append('course',v('up_course'));
+    fd.append('title',v('up_title')); fd.append('unit',v('up_unit'));
+    files.forEach(file=>fd.append('files',file));
+    submit.disabled=true; submit.textContent='분석 중…';
+    progress.hidden=false; progress.value=0;
+    st.style.color='#2563eb'; st.textContent=`PDF ${files.length}개를 분석 작업에 등록하는 중…`;
+    try{
+      const response=await fetch(API+'/ingest/batch',{method:'POST',headers:authHeaders(),body:fd});
+      const queued=await response.json().catch(()=>({}));
+      if(!response.ok) throw new Error(queued.detail||'분석 작업 등록에 실패했습니다.');
+      activeIngestJobId=queued.job_id;
+      const job=await pollIngestJob(queued.job_id);
+      activeIngestJobId=null;
+      const errorNames=new Set((job.errors||[]).map(item=>item.filename).filter(Boolean));
+      uploadFiles=files.filter(file=>errorNames.has(file.name));
+      renderUploadFiles();
+      st.style.color=job.status==='complete'?'#16a34a':'#ef4444';
+      st.textContent=`${job.message} · 완료 ${job.completed_files||0}/${job.total_files||files.length}`;
+      progress.value=100;
+      await loadHome(false);
+    }catch(error){
+      activeIngestJobId=null;
+      st.style.color='#ef4444'; st.textContent=error.message||'서버에 연결할 수 없습니다.';
+    }finally{
+      submit.disabled=false; submit.textContent='업로드 & 학습';
     }
-    st.style.color = failN? '#ef4444' : '#16a34a';
-    st.textContent = `완료: 성공 ${okN}개${failN?(', 실패 '+failN+'개'):''}`;
-    resetFileRows();
-    await loadHome(false);
   }
   // ===== 로그인 / 인증 =====
   async function authInit(){

@@ -39,13 +39,19 @@ Important current-state note:
 | `POST` | `/search/profile/aliases` | Add a user-local alias for a concept without changing shared concept extraction data. |
 | `POST` | `/ask` | Answer a question from indexed source chunks. Supports normal and connection-focused modes and calls the configured answer-generation provider. |
 | `POST` | `/ingest` | Upload a PDF, extract text, chunk/index pages, and optionally build concepts for the submitted unit. |
+| `POST` | `/ingest/batch` | Queue multiple PDFs as one background analysis job. Index every file, then extract concepts once per resulting unit. |
+| `GET` | `/ingest/jobs/{job_id}` | Return authenticated background ingest progress, counts, status, and bounded error details. |
 | `GET` | `/library` | Return the current user's indexed library overview. |
 | `DELETE` | `/library` | Delete indexed chunks matching a search filter for the current user. |
+| `DELETE` | `/library/file` | Delete one exact file from a semester/course/unit, then remove an empty concept/graph scope and an unreferenced source PDF. |
+| `POST` | `/library/file/move` | Move one exact file to another semester/course/unit without recomputing chunk embeddings. Moves the concept/graph scope when the source unit becomes empty. |
 | `GET` | `/chunks` | Inspect indexed chunks with optional filters and pagination. |
 | `GET` | `/file` | Serve an uploaded PDF file for preview. Uses a query token for iframe access and verifies the requested filename belongs to the current `data_user_id`. |
 | `POST` | `/rename-unit` | Rename a unit in ChromaDB metadata and update concept JSON when present. |
 
-`POST /ask/search` currently reports `algorithm_version = hybrid_personalized_v1`. The source score combines semantic similarity (40%), keyword match (25%), concept match (15%), learning relevance (14%), and long-term preference (6%). Learning relevance plus preference is capped by design at 20%, so personalized history cannot outrank clearly relevant evidence by itself. If embedding lookup fails, the endpoint returns keyword/concept/Learning Memory results with `semantic_search_used = false` rather than failing the entire search.
+New desktop uploads use `/ingest/batch`. OpenAI embeddings are sent in bounded groups (`EMBED_BATCH_SIZE`, default 64), concept MAP calls use at most `CONCEPT_MAX_WORKERS=3`, and OCR uses at most `OCR_MAX_WORKERS=2`. Content-addressed PDF, page, and embedding results are stored in `data/analysis_cache.sqlite3` (override with `ANALYSIS_CACHE_PATH`) so identical content is not analyzed again. The legacy single-file `/ingest` endpoint remains available for compatibility.
+
+`POST /ask/search` currently reports `algorithm_version = hybrid_personalized_v2`. Source ranking combines semantic similarity (40%), keyword match (25%), query-matched concept evidence (15%), learning relevance (14%), and long-term preference (6%). Learning relevance plus preference is capped by design at 20%, and chunk results require direct keyword/concept evidence or strong semantic evidence. The API keeps the raw score for diagnostics, while user-facing pages show `직접 일치` or `관련성 높음`. If embedding lookup fails, the endpoint continues with direct keyword/concept and Learning Memory results.
 
 ## Timetable Endpoints
 

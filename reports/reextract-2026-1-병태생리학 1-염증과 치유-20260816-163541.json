@@ -1,0 +1,4014 @@
+{
+  "scope": {
+    "user": "정유진",
+    "semester": "2026-1",
+    "course": "병태생리학 1",
+    "unit": "염증과 치유",
+    "filename": "중간 4 염증과 치유.pdf"
+  },
+  "source": {
+    "pdf": "data/uploads/14d942cd57b845e48af43c61df343c43_중간 4 염증과 치유.pdf",
+    "pdf_sha256": "6376acfcd0a2b50cb1a3ac39437445e43785bcdb17506e31c6f3d5089285de8e",
+    "source_digest": "88092ef072481d69701a774689ee19fafe475674c360c473cf23b34b9526939c",
+    "pages": 33,
+    "chunks": 55,
+    "ocr_pages": 28,
+    "fallback_pages": 0
+  },
+  "extraction": {
+    "existing_count": 10,
+    "new_count": 36,
+    "map_calls": 6,
+    "group_calls": 1,
+    "rejected": [
+      {
+        "concept": "중성구",
+        "reasons": [
+          "surface_not_found"
+        ]
+      },
+      {
+        "concept": "브래디키닌",
+        "reasons": [
+          "surface_not_found"
+        ]
+      },
+      {
+        "concept": "발열",
+        "reasons": [
+          "surface_not_found"
+        ]
+      },
+      {
+        "concept": "흉터",
+        "reasons": [
+          "surface_not_found"
+        ]
+      },
+      {
+        "concept": "켈로이드",
+        "reasons": [
+          "surface_not_found"
+        ]
+      },
+      {
+        "concept": "1도화상",
+        "reasons": [
+          "surface_not_found"
+        ]
+      },
+      {
+        "concept": "2도화상",
+        "reasons": [
+          "surface_not_found"
+        ]
+      },
+      {
+        "concept": "3도화상",
+        "reasons": [
+          "surface_not_found"
+        ]
+      },
+      {
+        "concept": "4도화상",
+        "reasons": [
+          "surface_not_found"
+        ]
+      },
+      {
+        "concept": "상처 치유",
+        "reasons": [
+          "ocr_keyword_without_clean_grounding"
+        ]
+      },
+      {
+        "concept": "섬유소성 삼출물",
+        "reasons": [
+          "new_surface_only_requires_review"
+        ]
+      },
+      {
+        "concept": "출혈성 삼출물",
+        "reasons": [
+          "new_surface_only_requires_review"
+        ]
+      },
+      {
+        "concept": "프로스타글란딘",
+        "reasons": [
+          "new_surface_only_requires_review"
+        ]
+      }
+    ],
+    "pre_coverage": {
+      "candidate_count": 47,
+      "covered_count": 5,
+      "missing_count": 42,
+      "covered": [
+        {
+          "name": "혈관 투과성 증가",
+          "aliases": [
+            "투과성"
+          ],
+          "rules": [
+            "extracted_alias"
+          ],
+          "occurrences": [
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 5,
+              "surface": "투과성",
+              "evidence_span": "혈관투과성증가",
+              "candidate_rule": "extracted_alias"
+            },
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 8,
+              "surface": "투과성",
+              "evidence_span": "ㅣ즉각적앤혈관확장과삼출물형성을위한모세혈관투과성증가",
+              "candidate_rule": "extracted_alias"
+            },
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 11,
+              "surface": "투과성",
+              "evidence_span": "* 섬유소원이혈관밖으로유출되어섬유소형성(혈관투과성이크게증가했을때)",
+              "candidate_rule": "extracted_alias"
+            },
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 19,
+              "surface": "투과성",
+              "evidence_span": "I(Ice): SHS 수축시켜, 화학매개물질로인해왁장된혈관을좁혀Sega 투과성감소, 부종억제, 통증감각둔화",
+              "candidate_rule": "extracted_alias"
+            }
+          ]
+        },
+        {
+          "name": "염증 부종 및 삼출물 종류",
+          "aliases": [
+            "삼출물"
+          ],
+          "rules": [
+            "extracted_alias"
+          ],
+          "occurrences": [
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 8,
+              "surface": "삼출물",
+              "evidence_span": "ㅣ즉각적앤혈관확장과삼출물형성을위한모세혈관투과성증가",
+              "candidate_rule": "extracted_alias"
+            },
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 10,
+              "surface": "삼출물",
+              "evidence_span": "삼출물): 장액성(66「045)/ 섬유소성((1610045)/ 화농성(04[ 비601)/출혈성([16010「「1[12019",
+              "candidate_rule": "extracted_alias"
+            },
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 11,
+              "surface": "삼출물",
+              "evidence_span": "* HUA 삼출물(호흡기나소화기처럼점",
+              "candidate_rule": "extracted_alias"
+            },
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 14,
+              "surface": "삼출물",
+              "evidence_span": "* 염증삼출물이미생물AAO] 용이한환경이=",
+              "candidate_rule": "extracted_alias"
+            },
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 31,
+              "surface": "삼출물",
+              "evidence_span": "A 화농성삼출물(원인미생물HAS 위하여배양이필요함. ㅁ. 청녹색은Pseucomonas aeruginosadl| 의한감",
+              "candidate_rule": "extracted_alias"
+            }
+          ]
+        },
+        {
+          "name": "화학주성 및 백혈구 이동",
+          "aliases": [
+            "화학주성"
+          ],
+          "rules": [
+            "extracted_alias"
+          ],
+          "occurrences": [
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 8,
+              "surface": "화학주성",
+              "evidence_span": "화학주성인재(21670800ㅇ: 비만세포과립",
+              "candidate_rule": "extracted_alias"
+            }
+          ]
+        },
+        {
+          "name": "염증 관련 약물",
+          "aliases": [
+            "항염증제"
+          ],
+          "rules": [
+            "extracted_alias"
+          ],
+          "occurrences": [
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 9,
+              "surface": "항염증제",
+              "evidence_span": "항염증제:",
+              "candidate_rule": "extracted_alias"
+            }
+          ]
+        },
+        {
+          "name": "항염증제",
+          "aliases": [],
+          "rules": [
+            "korean_definition_label"
+          ],
+          "occurrences": [
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 9,
+              "surface": "항염증제",
+              "evidence_span": "항염증제:",
+              "candidate_rule": "korean_definition_label"
+            }
+          ]
+        }
+      ],
+      "missing": [
+        {
+          "name": "heat",
+          "aliases": [],
+          "rules": [
+            "parenthetical_english"
+          ],
+          "occurrences": [
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 1,
+              "surface": "heat",
+              "evidence_span": "[원문 영문·수치] (heat) · (redness) · (swelling) · (loss of function)",
+              "candidate_rule": "parenthetical_english"
+            }
+          ]
+        },
+        {
+          "name": "Inflammation",
+          "aliases": [],
+          "rules": [
+            "parenthetical_english"
+          ],
+          "occurrences": [
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 1,
+              "surface": "Inflammation",
+              "evidence_span": "24(Inflammation)",
+              "candidate_rule": "parenthetical_english"
+            }
+          ]
+        },
+        {
+          "name": "loss of function",
+          "aliases": [],
+          "rules": [
+            "parenthetical_english"
+          ],
+          "occurrences": [
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 1,
+              "surface": "loss of function",
+              "evidence_span": "[원문 영문·수치] (heat) · (redness) · (swelling) · (loss of function)",
+              "candidate_rule": "parenthetical_english"
+            },
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 24,
+              "surface": "Loss of function",
+              "evidence_span": "만성적인기능AtAl(Loss of function)",
+              "candidate_rule": "parenthetical_english"
+            }
+          ]
+        },
+        {
+          "name": "pain",
+          "aliases": [],
+          "rules": [
+            "parenthetical_english"
+          ],
+          "occurrences": [
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 1,
+              "surface": "pain",
+              "evidence_span": "ㆍ발열(1681), 발적((6011659), 종장(6\\61109), SS(pain) + 기능상실(1065 of function)",
+              "candidate_rule": "parenthetical_english"
+            }
+          ]
+        },
+        {
+          "name": "redness",
+          "aliases": [],
+          "rules": [
+            "parenthetical_english"
+          ],
+          "occurrences": [
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 1,
+              "surface": "redness",
+              "evidence_span": "[원문 영문·수치] (heat) · (redness) · (swelling) · (loss of function)",
+              "candidate_rule": "parenthetical_english"
+            },
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 26,
+              "surface": "Redness",
+              "evidence_span": "e (Redness), #3(Swelling), 통증",
+              "candidate_rule": "parenthetical_english"
+            }
+          ]
+        },
+        {
+          "name": "swelling",
+          "aliases": [],
+          "rules": [
+            "parenthetical_english"
+          ],
+          "occurrences": [
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 1,
+              "surface": "swelling",
+              "evidence_span": "[원문 영문·수치] (heat) · (redness) · (swelling) · (loss of function)",
+              "candidate_rule": "parenthetical_english"
+            },
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 26,
+              "surface": "Swelling",
+              "evidence_span": "e (Redness), #3(Swelling), 통증",
+              "candidate_rule": "parenthetical_english"
+            }
+          ]
+        },
+        {
+          "name": "Endogenous",
+          "aliases": [],
+          "rules": [
+            "parenthetical_english"
+          ],
+          "occurrences": [
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 2,
+              "surface": "Endogenous",
+              "evidence_span": "내인성2°l(Endogenous)",
+              "candidate_rule": "parenthetical_english"
+            }
+          ]
+        },
+        {
+          "name": "외 인성요인",
+          "aliases": [
+            "Exogenous"
+          ],
+          "rules": [
+            "bilingual_pair",
+            "parenthetical_english"
+          ],
+          "occurrences": [
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 2,
+              "surface": "외 인성요인",
+              "evidence_span": "[한영 병기] 외 인성요인 (Exogenous)",
+              "candidate_rule": "bilingual_pair"
+            },
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 2,
+              "surface": "Exogenous",
+              "evidence_span": "[한영 병기] 외 인성요인 (Exogenous)",
+              "candidate_rule": "parenthetical_english"
+            }
+          ]
+        },
+        {
+          "name": "Vasodilation",
+          "aliases": [],
+          "rules": [
+            "parenthetical_english"
+          ],
+          "occurrences": [
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 3,
+              "surface": "Vasodilation",
+              "evidence_span": "Szts!4t(Vasodilation)",
+              "candidate_rule": "parenthetical_english"
+            }
+          ]
+        },
+        {
+          "name": "permeability",
+          "aliases": [],
+          "rules": [
+            "parenthetical_english"
+          ],
+          "occurrences": [
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 5,
+              "surface": "permeability",
+              "evidence_span": "2) 혈액Sat(permeability)2| 변화",
+              "candidate_rule": "parenthetical_english"
+            }
+          ]
+        },
+        {
+          "name": "chemotaxis",
+          "aliases": [],
+          "rules": [
+            "parenthetical_english"
+          ],
+          "occurrences": [
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 6,
+              "surface": "chemotaxis",
+              "evidence_span": "tse (chemotaxis)",
+              "candidate_rule": "parenthetical_english"
+            }
+          ]
+        },
+        {
+          "name": "healing",
+          "aliases": [],
+          "rules": [
+            "parenthetical_english"
+          ],
+          "occurrences": [
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 6,
+              "surface": "healing",
+              "evidence_span": "해를청소하고, 염증HSS 마무리하며소식+S (healing)",
+              "candidate_rule": "parenthetical_english"
+            }
+          ]
+        },
+        {
+          "name": "neutrophils",
+          "aliases": [],
+          "rules": [
+            "parenthetical_english"
+          ],
+          "occurrences": [
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 6,
+              "surface": "neutrophils",
+              "evidence_span": "[원문 영문·수치] (neutrophils)",
+              "candidate_rule": "parenthetical_english"
+            }
+          ]
+        },
+        {
+          "name": "kinogen",
+          "aliases": [],
+          "rules": [
+            "parenthetical_english"
+          ],
+          "occurrences": [
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 8,
+              "surface": "kinogen",
+              "evidence_span": "(kinogen)",
+              "candidate_rule": "parenthetical_english"
+            }
+          ]
+        },
+        {
+          "name": "fibrinous",
+          "aliases": [],
+          "rules": [
+            "parenthetical_english"
+          ],
+          "occurrences": [
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 10,
+              "surface": "fibrinous",
+              "evidence_span": "[원문 영문·수치] (serous) · (fibrinous) · (purulent) · (hemorrhagic)",
+              "candidate_rule": "parenthetical_english"
+            }
+          ]
+        },
+        {
+          "name": "hemorrhagic",
+          "aliases": [],
+          "rules": [
+            "parenthetical_english"
+          ],
+          "occurrences": [
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 10,
+              "surface": "hemorrhagic",
+              "evidence_span": "[원문 영문·수치] (serous) · (fibrinous) · (purulent) · (hemorrhagic)",
+              "candidate_rule": "parenthetical_english"
+            }
+          ]
+        },
+        {
+          "name": "purulent",
+          "aliases": [],
+          "rules": [
+            "parenthetical_english"
+          ],
+          "occurrences": [
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 10,
+              "surface": "purulent",
+              "evidence_span": "[원문 영문·수치] (serous) · (fibrinous) · (purulent) · (hemorrhagic)",
+              "candidate_rule": "parenthetical_english"
+            }
+          ]
+        },
+        {
+          "name": "pyrexia",
+          "aliases": [],
+          "rules": [
+            "parenthetical_english"
+          ],
+          "occurrences": [
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 10,
+              "surface": "pyrexia",
+              "evidence_span": "Fever(pyrexia)",
+              "candidate_rule": "parenthetical_english"
+            }
+          ]
+        },
+        {
+          "name": "serous",
+          "aliases": [],
+          "rules": [
+            "parenthetical_english"
+          ],
+          "occurrences": [
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 10,
+              "surface": "serous",
+              "evidence_span": "[원문 영문·수치] (serous) · (fibrinous) · (purulent) · (hemorrhagic)",
+              "candidate_rule": "parenthetical_english"
+            }
+          ]
+        },
+        {
+          "name": "BMR",
+          "aliases": [],
+          "rules": [
+            "parenthetical_english"
+          ],
+          "occurrences": [
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 12,
+              "surface": "BMR",
+              "evidence_span": "+ 7|ZCHAKR(BMR) 증가",
+              "candidate_rule": "parenthetical_english"
+            }
+          ]
+        },
+        {
+          "name": "lethargy",
+          "aliases": [],
+          "rules": [
+            "parenthetical_english"
+          ],
+          "occurrences": [
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 12,
+              "surface": "lethargy",
+              "evidence_span": "* 7|PA(lethargy)",
+              "candidate_rule": "parenthetical_english"
+            }
+          ]
+        },
+        {
+          "name": "alanine aminotransferase",
+          "aliases": [],
+          "rules": [
+            "parenthetical_english"
+          ],
+          "occurrences": [
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 13,
+              "surface": "alanine aminotransferase",
+              "evidence_span": "ALT(alanine aminotransferase): 간질환",
+              "candidate_rule": "parenthetical_english"
+            }
+          ]
+        },
+        {
+          "name": "C-reactive protein",
+          "aliases": [],
+          "rules": [
+            "parenthetical_english"
+          ],
+          "occurrences": [
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 13,
+              "surface": "C-reactive protein",
+              "evidence_span": "(-반응tt (C-reactive protein)",
+              "candidate_rule": "parenthetical_english"
+            }
+          ]
+        },
+        {
+          "name": "fibroblast",
+          "aliases": [],
+          "rules": [
+            "parenthetical_english"
+          ],
+          "occurrences": [
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 15,
+              "surface": "fibroblast",
+              "evidence_span": "(fibroblast)",
+              "candidate_rule": "parenthetical_english"
+            }
+          ]
+        },
+        {
+          "name": "granuloma",
+          "aliases": [],
+          "rules": [
+            "parenthetical_english"
+          ],
+          "occurrences": [
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 15,
+              "surface": "granuloma",
+              "evidence_span": "(granuloma)",
+              "candidate_rule": "parenthetical_english"
+            },
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 16,
+              "surface": "granuloma",
+              "evidence_span": "(granuloma) 형성 8 림프구가",
+              "candidate_rule": "parenthetical_english"
+            }
+          ]
+        },
+        {
+          "name": "cavity",
+          "aliases": [],
+          "rules": [
+            "parenthetical_english"
+          ],
+          "occurrences": [
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 16,
+              "surface": "cavity",
+              "evidence_span": "Sa(cavity) 형성: 육아종이커지면서내부괴사가심해지면, 대식세포와결핵균이싸우다죽은잔해가액체상태로변화~ 기관지침식",
+              "candidate_rule": "parenthetical_english"
+            }
+          ]
+        },
+        {
+          "name": "erosion",
+          "aliases": [],
+          "rules": [
+            "parenthetical_english"
+          ],
+          "occurrences": [
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 17,
+              "surface": "erosion",
+              "evidence_span": "(erosion) →",
+              "candidate_rule": "parenthetical_english"
+            }
+          ]
+        },
+        {
+          "name": "perforation",
+          "aliases": [],
+          "rules": [
+            "parenthetical_english"
+          ],
+          "occurrences": [
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 17,
+              "surface": "perforation",
+              "evidence_span": "(perforation)",
+              "candidate_rule": "parenthetical_english"
+            }
+          ]
+        },
+        {
+          "name": "ulcer",
+          "aliases": [],
+          "rules": [
+            "parenthetical_english"
+          ],
+          "occurrences": [
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 17,
+              "surface": "ulcer",
+              "evidence_span": "(ulcer) →",
+              "candidate_rule": "parenthetical_english"
+            }
+          ]
+        },
+        {
+          "name": "fibrosis",
+          "aliases": [],
+          "rules": [
+            "parenthetical_english"
+          ],
+          "occurrences": [
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 21,
+              "surface": "fibrosis",
+              "evidence_span": "(fibrosis):",
+              "candidate_rule": "parenthetical_english"
+            }
+          ]
+        },
+        {
+          "name": "regeneration",
+          "aliases": [],
+          "rules": [
+            "parenthetical_english"
+          ],
+          "occurrences": [
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 21,
+              "surface": "regeneration",
+              "evidence_span": "(regeneration):",
+              "candidate_rule": "parenthetical_english"
+            }
+          ]
+        },
+        {
+          "name": "resolution",
+          "aliases": [],
+          "rules": [
+            "parenthetical_english"
+          ],
+          "occurrences": [
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 21,
+              "surface": "resolution",
+              "evidence_span": "(resolution):",
+              "candidate_rule": "parenthetical_english"
+            }
+          ]
+        },
+        {
+          "name": "adhesions",
+          "aliases": [],
+          "rules": [
+            "parenthetical_english"
+          ],
+          "occurrences": [
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 24,
+              "surface": "adhesions",
+              "evidence_span": "[원문 영문·수치] (adhesions) · (keloid) · (ulceration)",
+              "candidate_rule": "parenthetical_english"
+            }
+          ]
+        },
+        {
+          "name": "contractures and obstructions",
+          "aliases": [],
+          "rules": [
+            "parenthetical_english"
+          ],
+          "occurrences": [
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 24,
+              "surface": "contractures and obstructions",
+              "evidence_span": "e 구축과Hl44(contractures and obstructions)",
+              "candidate_rule": "parenthetical_english"
+            }
+          ]
+        },
+        {
+          "name": "hypertrophic scar tissue",
+          "aliases": [],
+          "rules": [
+            "parenthetical_english"
+          ],
+          "occurrences": [
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 24,
+              "surface": "hypertrophic scar tissue",
+              "evidence_span": "e 비대형반흔2Al(hypertrophic scar tissue): 과도한콜라겐침착으로섬유성조직이과다성장하여반흔조직의가장자리가",
+              "candidate_rule": "parenthetical_english"
+            }
+          ]
+        },
+        {
+          "name": "keloid",
+          "aliases": [],
+          "rules": [
+            "parenthetical_english"
+          ],
+          "occurrences": [
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 24,
+              "surface": "keloid",
+              "evidence_span": "[원문 영문·수치] (adhesions) · (keloid) · (ulceration)",
+              "candidate_rule": "parenthetical_english"
+            },
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 25,
+              "surface": "keloid",
+              "evidence_span": "(keloid)2| Afei(From Callen J, Greer K, Hood A, et al",
+              "candidate_rule": "parenthetical_english"
+            }
+          ]
+        },
+        {
+          "name": "ulceration",
+          "aliases": [],
+          "rules": [
+            "parenthetical_english"
+          ],
+          "occurrences": [
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 24,
+              "surface": "ulceration",
+              "evidence_span": "[원문 영문·수치] (adhesions) · (keloid) · (ulceration)",
+              "candidate_rule": "parenthetical_english"
+            }
+          ]
+        },
+        {
+          "name": "hiatal hernia",
+          "aliases": [],
+          "rules": [
+            "parenthetical_english"
+          ],
+          "occurrences": [
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 25,
+              "surface": "hiatal hernia",
+              "evidence_span": "(hiatal hernia) —",
+              "candidate_rule": "parenthetical_english"
+            }
+          ]
+        },
+        {
+          "name": "Burns",
+          "aliases": [],
+          "rules": [
+            "parenthetical_english"
+          ],
+          "occurrences": [
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 27,
+              "surface": "Burns",
+              "evidence_span": "At(Burns)",
+              "candidate_rule": "parenthetical_english"
+            }
+          ]
+        },
+        {
+          "name": "body surface area",
+          "aliases": [],
+          "rules": [
+            "parenthetical_english"
+          ],
+          "occurrences": [
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 28,
+              "surface": "body surface area",
+              "evidence_span": "[출처] 화상의범위를계산하는H - BSA(body surface area)",
+              "candidate_rule": "parenthetical_english"
+            },
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 29,
+              "surface": "body surface area",
+              "evidence_span": "[출처] 화상의범위를계산하는4 - BSA(body surface area)",
+              "candidate_rule": "parenthetical_english"
+            }
+          ]
+        },
+        {
+          "name": "Rules of nine",
+          "aliases": [],
+          "rules": [
+            "parenthetical_english"
+          ],
+          "occurrences": [
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 28,
+              "surface": "Rules of nine",
+              "evidence_span": "9의4!(Rules of nine)",
+              "candidate_rule": "parenthetical_english"
+            }
+          ]
+        },
+        {
+          "name": "Shock",
+          "aliases": [],
+          "rules": [
+            "parenthetical_english"
+          ],
+          "occurrences": [
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 30,
+              "surface": "Shock",
+              "evidence_span": "#A(Shock)",
+              "candidate_rule": "parenthetical_english"
+            }
+          ]
+        }
+      ]
+    },
+    "post_coverage": {
+      "candidate_count": 61,
+      "covered_count": 33,
+      "missing_count": 28,
+      "covered": [
+        {
+          "name": "기능손실",
+          "aliases": [
+            "Loss of function",
+            "기능 상실"
+          ],
+          "rules": [
+            "extracted_alias",
+            "parenthetical_english"
+          ],
+          "occurrences": [
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 1,
+              "surface": "Loss of function",
+              "evidence_span": "[원문 영문·수치] (heat) · (redness) · (swelling) · (loss of function)",
+              "candidate_rule": "extracted_alias"
+            },
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 1,
+              "surface": "loss of function",
+              "evidence_span": "[원문 영문·수치] (heat) · (redness) · (swelling) · (loss of function)",
+              "candidate_rule": "parenthetical_english"
+            },
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 10,
+              "surface": "Loss of function",
+              "evidence_span": "Loss of function: 상대적세포저산소증/ 영양부족, 움직임제한",
+              "candidate_rule": "extracted_alias"
+            },
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 24,
+              "surface": "Loss of function",
+              "evidence_span": "만성적인기능AtAl(Loss of function)",
+              "candidate_rule": "extracted_alias"
+            },
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 24,
+              "surface": "Loss of function",
+              "evidence_span": "만성적인기능AtAl(Loss of function)",
+              "candidate_rule": "parenthetical_english"
+            }
+          ]
+        },
+        {
+          "name": "염증",
+          "aliases": [
+            "Inflammation"
+          ],
+          "rules": [
+            "extracted_alias",
+            "parenthetical_english"
+          ],
+          "occurrences": [
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 1,
+              "surface": "Inflammation",
+              "evidence_span": "24(Inflammation)",
+              "candidate_rule": "extracted_alias"
+            },
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 1,
+              "surface": "Inflammation",
+              "evidence_span": "24(Inflammation)",
+              "candidate_rule": "parenthetical_english"
+            },
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 3,
+              "surface": "염증",
+              "evidence_span": "급성염증의병태생리",
+              "candidate_rule": "extracted_alias"
+            },
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 5,
+              "surface": "염증",
+              "evidence_span": "그션염증의병태생리",
+              "candidate_rule": "extracted_alias"
+            },
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 6,
+              "surface": "염증",
+              "evidence_span": "급성염증의병태생리",
+              "candidate_rule": "extracted_alias"
+            },
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 7,
+              "surface": "염증",
+              "evidence_span": "e 염증Slo] 중성구부착",
+              "candidate_rule": "extracted_alias"
+            },
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 8,
+              "surface": "염증",
+              "evidence_span": "염증반응",
+              "candidate_rule": "extracted_alias"
+            },
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 9,
+              "surface": "염증",
+              "evidence_span": "항염증제:",
+              "candidate_rule": "extracted_alias"
+            },
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 10,
+              "surface": "염증",
+              "evidence_span": "그서염증의Ol oF",
+              "candidate_rule": "extracted_alias"
+            },
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 11,
+              "surface": "염증",
+              "evidence_span": "© 초기염증, 가벼운손상",
+              "candidate_rule": "extracted_alias"
+            },
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 12,
+              "surface": "염증",
+              "evidence_span": "그서염증의X1 A] Ol SE",
+              "candidate_rule": "extracted_alias"
+            },
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 13,
+              "surface": "염증",
+              "evidence_span": "급성염증의진단검사",
+              "candidate_rule": "extracted_alias"
+            },
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 14,
+              "surface": "염증",
+              "evidence_span": "급성염증의잠재적합병증",
+              "candidate_rule": "extracted_alias"
+            },
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 19,
+              "surface": "염증",
+              "evidence_span": "염증의치료",
+              "candidate_rule": "extracted_alias"
+            },
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 20,
+              "surface": "염증",
+              "evidence_span": "염증반응과치유",
+              "candidate_rule": "extracted_alias"
+            },
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 23,
+              "surface": "염증",
+              "evidence_span": "손상과염증",
+              "candidate_rule": "extracted_alias"
+            },
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 26,
+              "surface": "염증",
+              "evidence_span": "급성염증과광범위한조직손상유발",
+              "candidate_rule": "extracted_alias"
+            },
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 29,
+              "surface": "염증",
+              "evidence_span": "급성염증반응으로인해혈관투",
+              "candidate_rule": "extracted_alias"
+            }
+          ]
+        },
+        {
+          "name": "내인성요인",
+          "aliases": [
+            "Endogenous"
+          ],
+          "rules": [
+            "extracted_alias",
+            "parenthetical_english"
+          ],
+          "occurrences": [
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 2,
+              "surface": "Endogenous",
+              "evidence_span": "내인성2°l(Endogenous)",
+              "candidate_rule": "extracted_alias"
+            },
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 2,
+              "surface": "Endogenous",
+              "evidence_span": "내인성2°l(Endogenous)",
+              "candidate_rule": "parenthetical_english"
+            }
+          ]
+        },
+        {
+          "name": "외인성요인",
+          "aliases": [
+            "Exogenous"
+          ],
+          "rules": [
+            "bilingual_pair",
+            "extracted_alias",
+            "parenthetical_english"
+          ],
+          "occurrences": [
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 2,
+              "surface": "외 인성요인",
+              "evidence_span": "[한영 병기] 외 인성요인 (Exogenous)",
+              "candidate_rule": "bilingual_pair"
+            },
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 2,
+              "surface": "Exogenous",
+              "evidence_span": "인성요인(Exogenous)",
+              "candidate_rule": "extracted_alias"
+            },
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 2,
+              "surface": "Exogenous",
+              "evidence_span": "인성요인(Exogenous)",
+              "candidate_rule": "parenthetical_english"
+            }
+          ]
+        },
+        {
+          "name": "화상",
+          "aliases": [
+            "Burns"
+          ],
+          "rules": [
+            "extracted_alias",
+            "parenthetical_english"
+          ],
+          "occurrences": [
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 2,
+              "surface": "화상",
+              "evidence_span": "e 물리적원인: 자상, 외상, 화상, 동상등",
+              "candidate_rule": "extracted_alias"
+            },
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 26,
+              "surface": "Burns",
+              "evidence_span": "상(168 degree): Superficial burns",
+              "candidate_rule": "extracted_alias"
+            },
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 26,
+              "surface": "화상",
+              "evidence_span": "3도화상(3[0 degree): Full thickness burns",
+              "candidate_rule": "extracted_alias"
+            },
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 27,
+              "surface": "Burns",
+              "evidence_span": "At(Burns)",
+              "candidate_rule": "extracted_alias"
+            },
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 27,
+              "surface": "화상",
+              "evidence_span": "표면화상",
+              "candidate_rule": "extracted_alias"
+            },
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 27,
+              "surface": "Burns",
+              "evidence_span": "At(Burns)",
+              "candidate_rule": "parenthetical_english"
+            },
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 28,
+              "surface": "화상",
+              "evidence_span": "e 화상의범위( 면적) 을추정하여화상의SSH 판단",
+              "candidate_rule": "extracted_alias"
+            },
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 29,
+              "surface": "화상",
+              "evidence_span": "ZZ 화상환",
+              "candidate_rule": "extracted_alias"
+            },
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 29,
+              "surface": "Burns",
+              "evidence_span": "* Example: /0-kg adult with 40% second- and third-degree burns:",
+              "candidate_rule": "extracted_alias"
+            },
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 30,
+              "surface": "화상",
+              "evidence_span": "화상으로이하Ci oF",
+              "candidate_rule": "extracted_alias"
+            },
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 31,
+              "surface": "화상",
+              "evidence_span": "그림5-13. 화상창상감염",
+              "candidate_rule": "extracted_alias"
+            },
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 32,
+              "surface": "화상",
+              "evidence_span": "olen화상의치유",
+              "candidate_rule": "extracted_alias"
+            },
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 32,
+              "surface": "Burns",
+              "evidence_span": "Indeterminate Depth Partial-Thickness Burns",
+              "candidate_rule": "extracted_alias"
+            },
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 33,
+              "surface": "화상",
+              "evidence_span": "i i) 화상(심부2도화상) K 전층화상: 융터/ 구축위험nro",
+              "candidate_rule": "extracted_alias"
+            }
+          ]
+        },
+        {
+          "name": "혈관 확장",
+          "aliases": [
+            "Vasodilation"
+          ],
+          "rules": [
+            "extracted_alias",
+            "parenthetical_english"
+          ],
+          "occurrences": [
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 3,
+              "surface": "Vasodilation",
+              "evidence_span": "Szts!4t(Vasodilation)",
+              "candidate_rule": "extracted_alias"
+            },
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 3,
+              "surface": "Vasodilation",
+              "evidence_span": "Szts!4t(Vasodilation)",
+              "candidate_rule": "parenthetical_english"
+            }
+          ]
+        },
+        {
+          "name": "혈관 투과성 증가",
+          "aliases": [
+            "permeability"
+          ],
+          "rules": [
+            "extracted_alias",
+            "parenthetical_english"
+          ],
+          "occurrences": [
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 5,
+              "surface": "permeability",
+              "evidence_span": "2) 혈액Sat(permeability)2| 변화",
+              "candidate_rule": "extracted_alias"
+            },
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 5,
+              "surface": "permeability",
+              "evidence_span": "2) 혈액Sat(permeability)2| 변화",
+              "candidate_rule": "parenthetical_english"
+            }
+          ]
+        },
+        {
+          "name": "화학주성 및 백혈구 이동",
+          "aliases": [
+            "chemotaxis",
+            "화학주성"
+          ],
+          "rules": [
+            "extracted_alias",
+            "parenthetical_english"
+          ],
+          "occurrences": [
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 6,
+              "surface": "chemotaxis",
+              "evidence_span": "tse (chemotaxis)",
+              "candidate_rule": "extracted_alias"
+            },
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 6,
+              "surface": "chemotaxis",
+              "evidence_span": "tse (chemotaxis)",
+              "candidate_rule": "parenthetical_english"
+            },
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 8,
+              "surface": "화학주성",
+              "evidence_span": "화학주성인재(21670800ㅇ: 비만세포과립",
+              "candidate_rule": "extracted_alias"
+            }
+          ]
+        },
+        {
+          "name": "류코트리엔",
+          "aliases": [
+            "Leukotriene"
+          ],
+          "rules": [
+            "extracted_alias"
+          ],
+          "occurrences": [
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 8,
+              "surface": "류코트리엔",
+              "evidence_span": "류코트리엔.84600606)",
+              "candidate_rule": "extracted_alias"
+            }
+          ]
+        },
+        {
+          "name": "보체계",
+          "aliases": [
+            "Complement system"
+          ],
+          "rules": [
+            "extracted_alias"
+          ],
+          "occurrences": [
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 8,
+              "surface": "보체계",
+              "evidence_span": "보체계(0070676000/",
+              "candidate_rule": "extracted_alias"
+            }
+          ]
+        },
+        {
+          "name": "사이토카인",
+          "aliases": [
+            "Cytokine",
+            "Interleukin",
+            "TNF"
+          ],
+          "rules": [
+            "extracted_alias"
+          ],
+          "occurrences": [
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 8,
+              "surface": "TNF",
+              "evidence_span": "leukin, lymphokine) TNF*",
+              "candidate_rule": "extracted_alias"
+            }
+          ]
+        },
+        {
+          "name": "염증 부종 및 삼출물 종류",
+          "aliases": [
+            "Exudate",
+            "삼출물"
+          ],
+          "rules": [
+            "extracted_alias"
+          ],
+          "occurrences": [
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 8,
+              "surface": "삼출물",
+              "evidence_span": "ㅣ즉각적앤혈관확장과삼출물형성을위한모세혈관투과성증가",
+              "candidate_rule": "extracted_alias"
+            },
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 10,
+              "surface": "삼출물",
+              "evidence_span": "삼출물): 장액성(66「045)/ 섬유소성((1610045)/ 화농성(04[ 비601)/출혈성([16010「「1[12019",
+              "candidate_rule": "extracted_alias"
+            },
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 11,
+              "surface": "삼출물",
+              "evidence_span": "* HUA 삼출물(호흡기나소화기처럼점",
+              "candidate_rule": "extracted_alias"
+            },
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 14,
+              "surface": "삼출물",
+              "evidence_span": "* 염증삼출물이미생물AAO] 용이한환경이=",
+              "candidate_rule": "extracted_alias"
+            },
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 31,
+              "surface": "삼출물",
+              "evidence_span": "A 화농성삼출물(원인미생물HAS 위하여배양이필요함. ㅁ. 청녹색은Pseucomonas aeruginosadl| 의한감",
+              "candidate_rule": "extracted_alias"
+            }
+          ]
+        },
+        {
+          "name": "염증반응",
+          "aliases": [
+            "Inflammatory response"
+          ],
+          "rules": [
+            "extracted_alias"
+          ],
+          "occurrences": [
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 8,
+              "surface": "염증반응",
+              "evidence_span": "염증반응",
+              "candidate_rule": "extracted_alias"
+            },
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 19,
+              "surface": "염증반응",
+              "evidence_span": "R(Rest): 주가적조직손상방지, 대사요구량감소로염증반응확산제한",
+              "candidate_rule": "extracted_alias"
+            },
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 20,
+              "surface": "염증반응",
+              "evidence_span": "염증반응과치유",
+              "candidate_rule": "extracted_alias"
+            },
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 23,
+              "surface": "염증반응",
+              "evidence_span": "손상과염증: 급성염증반응, 딱지생성, 손상부우",
+              "candidate_rule": "extracted_alias"
+            },
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 29,
+              "surface": "염증반응",
+              "evidence_span": "급성염증반응으로인해혈관투",
+              "candidate_rule": "extracted_alias"
+            }
+          ]
+        },
+        {
+          "name": "히스타민",
+          "aliases": [
+            "Histamine"
+          ],
+          "rules": [
+            "extracted_alias"
+          ],
+          "occurrences": [
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 8,
+              "surface": "히스타민",
+              "evidence_span": "히스타민}1880006)",
+              "candidate_rule": "extracted_alias"
+            }
+          ]
+        },
+        {
+          "name": "장액성 삼출물",
+          "aliases": [
+            "serous",
+            "장액성"
+          ],
+          "rules": [
+            "extracted_alias",
+            "parenthetical_english"
+          ],
+          "occurrences": [
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 10,
+              "surface": "장액성",
+              "evidence_span": "삼출물): 장액성(66「045)/ 섬유소성((1610045)/ 화농성(04[ 비601)/출혈성([16010「「1[12019",
+              "candidate_rule": "extracted_alias"
+            },
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 10,
+              "surface": "serous",
+              "evidence_span": "[원문 영문·수치] (serous) · (fibrinous) · (purulent) · (hemorrhagic)",
+              "candidate_rule": "extracted_alias"
+            },
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 10,
+              "surface": "serous",
+              "evidence_span": "[원문 영문·수치] (serous) · (fibrinous) · (purulent) · (hemorrhagic)",
+              "candidate_rule": "parenthetical_english"
+            }
+          ]
+        },
+        {
+          "name": "화농성 삼출물",
+          "aliases": [
+            "purulent",
+            "화농성"
+          ],
+          "rules": [
+            "extracted_alias",
+            "parenthetical_english"
+          ],
+          "occurrences": [
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 10,
+              "surface": "화농성",
+              "evidence_span": "삼출물): 장액성(66「045)/ 섬유소성((1610045)/ 화농성(04[ 비601)/출혈성([16010「「1[12019",
+              "candidate_rule": "extracted_alias"
+            },
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 10,
+              "surface": "purulent",
+              "evidence_span": "[원문 영문·수치] (serous) · (fibrinous) · (purulent) · (hemorrhagic)",
+              "candidate_rule": "extracted_alias"
+            },
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 10,
+              "surface": "purulent",
+              "evidence_span": "[원문 영문·수치] (serous) · (fibrinous) · (purulent) · (hemorrhagic)",
+              "candidate_rule": "parenthetical_english"
+            },
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 31,
+              "surface": "화농성",
+              "evidence_span": "A 화농성삼출물(원인미생물HAS 위하여배양이필요함. ㅁ. 청녹색은Pseucomonas aeruginosadl| 의한감",
+              "candidate_rule": "extracted_alias"
+            }
+          ]
+        },
+        {
+          "name": "유착",
+          "aliases": [
+            "adhesions",
+            "조직 유착"
+          ],
+          "rules": [
+            "extracted_alias",
+            "parenthetical_english"
+          ],
+          "occurrences": [
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 11,
+              "surface": "adhesions",
+              "evidence_span": "Adhesions",
+              "candidate_rule": "extracted_alias"
+            },
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 24,
+              "surface": "유착",
+              "evidence_span": "e 유착(3 마165101709): 정상적으로분리되어있는두표면은흉터조직이결합시키는것",
+              "candidate_rule": "extracted_alias"
+            },
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 24,
+              "surface": "adhesions",
+              "evidence_span": "[원문 영문·수치] (adhesions) · (keloid) · (ulceration)",
+              "candidate_rule": "extracted_alias"
+            },
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 24,
+              "surface": "adhesions",
+              "evidence_span": "[원문 영문·수치] (adhesions) · (keloid) · (ulceration)",
+              "candidate_rule": "parenthetical_english"
+            }
+          ]
+        },
+        {
+          "name": "콜라겐",
+          "aliases": [
+            "Collagen"
+          ],
+          "rules": [
+            "extracted_alias"
+          ],
+          "occurrences": [
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 16,
+              "surface": "콜라겐",
+              "evidence_span": "자리를콜라겐결합조직으로메움",
+              "candidate_rule": "extracted_alias"
+            },
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 23,
+              "surface": "콜라겐",
+              "evidence_span": "육아조직과콜라겐",
+              "candidate_rule": "extracted_alias"
+            },
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 24,
+              "surface": "콜라겐",
+              "evidence_span": "e 비대형반흔2Al(hypertrophic scar tissue): 과도한콜라겐침착으로섬유성조직이과다성장하여반흔조직의가장자리가",
+              "candidate_rule": "extracted_alias"
+            }
+          ]
+        },
+        {
+          "name": "궤양형성",
+          "aliases": [
+            "ulceration",
+            "궤양"
+          ],
+          "rules": [
+            "extracted_alias",
+            "parenthetical_english"
+          ],
+          "occurrences": [
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 17,
+              "surface": "궤양",
+              "evidence_span": "위궤양위천공소화기계- 발발가능성높음",
+              "candidate_rule": "extracted_alias"
+            },
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 24,
+              "surface": "궤양",
+              "evidence_span": "e 궤양형",
+              "candidate_rule": "extracted_alias"
+            },
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 24,
+              "surface": "ulceration",
+              "evidence_span": "[원문 영문·수치] (adhesions) · (keloid) · (ulceration)",
+              "candidate_rule": "extracted_alias"
+            },
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 24,
+              "surface": "ulceration",
+              "evidence_span": "[원문 영문·수치] (adhesions) · (keloid) · (ulceration)",
+              "candidate_rule": "parenthetical_english"
+            }
+          ]
+        },
+        {
+          "name": "치유지연요인",
+          "aliases": [
+            "Factors delaying healing"
+          ],
+          "rules": [
+            "extracted_alias"
+          ],
+          "occurrences": [
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 22,
+              "surface": "치유지연요인",
+              "evidence_span": "치유지연요인",
+              "candidate_rule": "extracted_alias"
+            }
+          ]
+        },
+        {
+          "name": "치유촉진요인",
+          "aliases": [
+            "Factors promoting healing"
+          ],
+          "rules": [
+            "extracted_alias"
+          ],
+          "occurrences": [
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 22,
+              "surface": "치유촉진요인",
+              "evidence_span": "치유촉진요인",
+              "candidate_rule": "extracted_alias"
+            }
+          ]
+        },
+        {
+          "name": "상피증식",
+          "aliases": [
+            "Epithelialization"
+          ],
+          "rules": [
+            "extracted_alias"
+          ],
+          "occurrences": [
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 23,
+              "surface": "상피증식",
+              "evidence_span": "|? 2, 육아조직과상피증식",
+              "candidate_rule": "extracted_alias"
+            }
+          ]
+        },
+        {
+          "name": "육아조직",
+          "aliases": [
+            "Granulation tissue"
+          ],
+          "rules": [
+            "extracted_alias"
+          ],
+          "occurrences": [
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 23,
+              "surface": "육아조직",
+              "evidence_span": "|? 2, 육아조직과상피증식",
+              "candidate_rule": "extracted_alias"
+            }
+          ]
+        },
+        {
+          "name": "이차유합",
+          "aliases": [
+            "2차 치유",
+            "Secondary union"
+          ],
+          "rules": [
+            "extracted_alias"
+          ],
+          "occurrences": [
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 23,
+              "surface": "이차유합",
+              "evidence_span": "8. 이차유합에의한치유",
+              "candidate_rule": "extracted_alias"
+            }
+          ]
+        },
+        {
+          "name": "구축",
+          "aliases": [
+            "contractures",
+            "관절 구축"
+          ],
+          "rules": [
+            "extracted_alias"
+          ],
+          "occurrences": [
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 24,
+              "surface": "구축",
+              "evidence_span": "e 구축과Hl44(contractures and obstructions)",
+              "candidate_rule": "extracted_alias"
+            },
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 33,
+              "surface": "구축",
+              "evidence_span": "i i) 화상(심부2도화상) K 전층화상: 융터/ 구축위험nro",
+              "candidate_rule": "extracted_alias"
+            }
+          ]
+        },
+        {
+          "name": "반흔조직",
+          "aliases": [
+            "scar tissue"
+          ],
+          "rules": [
+            "extracted_alias"
+          ],
+          "occurrences": [
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 24,
+              "surface": "반흔조직",
+              "evidence_span": "e 비대형반흔2Al(hypertrophic scar tissue): 과도한콜라겐침착으로섬유성조직이과다성장하여반흔조직의가장자리가",
+              "candidate_rule": "extracted_alias"
+            },
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 25,
+              "surface": "반흔조직",
+              "evidence_span": "반흔조직",
+              "candidate_rule": "extracted_alias"
+            },
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 33,
+              "surface": "반흔조직",
+              "evidence_span": "그림5-15. A 화상으로인한반흔조직DAS 탄력성OHS 위한BA (Courtesy of Judy Knighton, Clinical Nurse",
+              "candidate_rule": "extracted_alias"
+            }
+          ]
+        },
+        {
+          "name": "비대형 반흔",
+          "aliases": [
+            "hypertrophic scar tissue",
+            "비대성 반흔"
+          ],
+          "rules": [
+            "extracted_alias",
+            "parenthetical_english"
+          ],
+          "occurrences": [
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 24,
+              "surface": "hypertrophic scar tissue",
+              "evidence_span": "e 비대형반흔2Al(hypertrophic scar tissue): 과도한콜라겐침착으로섬유성조직이과다성장하여반흔조직의가장자리가",
+              "candidate_rule": "extracted_alias"
+            },
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 24,
+              "surface": "hypertrophic scar tissue",
+              "evidence_span": "e 비대형반흔2Al(hypertrophic scar tissue): 과도한콜라겐침착으로섬유성조직이과다성장하여반흔조직의가장자리가",
+              "candidate_rule": "parenthetical_english"
+            }
+          ]
+        },
+        {
+          "name": "켈로이드",
+          "aliases": [
+            "keloid"
+          ],
+          "rules": [
+            "extracted_alias",
+            "parenthetical_english"
+          ],
+          "occurrences": [
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 24,
+              "surface": "keloid",
+              "evidence_span": "[원문 영문·수치] (adhesions) · (keloid) · (ulceration)",
+              "candidate_rule": "extracted_alias"
+            },
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 24,
+              "surface": "keloid",
+              "evidence_span": "[원문 영문·수치] (adhesions) · (keloid) · (ulceration)",
+              "candidate_rule": "parenthetical_english"
+            },
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 25,
+              "surface": "켈로이드",
+              "evidence_span": "6. 켈로이드",
+              "candidate_rule": "extracted_alias"
+            },
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 25,
+              "surface": "keloid",
+              "evidence_span": "(keloid)2| Afei(From Callen J, Greer K, Hood A, et al",
+              "candidate_rule": "extracted_alias"
+            },
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 25,
+              "surface": "keloid",
+              "evidence_span": "(keloid)2| Afei(From Callen J, Greer K, Hood A, et al",
+              "candidate_rule": "parenthetical_english"
+            }
+          ]
+        },
+        {
+          "name": "식도열공탈장",
+          "aliases": [
+            "hiatal hernia"
+          ],
+          "rules": [
+            "extracted_alias",
+            "parenthetical_english"
+          ],
+          "occurrences": [
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 25,
+              "surface": "식도열공탈장",
+              "evidence_span": "식도열공탈장",
+              "candidate_rule": "extracted_alias"
+            },
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 25,
+              "surface": "hiatal hernia",
+              "evidence_span": "(hiatal hernia) —",
+              "candidate_rule": "extracted_alias"
+            },
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 25,
+              "surface": "hiatal hernia",
+              "evidence_span": "(hiatal hernia) —",
+              "candidate_rule": "parenthetical_english"
+            }
+          ]
+        },
+        {
+          "name": "화상범위 평가",
+          "aliases": [
+            "body surface area",
+            "BSA",
+            "화상범위",
+            "화상부위사정"
+          ],
+          "rules": [
+            "extracted_alias",
+            "parenthetical_english"
+          ],
+          "occurrences": [
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 28,
+              "surface": "body surface area",
+              "evidence_span": "[출처] 화상의범위를계산하는H - BSA(body surface area)",
+              "candidate_rule": "extracted_alias"
+            },
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 28,
+              "surface": "BSA",
+              "evidence_span": "[표 행] 9의4!(Rules of nine) | [출처] 화상의범위를계산하는H - BSA(body surface are",
+              "candidate_rule": "extracted_alias"
+            },
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 28,
+              "surface": "body surface area",
+              "evidence_span": "[출처] 화상의범위를계산하는H - BSA(body surface area)",
+              "candidate_rule": "parenthetical_english"
+            },
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 29,
+              "surface": "BSA",
+              "evidence_span": "* LR 4 mL x weight (kg) x % BSA burned” over initial 24 h",
+              "candidate_rule": "extracted_alias"
+            },
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 29,
+              "surface": "body surface area",
+              "evidence_span": "Abbreviations: BSA = body surface area; LR = lactated Ringer's solution.",
+              "candidate_rule": "extracted_alias"
+            },
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 29,
+              "surface": "body surface area",
+              "evidence_span": "[출처] 화상의범위를계산하는4 - BSA(body surface area)",
+              "candidate_rule": "parenthetical_english"
+            }
+          ]
+        },
+        {
+          "name": "화상 수액 치료",
+          "aliases": [
+            "Parkland Formula",
+            "수액용량 산정"
+          ],
+          "rules": [
+            "extracted_alias"
+          ],
+          "occurrences": [
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 29,
+              "surface": "Parkland Formula",
+              "evidence_span": "※× Parkland Formula for Fluid Resuscitation",
+              "candidate_rule": "extracted_alias"
+            }
+          ]
+        },
+        {
+          "name": "저혈량쇼크",
+          "aliases": [
+            "Shock"
+          ],
+          "rules": [
+            "extracted_alias",
+            "parenthetical_english"
+          ],
+          "occurrences": [
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 30,
+              "surface": "Shock",
+              "evidence_span": "#A(Shock)",
+              "candidate_rule": "extracted_alias"
+            },
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 30,
+              "surface": "저혈량쇼크",
+              "evidence_span": "소> 혈압저하~ 저혈량쇼크~ 혈액내의단백질이동과삼투압감소지속",
+              "candidate_rule": "extracted_alias"
+            },
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 30,
+              "surface": "Shock",
+              "evidence_span": "#A(Shock)",
+              "candidate_rule": "parenthetical_english"
+            }
+          ]
+        },
+        {
+          "name": "생합성피부대체물",
+          "aliases": [
+            "biosynthetic skin substitute"
+          ],
+          "rules": [
+            "extracted_alias"
+          ],
+          "occurrences": [
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 32,
+              "surface": "생합성피부대체물",
+              "evidence_span": "성/생합성피부대체물활용하여화상부위드레싱: 일시적인보호막역할을하여수분증발막고, 감염방지",
+              "candidate_rule": "extracted_alias"
+            }
+          ]
+        }
+      ],
+      "missing": [
+        {
+          "name": "heat",
+          "aliases": [],
+          "rules": [
+            "parenthetical_english"
+          ],
+          "occurrences": [
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 1,
+              "surface": "heat",
+              "evidence_span": "[원문 영문·수치] (heat) · (redness) · (swelling) · (loss of function)",
+              "candidate_rule": "parenthetical_english"
+            }
+          ]
+        },
+        {
+          "name": "pain",
+          "aliases": [],
+          "rules": [
+            "parenthetical_english"
+          ],
+          "occurrences": [
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 1,
+              "surface": "pain",
+              "evidence_span": "ㆍ발열(1681), 발적((6011659), 종장(6\\61109), SS(pain) + 기능상실(1065 of function)",
+              "candidate_rule": "parenthetical_english"
+            }
+          ]
+        },
+        {
+          "name": "redness",
+          "aliases": [],
+          "rules": [
+            "parenthetical_english"
+          ],
+          "occurrences": [
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 1,
+              "surface": "redness",
+              "evidence_span": "[원문 영문·수치] (heat) · (redness) · (swelling) · (loss of function)",
+              "candidate_rule": "parenthetical_english"
+            },
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 26,
+              "surface": "Redness",
+              "evidence_span": "e (Redness), #3(Swelling), 통증",
+              "candidate_rule": "parenthetical_english"
+            }
+          ]
+        },
+        {
+          "name": "swelling",
+          "aliases": [],
+          "rules": [
+            "parenthetical_english"
+          ],
+          "occurrences": [
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 1,
+              "surface": "swelling",
+              "evidence_span": "[원문 영문·수치] (heat) · (redness) · (swelling) · (loss of function)",
+              "candidate_rule": "parenthetical_english"
+            },
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 26,
+              "surface": "Swelling",
+              "evidence_span": "e (Redness), #3(Swelling), 통증",
+              "candidate_rule": "parenthetical_english"
+            }
+          ]
+        },
+        {
+          "name": "손실",
+          "aliases": [
+            "function"
+          ],
+          "rules": [
+            "compound_suffix_alias"
+          ],
+          "occurrences": [
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 1,
+              "surface": "function",
+              "evidence_span": "ㆍ발열(1681), 발적((6011659), 종장(6\\61109), SS(pain) + 기능상실(1065 of function)",
+              "candidate_rule": "compound_suffix_alias"
+            },
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 10,
+              "surface": "function",
+              "evidence_span": "Loss of function: 상대적세포저산소증/ 영양부족, 움직임제한",
+              "candidate_rule": "compound_suffix_alias"
+            },
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 24,
+              "surface": "function",
+              "evidence_span": "만성적인기능AtAl(Loss of function)",
+              "candidate_rule": "compound_suffix_alias"
+            }
+          ]
+        },
+        {
+          "name": "healing",
+          "aliases": [],
+          "rules": [
+            "parenthetical_english"
+          ],
+          "occurrences": [
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 6,
+              "surface": "healing",
+              "evidence_span": "해를청소하고, 염증HSS 마무리하며소식+S (healing)",
+              "candidate_rule": "parenthetical_english"
+            }
+          ]
+        },
+        {
+          "name": "neutrophils",
+          "aliases": [],
+          "rules": [
+            "parenthetical_english"
+          ],
+          "occurrences": [
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 6,
+              "surface": "neutrophils",
+              "evidence_span": "[원문 영문·수치] (neutrophils)",
+              "candidate_rule": "parenthetical_english"
+            }
+          ]
+        },
+        {
+          "name": "kinogen",
+          "aliases": [],
+          "rules": [
+            "parenthetical_english"
+          ],
+          "occurrences": [
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 8,
+              "surface": "kinogen",
+              "evidence_span": "(kinogen)",
+              "candidate_rule": "parenthetical_english"
+            }
+          ]
+        },
+        {
+          "name": "항염증제",
+          "aliases": [],
+          "rules": [
+            "korean_definition_label"
+          ],
+          "occurrences": [
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 9,
+              "surface": "항염증제",
+              "evidence_span": "항염증제:",
+              "candidate_rule": "korean_definition_label"
+            }
+          ]
+        },
+        {
+          "name": "fibrinous",
+          "aliases": [],
+          "rules": [
+            "parenthetical_english"
+          ],
+          "occurrences": [
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 10,
+              "surface": "fibrinous",
+              "evidence_span": "[원문 영문·수치] (serous) · (fibrinous) · (purulent) · (hemorrhagic)",
+              "candidate_rule": "parenthetical_english"
+            }
+          ]
+        },
+        {
+          "name": "hemorrhagic",
+          "aliases": [],
+          "rules": [
+            "parenthetical_english"
+          ],
+          "occurrences": [
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 10,
+              "surface": "hemorrhagic",
+              "evidence_span": "[원문 영문·수치] (serous) · (fibrinous) · (purulent) · (hemorrhagic)",
+              "candidate_rule": "parenthetical_english"
+            }
+          ]
+        },
+        {
+          "name": "pyrexia",
+          "aliases": [],
+          "rules": [
+            "parenthetical_english"
+          ],
+          "occurrences": [
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 10,
+              "surface": "pyrexia",
+              "evidence_span": "Fever(pyrexia)",
+              "candidate_rule": "parenthetical_english"
+            }
+          ]
+        },
+        {
+          "name": "BMR",
+          "aliases": [],
+          "rules": [
+            "parenthetical_english"
+          ],
+          "occurrences": [
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 12,
+              "surface": "BMR",
+              "evidence_span": "+ 7|ZCHAKR(BMR) 증가",
+              "candidate_rule": "parenthetical_english"
+            }
+          ]
+        },
+        {
+          "name": "lethargy",
+          "aliases": [],
+          "rules": [
+            "parenthetical_english"
+          ],
+          "occurrences": [
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 12,
+              "surface": "lethargy",
+              "evidence_span": "* 7|PA(lethargy)",
+              "candidate_rule": "parenthetical_english"
+            }
+          ]
+        },
+        {
+          "name": "alanine aminotransferase",
+          "aliases": [],
+          "rules": [
+            "parenthetical_english"
+          ],
+          "occurrences": [
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 13,
+              "surface": "alanine aminotransferase",
+              "evidence_span": "ALT(alanine aminotransferase): 간질환",
+              "candidate_rule": "parenthetical_english"
+            }
+          ]
+        },
+        {
+          "name": "C-reactive protein",
+          "aliases": [],
+          "rules": [
+            "parenthetical_english"
+          ],
+          "occurrences": [
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 13,
+              "surface": "C-reactive protein",
+              "evidence_span": "(-반응tt (C-reactive protein)",
+              "candidate_rule": "parenthetical_english"
+            }
+          ]
+        },
+        {
+          "name": "fibroblast",
+          "aliases": [],
+          "rules": [
+            "parenthetical_english"
+          ],
+          "occurrences": [
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 15,
+              "surface": "fibroblast",
+              "evidence_span": "(fibroblast)",
+              "candidate_rule": "parenthetical_english"
+            }
+          ]
+        },
+        {
+          "name": "granuloma",
+          "aliases": [],
+          "rules": [
+            "parenthetical_english"
+          ],
+          "occurrences": [
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 15,
+              "surface": "granuloma",
+              "evidence_span": "(granuloma)",
+              "candidate_rule": "parenthetical_english"
+            },
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 16,
+              "surface": "granuloma",
+              "evidence_span": "(granuloma) 형성 8 림프구가",
+              "candidate_rule": "parenthetical_english"
+            }
+          ]
+        },
+        {
+          "name": "cavity",
+          "aliases": [],
+          "rules": [
+            "parenthetical_english"
+          ],
+          "occurrences": [
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 16,
+              "surface": "cavity",
+              "evidence_span": "Sa(cavity) 형성: 육아종이커지면서내부괴사가심해지면, 대식세포와결핵균이싸우다죽은잔해가액체상태로변화~ 기관지침식",
+              "candidate_rule": "parenthetical_english"
+            }
+          ]
+        },
+        {
+          "name": "erosion",
+          "aliases": [],
+          "rules": [
+            "parenthetical_english"
+          ],
+          "occurrences": [
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 17,
+              "surface": "erosion",
+              "evidence_span": "(erosion) →",
+              "candidate_rule": "parenthetical_english"
+            }
+          ]
+        },
+        {
+          "name": "perforation",
+          "aliases": [],
+          "rules": [
+            "parenthetical_english"
+          ],
+          "occurrences": [
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 17,
+              "surface": "perforation",
+              "evidence_span": "(perforation)",
+              "candidate_rule": "parenthetical_english"
+            }
+          ]
+        },
+        {
+          "name": "ulcer",
+          "aliases": [],
+          "rules": [
+            "parenthetical_english"
+          ],
+          "occurrences": [
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 17,
+              "surface": "ulcer",
+              "evidence_span": "(ulcer) →",
+              "candidate_rule": "parenthetical_english"
+            }
+          ]
+        },
+        {
+          "name": "fibrosis",
+          "aliases": [],
+          "rules": [
+            "parenthetical_english"
+          ],
+          "occurrences": [
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 21,
+              "surface": "fibrosis",
+              "evidence_span": "(fibrosis):",
+              "candidate_rule": "parenthetical_english"
+            }
+          ]
+        },
+        {
+          "name": "regeneration",
+          "aliases": [],
+          "rules": [
+            "parenthetical_english"
+          ],
+          "occurrences": [
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 21,
+              "surface": "regeneration",
+              "evidence_span": "(regeneration):",
+              "candidate_rule": "parenthetical_english"
+            }
+          ]
+        },
+        {
+          "name": "resolution",
+          "aliases": [],
+          "rules": [
+            "parenthetical_english"
+          ],
+          "occurrences": [
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 21,
+              "surface": "resolution",
+              "evidence_span": "(resolution):",
+              "candidate_rule": "parenthetical_english"
+            }
+          ]
+        },
+        {
+          "name": "contractures and obstructions",
+          "aliases": [],
+          "rules": [
+            "parenthetical_english"
+          ],
+          "occurrences": [
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 24,
+              "surface": "contractures and obstructions",
+              "evidence_span": "e 구축과Hl44(contractures and obstructions)",
+              "candidate_rule": "parenthetical_english"
+            }
+          ]
+        },
+        {
+          "name": "탈장",
+          "aliases": [
+            "hernia"
+          ],
+          "rules": [
+            "compound_suffix_alias"
+          ],
+          "occurrences": [
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 25,
+              "surface": "hernia",
+              "evidence_span": "(hiatal hernia) —",
+              "candidate_rule": "compound_suffix_alias"
+            }
+          ]
+        },
+        {
+          "name": "Rules of nine",
+          "aliases": [],
+          "rules": [
+            "parenthetical_english"
+          ],
+          "occurrences": [
+            {
+              "filename": "중간 4 염증과 치유.pdf",
+              "page": 28,
+              "surface": "Rules of nine",
+              "evidence_span": "9의4!(Rules of nine)",
+              "candidate_rule": "parenthetical_english"
+            }
+          ]
+        }
+      ]
+    },
+    "candidate_coverage": 0.541,
+    "concepts": [
+      {
+        "name": "염증",
+        "keyword": "Inflammation",
+        "aliases": [],
+        "weight": 5,
+        "page": 1,
+        "filename": "중간 4 염증과 치유.pdf",
+        "pages": [
+          1,
+          23
+        ],
+        "occurrences": [
+          {
+            "filename": "중간 4 염증과 치유.pdf",
+            "page": 1,
+            "surface": "Inflammation",
+            "evidence_span": "24(Inflammation) e 신체정상방어기전: 해로운SHEA 및제거 * 조직손상에대한신체의비특이적반응",
+            "status": "direct_span"
+          },
+          {
+            "filename": "중간 4 염증과 치유.pdf",
+            "page": 23,
+            "surface": "염증",
+            "evidence_span": "손상과염증: 급성염증반응",
+            "status": "direct_span"
+          }
+        ],
+        "links": [
+          "발열",
+          "발적",
+          "종창",
+          "통증",
+          "기능상실",
+          "상처 치유",
+          "급성염증반응",
+          "대식세포"
+        ],
+        "origin": "llm_grounded",
+        "evidence_status": "direct_span",
+        "canonical_status": "new",
+        "related_variants": [],
+        "related_descriptors": [],
+        "group": "염증",
+        "extraction_version": "concept_quality_v1",
+        "source_digest": "88092ef072481d69701a774689ee19fafe475674c360c473cf23b34b9526939c",
+        "extracted_at": "2026-08-16T07:35:41.261957+00:00"
+      },
+      {
+        "name": "염증반응",
+        "keyword": "염증반응",
+        "aliases": [
+          "Inflammatory response"
+        ],
+        "weight": 5,
+        "page": 8,
+        "filename": "중간 4 염증과 치유.pdf",
+        "pages": [
+          8
+        ],
+        "occurrences": [
+          {
+            "filename": "중간 4 염증과 치유.pdf",
+            "page": 8,
+            "surface": "염증반응",
+            "evidence_span": "염증반응에서화학매개물질",
+            "status": "direct_span"
+          }
+        ],
+        "links": [
+          "히스타민",
+          "사이토카인",
+          "보체계",
+          "류코트리엔",
+          "프로스타글란딘",
+          "브래디키닌"
+        ],
+        "origin": "llm_grounded",
+        "evidence_status": "direct_span",
+        "canonical_status": "new",
+        "related_variants": [],
+        "related_descriptors": [],
+        "group": "염증",
+        "extraction_version": "concept_quality_v1",
+        "source_digest": "88092ef072481d69701a774689ee19fafe475674c360c473cf23b34b9526939c",
+        "extracted_at": "2026-08-16T07:35:41.261957+00:00"
+      },
+      {
+        "name": "육아조직",
+        "keyword": "육아조직",
+        "aliases": [
+          "Granulation tissue"
+        ],
+        "weight": 5,
+        "page": 23,
+        "filename": "중간 4 염증과 치유.pdf",
+        "pages": [
+          23
+        ],
+        "occurrences": [
+          {
+            "filename": "중간 4 염증과 치유.pdf",
+            "page": 23,
+            "surface": "육아조직과콜라겐",
+            "evidence_span": "육아조직과콜라겐",
+            "status": "direct_span"
+          }
+        ],
+        "links": [
+          "상처 치유",
+          "콜라겐",
+          "모세혈관신생",
+          "섬유모세포"
+        ],
+        "origin": "llm_grounded",
+        "evidence_status": "direct_span",
+        "canonical_status": "new",
+        "related_variants": [],
+        "related_descriptors": [],
+        "group": "치유",
+        "extraction_version": "concept_quality_v1",
+        "source_digest": "88092ef072481d69701a774689ee19fafe475674c360c473cf23b34b9526939c",
+        "extracted_at": "2026-08-16T07:35:41.261957+00:00"
+      },
+      {
+        "name": "저혈량쇼크",
+        "keyword": "저혈량쇼크",
+        "aliases": [
+          "Shock"
+        ],
+        "weight": 5,
+        "page": 30,
+        "filename": "중간 4 염증과 치유.pdf",
+        "pages": [
+          30
+        ],
+        "occurrences": [
+          {
+            "filename": "중간 4 염증과 치유.pdf",
+            "page": 30,
+            "surface": "저혈량쇼크",
+            "evidence_span": "혈압저하~ 저혈량쇼크~ 혈액내의단백질이동과삼투압감소지속",
+            "status": "direct_span"
+          }
+        ],
+        "links": [
+          "혈압저하",
+          "체액과다",
+          "부종",
+          "혈액내의단백질이동",
+          "삼투압감소",
+          "신부전",
+          "전신장기부전"
+        ],
+        "origin": "llm_grounded",
+        "evidence_status": "direct_span",
+        "canonical_status": "new",
+        "related_variants": [],
+        "related_descriptors": [],
+        "group": "합병증",
+        "extraction_version": "concept_quality_v1",
+        "source_digest": "88092ef072481d69701a774689ee19fafe475674c360c473cf23b34b9526939c",
+        "extracted_at": "2026-08-16T07:35:41.261957+00:00"
+      },
+      {
+        "name": "포식작용",
+        "keyword": "포식작용",
+        "aliases": [],
+        "weight": 5,
+        "page": 7,
+        "filename": "중간 4 염증과 치유.pdf",
+        "pages": [
+          7
+        ],
+        "occurrences": [
+          {
+            "filename": "중간 4 염증과 치유.pdf",
+            "page": 7,
+            "surface": "포식작용",
+            "evidence_span": "중성구의포식작용이마무리되면, 뒤이어도착한대식세포가죽은박테리아와수명을다한중성구사체까지모두포식",
+            "status": "direct_span"
+          }
+        ],
+        "links": [
+          "중성구",
+          "대식세포",
+          "박테리아"
+        ],
+        "origin": "llm_grounded",
+        "evidence_status": "direct_span",
+        "canonical_status": "new",
+        "related_variants": [],
+        "related_descriptors": [],
+        "group": "염증",
+        "extraction_version": "concept_quality_v1",
+        "source_digest": "88092ef072481d69701a774689ee19fafe475674c360c473cf23b34b9526939c",
+        "extracted_at": "2026-08-16T07:35:41.261957+00:00"
+      },
+      {
+        "name": "혈관 투과성 증가",
+        "keyword": "permeability",
+        "aliases": [],
+        "weight": 5,
+        "page": 5,
+        "filename": "중간 4 염증과 치유.pdf",
+        "pages": [
+          5
+        ],
+        "occurrences": [
+          {
+            "filename": "중간 4 염증과 치유.pdf",
+            "page": 5,
+            "surface": "permeability",
+            "evidence_span": "혈관투과성증가",
+            "status": "direct_span"
+          }
+        ],
+        "links": [
+          "내피세포",
+          "혈장단백질",
+          "화학매개인자"
+        ],
+        "origin": "llm_grounded",
+        "evidence_status": "direct_span",
+        "canonical_status": "reused_existing",
+        "canonical_match_rule": "exact_term",
+        "related_variants": [],
+        "related_descriptors": [],
+        "group": "염증",
+        "extraction_version": "concept_quality_v1",
+        "source_digest": "88092ef072481d69701a774689ee19fafe475674c360c473cf23b34b9526939c",
+        "extracted_at": "2026-08-16T07:35:41.261957+00:00"
+      },
+      {
+        "name": "혈관 확장",
+        "keyword": "Vasodilation",
+        "aliases": [],
+        "weight": 5,
+        "page": 3,
+        "filename": "중간 4 염증과 치유.pdf",
+        "pages": [
+          3
+        ],
+        "occurrences": [
+          {
+            "filename": "중간 4 염증과 치유.pdf",
+            "page": 3,
+            "surface": "Vasodilation",
+            "evidence_span": "혈관확장(세동맥) ~ 혈류증가( 중혈; hyperemia)",
+            "status": "direct_span"
+          }
+        ],
+        "links": [
+          "급성염증",
+          "혈류증가",
+          "화학매개물질"
+        ],
+        "origin": "llm_grounded",
+        "evidence_status": "direct_span",
+        "canonical_status": "reused_existing",
+        "canonical_match_rule": "exact_term",
+        "related_variants": [],
+        "related_descriptors": [],
+        "group": "염증",
+        "extraction_version": "concept_quality_v1",
+        "source_digest": "88092ef072481d69701a774689ee19fafe475674c360c473cf23b34b9526939c",
+        "extracted_at": "2026-08-16T07:35:41.261957+00:00"
+      },
+      {
+        "name": "화상",
+        "keyword": "Burns",
+        "aliases": [],
+        "weight": 5,
+        "page": 26,
+        "filename": "중간 4 염증과 치유.pdf",
+        "pages": [
+          26,
+          27
+        ],
+        "occurrences": [
+          {
+            "filename": "중간 4 염증과 치유.pdf",
+            "page": 26,
+            "surface": "Burns",
+            "evidence_span": "Burns",
+            "status": "direct_span"
+          },
+          {
+            "filename": "중간 4 염증과 치유.pdf",
+            "page": 27,
+            "surface": "화상의분류",
+            "evidence_span": "화상의분류. 피부증의포함정도",
+            "status": "direct_span"
+          }
+        ],
+        "links": [
+          "1도화상",
+          "2도화상",
+          "3도화상",
+          "4도화상",
+          "화상부위사정",
+          "화상범위",
+          "화상분류"
+        ],
+        "origin": "llm_grounded",
+        "evidence_status": "direct_span",
+        "canonical_status": "new",
+        "related_variants": [],
+        "related_descriptors": [],
+        "group": "손상",
+        "extraction_version": "concept_quality_v1",
+        "source_digest": "88092ef072481d69701a774689ee19fafe475674c360c473cf23b34b9526939c",
+        "extracted_at": "2026-08-16T07:35:41.261957+00:00"
+      },
+      {
+        "name": "화상 수액 치료",
+        "keyword": "Parkland Formula",
+        "aliases": [
+          "수액용량 산정"
+        ],
+        "weight": 5,
+        "page": 29,
+        "filename": "중간 4 염증과 치유.pdf",
+        "pages": [
+          29
+        ],
+        "occurrences": [
+          {
+            "filename": "중간 4 염증과 치유.pdf",
+            "page": 29,
+            "surface": "Parkland Formula for Fluid Resuscitation",
+            "evidence_span": "Parkland Formula for Fluid Resuscitation",
+            "status": "direct_span"
+          }
+        ],
+        "links": [
+          "화상",
+          "화상범위 평가",
+          "body surface area",
+          "lactated Ringer's solution"
+        ],
+        "origin": "llm_grounded",
+        "evidence_status": "direct_span",
+        "canonical_status": "new",
+        "related_variants": [],
+        "related_descriptors": [],
+        "group": "손상",
+        "extraction_version": "concept_quality_v1",
+        "source_digest": "88092ef072481d69701a774689ee19fafe475674c360c473cf23b34b9526939c",
+        "extracted_at": "2026-08-16T07:35:41.261957+00:00"
+      },
+      {
+        "name": "화상범위 평가",
+        "keyword": "body surface area",
+        "aliases": [
+          "BSA",
+          "화상범위",
+          "화상부위사정"
+        ],
+        "weight": 5,
+        "page": 28,
+        "filename": "중간 4 염증과 치유.pdf",
+        "pages": [
+          28
+        ],
+        "occurrences": [
+          {
+            "filename": "중간 4 염증과 치유.pdf",
+            "page": 28,
+            "surface": "body surface area",
+            "evidence_span": "화상의범위를계산하는H - BSA(body surface area)",
+            "status": "direct_span"
+          },
+          {
+            "filename": "중간 4 염증과 치유.pdf",
+            "page": 28,
+            "surface": "Rules of nine",
+            "evidence_span": "9의4!(Rules of nine)",
+            "status": "direct_span"
+          }
+        ],
+        "links": [
+          "화상",
+          "Rules of nine",
+          "Lund-Browder diagram"
+        ],
+        "origin": "llm_grounded",
+        "evidence_status": "direct_span",
+        "canonical_status": "new",
+        "related_variants": [],
+        "related_descriptors": [],
+        "group": "손상",
+        "extraction_version": "concept_quality_v1",
+        "source_digest": "88092ef072481d69701a774689ee19fafe475674c360c473cf23b34b9526939c",
+        "extracted_at": "2026-08-16T07:35:41.261957+00:00"
+      },
+      {
+        "name": "화학주성 및 백혈구 이동",
+        "keyword": "chemotaxis",
+        "aliases": [
+          "화학주성"
+        ],
+        "weight": 5,
+        "page": 8,
+        "filename": "중간 4 염증과 치유.pdf",
+        "pages": [
+          8
+        ],
+        "occurrences": [
+          {
+            "filename": "중간 4 염증과 치유.pdf",
+            "page": 8,
+            "surface": "화학주성",
+            "evidence_span": "화학주성",
+            "status": "direct_span",
+            "grounding_rule": "canonical_name_in_same_file",
+            "source_surface": "chemotaxis"
+          }
+        ],
+        "links": [
+          "백혈구 이동",
+          "화학매개물질",
+          "급성염증"
+        ],
+        "origin": "llm_grounded",
+        "evidence_status": "direct_span",
+        "canonical_status": "reused_existing",
+        "canonical_match_rule": "exact_term",
+        "related_variants": [],
+        "related_descriptors": [],
+        "group": "염증",
+        "extraction_version": "concept_quality_v1",
+        "source_digest": "88092ef072481d69701a774689ee19fafe475674c360c473cf23b34b9526939c",
+        "extracted_at": "2026-08-16T07:35:41.261957+00:00"
+      },
+      {
+        "name": "내인성요인",
+        "keyword": "Endogenous",
+        "aliases": [],
+        "weight": 4,
+        "page": 2,
+        "filename": "중간 4 염증과 치유.pdf",
+        "pages": [
+          2
+        ],
+        "occurrences": [
+          {
+            "filename": "중간 4 염증과 치유.pdf",
+            "page": 2,
+            "surface": "Endogenous",
+            "evidence_span": "내인성2°l(Endogenous)",
+            "status": "direct_span"
+          }
+        ],
+        "links": [
+          "외인성요인",
+          "자가면역",
+          "과민성면역반응",
+          "대사기능장애"
+        ],
+        "origin": "llm_grounded",
+        "evidence_status": "direct_span",
+        "canonical_status": "new",
+        "related_variants": [],
+        "related_descriptors": [],
+        "group": "염증",
+        "extraction_version": "concept_quality_v1",
+        "source_digest": "88092ef072481d69701a774689ee19fafe475674c360c473cf23b34b9526939c",
+        "extracted_at": "2026-08-16T07:35:41.261957+00:00"
+      },
+      {
+        "name": "반흔조직",
+        "keyword": "반흔조직",
+        "aliases": [
+          "scar tissue"
+        ],
+        "weight": 4,
+        "page": 33,
+        "filename": "중간 4 염증과 치유.pdf",
+        "pages": [
+          33
+        ],
+        "occurrences": [
+          {
+            "filename": "중간 4 염증과 치유.pdf",
+            "page": 33,
+            "surface": "반흔조직",
+            "evidence_span": "화상으로인한반흔조직DAS 탄력성OHS 위한BA",
+            "status": "direct_span"
+          }
+        ],
+        "links": [
+          "탄력성",
+          "압박치료",
+          "구축위험",
+          "기능장애"
+        ],
+        "origin": "llm_grounded",
+        "evidence_status": "direct_span",
+        "canonical_status": "new",
+        "related_variants": [],
+        "related_descriptors": [],
+        "group": "치유",
+        "extraction_version": "concept_quality_v1",
+        "source_digest": "88092ef072481d69701a774689ee19fafe475674c360c473cf23b34b9526939c",
+        "extracted_at": "2026-08-16T07:35:41.261957+00:00"
+      },
+      {
+        "name": "보체계",
+        "keyword": "보체계",
+        "aliases": [
+          "Complement system"
+        ],
+        "weight": 4,
+        "page": 8,
+        "filename": "중간 4 염증과 치유.pdf",
+        "pages": [
+          8
+        ],
+        "occurrences": [
+          {
+            "filename": "중간 4 염증과 치유.pdf",
+            "page": 8,
+            "surface": "보체계(0070676000/",
+            "evidence_span": "보체계(0070676000/ . 혈장단백질연속단계활성화 PREIS, 모세혈관투과성의증가",
+            "status": "direct_span"
+          }
+        ],
+        "links": [
+          "혈장단백질 활성화",
+          "모세혈관투과성 증가"
+        ],
+        "origin": "llm_grounded",
+        "evidence_status": "direct_span",
+        "canonical_status": "new",
+        "related_variants": [],
+        "related_descriptors": [],
+        "group": "염증",
+        "extraction_version": "concept_quality_v1",
+        "source_digest": "88092ef072481d69701a774689ee19fafe475674c360c473cf23b34b9526939c",
+        "extracted_at": "2026-08-16T07:35:41.261957+00:00"
+      },
+      {
+        "name": "사이토카인",
+        "keyword": "사이토카인",
+        "aliases": [
+          "Cytokine",
+          "Interleukin",
+          "TNF"
+        ],
+        "weight": 4,
+        "page": 8,
+        "filename": "중간 4 염증과 치유.pdf",
+        "pages": [
+          8
+        ],
+        "occurrences": [
+          {
+            "filename": "중간 4 염증과 치유.pdf",
+            "page": 8,
+            "surface": "사 이토카인(10006 : inter—",
+            "evidence_span": "사 이토카인(10006 : inter— | 림프구, 대식세포 | 혈장단백질, 적혈구침강속도의증가",
+            "status": "direct_span"
+          }
+        ],
+        "links": [
+          "림프구",
+          "대식세포",
+          "백혈구증가증"
+        ],
+        "origin": "llm_grounded",
+        "evidence_status": "direct_span",
+        "canonical_status": "new",
+        "related_variants": [],
+        "related_descriptors": [],
+        "group": "염증",
+        "extraction_version": "concept_quality_v1",
+        "source_digest": "88092ef072481d69701a774689ee19fafe475674c360c473cf23b34b9526939c",
+        "extracted_at": "2026-08-16T07:35:41.261957+00:00"
+      },
+      {
+        "name": "상피증식",
+        "keyword": "상피증식",
+        "aliases": [
+          "Epithelialization"
+        ],
+        "weight": 4,
+        "page": 23,
+        "filename": "중간 4 염증과 치유.pdf",
+        "pages": [
+          23
+        ],
+        "occurrences": [
+          {
+            "filename": "중간 4 염증과 치유.pdf",
+            "page": 23,
+            "surface": "육아조직과상피증식",
+            "evidence_span": "육아조직과상피증식",
+            "status": "direct_span"
+          }
+        ],
+        "links": [
+          "상처 치유",
+          "상피세포",
+          "육아조직"
+        ],
+        "origin": "llm_grounded",
+        "evidence_status": "direct_span",
+        "canonical_status": "new",
+        "related_variants": [],
+        "related_descriptors": [],
+        "group": "치유",
+        "extraction_version": "concept_quality_v1",
+        "source_digest": "88092ef072481d69701a774689ee19fafe475674c360c473cf23b34b9526939c",
+        "extracted_at": "2026-08-16T07:35:41.261957+00:00"
+      },
+      {
+        "name": "생합성피부대체물",
+        "keyword": "생합성피부대체물",
+        "aliases": [
+          "biosynthetic skin substitute"
+        ],
+        "weight": 4,
+        "page": 32,
+        "filename": "중간 4 염증과 치유.pdf",
+        "pages": [
+          32
+        ],
+        "occurrences": [
+          {
+            "filename": "중간 4 염증과 치유.pdf",
+            "page": 32,
+            "surface": "생합성피부대체물",
+            "evidence_span": "생합성피부대체물활용하여화상부위드레싱: 일시적인보호막역할을하여수분증발막고, 감염방지",
+            "status": "direct_span"
+          }
+        ],
+        "links": [
+          "피부이식",
+          "화상치유",
+          "드레싱",
+          "감염방지"
+        ],
+        "origin": "llm_grounded",
+        "evidence_status": "direct_span",
+        "canonical_status": "new",
+        "related_variants": [],
+        "related_descriptors": [],
+        "group": "치유",
+        "extraction_version": "concept_quality_v1",
+        "source_digest": "88092ef072481d69701a774689ee19fafe475674c360c473cf23b34b9526939c",
+        "extracted_at": "2026-08-16T07:35:41.261957+00:00"
+      },
+      {
+        "name": "염증 부종 및 삼출물 종류",
+        "keyword": "삼출물",
+        "aliases": [
+          "Exudate"
+        ],
+        "weight": 4,
+        "page": 10,
+        "filename": "중간 4 염증과 치유.pdf",
+        "pages": [
+          10
+        ],
+        "occurrences": [
+          {
+            "filename": "중간 4 염증과 치유.pdf",
+            "page": 10,
+            "surface": "삼출물",
+            "evidence_span": "삼출물): 장액성(66「045)/ 섬유소성((1610045)/ 화농성(04[ 비601)/출혈성([16010「「1[12019",
+            "status": "direct_span"
+          }
+        ],
+        "links": [
+          "장액성 삼출물",
+          "섬유소성 삼출물",
+          "화농성 삼출물",
+          "출혈성 삼출물"
+        ],
+        "origin": "llm_grounded",
+        "evidence_status": "direct_span",
+        "ocr_keyword_replaced": "삼출물",
+        "keyword_restored_from_existing": true,
+        "canonical_status": "reused_existing",
+        "canonical_match_rule": "exact_term",
+        "related_variants": [
+          "염증 삼출물"
+        ],
+        "related_descriptors": [],
+        "alias_relations_reclassified": [
+          "염증 삼출물"
+        ],
+        "group": "치유",
+        "extraction_version": "concept_quality_v1",
+        "source_digest": "88092ef072481d69701a774689ee19fafe475674c360c473cf23b34b9526939c",
+        "extracted_at": "2026-08-16T07:35:41.261957+00:00"
+      },
+      {
+        "name": "외인성요인",
+        "keyword": "외 인성요인",
+        "aliases": [
+          "Exogenous"
+        ],
+        "weight": 4,
+        "page": 2,
+        "filename": "중간 4 염증과 치유.pdf",
+        "pages": [
+          2
+        ],
+        "occurrences": [
+          {
+            "filename": "중간 4 염증과 치유.pdf",
+            "page": 2,
+            "surface": "외 인성요인",
+            "evidence_span": "외 인성요인(Exogenous)",
+            "status": "direct_span"
+          }
+        ],
+        "links": [
+          "내인성요인",
+          "물리적원인",
+          "화학적원인",
+          "생물학적원인"
+        ],
+        "origin": "llm_grounded",
+        "evidence_status": "direct_span",
+        "canonical_status": "new",
+        "related_variants": [],
+        "related_descriptors": [],
+        "group": "손상",
+        "extraction_version": "concept_quality_v1",
+        "source_digest": "88092ef072481d69701a774689ee19fafe475674c360c473cf23b34b9526939c",
+        "extracted_at": "2026-08-16T07:35:41.261957+00:00"
+      },
+      {
+        "name": "이차유합",
+        "keyword": "이차유합",
+        "aliases": [
+          "Secondary union",
+          "2차 치유"
+        ],
+        "weight": 4,
+        "page": 23,
+        "filename": "중간 4 염증과 치유.pdf",
+        "pages": [
+          23
+        ],
+        "occurrences": [
+          {
+            "filename": "중간 4 염증과 치유.pdf",
+            "page": 23,
+            "surface": "이차유합에의한치유",
+            "evidence_span": "이차유합에의한치유",
+            "status": "direct_span"
+          }
+        ],
+        "links": [
+          "상처 치유",
+          "육아조직",
+          "상피증식"
+        ],
+        "origin": "llm_grounded",
+        "evidence_status": "direct_span",
+        "canonical_status": "new",
+        "related_variants": [],
+        "related_descriptors": [],
+        "group": "치유",
+        "extraction_version": "concept_quality_v1",
+        "source_digest": "88092ef072481d69701a774689ee19fafe475674c360c473cf23b34b9526939c",
+        "extracted_at": "2026-08-16T07:35:41.261957+00:00"
+      },
+      {
+        "name": "일차유합",
+        "keyword": "일차유합",
+        "aliases": [
+          "Primary union",
+          "1차 치유"
+        ],
+        "weight": 4,
+        "page": 23,
+        "filename": "중간 4 염증과 치유.pdf",
+        "pages": [
+          23
+        ],
+        "occurrences": [
+          {
+            "filename": "중간 4 염증과 치유.pdf",
+            "page": 23,
+            "surface": "일차유합",
+            "evidence_span": "일차유합: 수술적절 개와같이상처의끝과끝",
+            "status": "direct_span"
+          }
+        ],
+        "links": [
+          "상처 치유",
+          "수술적 절개",
+          "상처 끝과 끝의 접합"
+        ],
+        "origin": "llm_grounded",
+        "evidence_status": "direct_span",
+        "canonical_status": "new",
+        "related_variants": [],
+        "related_descriptors": [],
+        "group": "치유",
+        "extraction_version": "concept_quality_v1",
+        "source_digest": "88092ef072481d69701a774689ee19fafe475674c360c473cf23b34b9526939c",
+        "extracted_at": "2026-08-16T07:35:41.261957+00:00"
+      },
+      {
+        "name": "콜라겐",
+        "keyword": "콜라겐",
+        "aliases": [
+          "Collagen"
+        ],
+        "weight": 4,
+        "page": 23,
+        "filename": "중간 4 염증과 치유.pdf",
+        "pages": [
+          23
+        ],
+        "occurrences": [
+          {
+            "filename": "중간 4 염증과 치유.pdf",
+            "page": 23,
+            "surface": "육아조직과콜라겐",
+            "evidence_span": "육아조직과콜라겐",
+            "status": "direct_span"
+          }
+        ],
+        "links": [
+          "육아조직",
+          "섬유모세포",
+          "흉터"
+        ],
+        "origin": "llm_grounded",
+        "evidence_status": "direct_span",
+        "canonical_status": "new",
+        "related_variants": [],
+        "related_descriptors": [],
+        "group": "치유",
+        "extraction_version": "concept_quality_v1",
+        "source_digest": "88092ef072481d69701a774689ee19fafe475674c360c473cf23b34b9526939c",
+        "extracted_at": "2026-08-16T07:35:41.261957+00:00"
+      },
+      {
+        "name": "화상창상감염",
+        "keyword": "화상창상감염",
+        "aliases": [],
+        "weight": 4,
+        "page": 31,
+        "filename": "중간 4 염증과 치유.pdf",
+        "pages": [
+          31
+        ],
+        "occurrences": [
+          {
+            "filename": "중간 4 염증과 치유.pdf",
+            "page": 31,
+            "surface": "화상창상감염",
+            "evidence_span": "그림5-13. 화상창상감염",
+            "status": "direct_span"
+          }
+        ],
+        "links": [
+          "pseudomonas aeruginosa",
+          "staphylococcus aureus",
+          "klebsiela",
+          "candida",
+          "화농성삼출물"
+        ],
+        "origin": "llm_grounded",
+        "evidence_status": "direct_span",
+        "canonical_status": "new",
+        "related_variants": [],
+        "related_descriptors": [],
+        "group": "손상",
+        "extraction_version": "concept_quality_v1",
+        "source_digest": "88092ef072481d69701a774689ee19fafe475674c360c473cf23b34b9526939c",
+        "extracted_at": "2026-08-16T07:35:41.261957+00:00"
+      },
+      {
+        "name": "히스타민",
+        "keyword": "히스타민",
+        "aliases": [
+          "Histamine"
+        ],
+        "weight": 4,
+        "page": 8,
+        "filename": "중간 4 염증과 치유.pdf",
+        "pages": [
+          8
+        ],
+        "occurrences": [
+          {
+            "filename": "중간 4 염증과 치유.pdf",
+            "page": 8,
+            "surface": "히스타민",
+            "evidence_span": "히스타민}1880006) | 비만세포과립/ 호염구 ㅣ즉각적앤혈관확장과삼출물형성을위한모세혈관투과성증가",
+            "status": "direct_span"
+          }
+        ],
+        "links": [
+          "비만세포",
+          "호염구",
+          "모세혈관투과성 증가",
+          "혈관확장"
+        ],
+        "origin": "llm_grounded",
+        "evidence_status": "direct_span",
+        "canonical_status": "new",
+        "related_variants": [],
+        "related_descriptors": [],
+        "group": "염증",
+        "extraction_version": "concept_quality_v1",
+        "source_digest": "88092ef072481d69701a774689ee19fafe475674c360c473cf23b34b9526939c",
+        "extracted_at": "2026-08-16T07:35:41.261957+00:00"
+      },
+      {
+        "name": "구축",
+        "keyword": "contractures",
+        "aliases": [
+          "관절 구축"
+        ],
+        "weight": 3,
+        "page": 24,
+        "filename": "중간 4 염증과 치유.pdf",
+        "pages": [
+          24
+        ],
+        "occurrences": [
+          {
+            "filename": "중간 4 염증과 치유.pdf",
+            "page": 24,
+            "surface": "contractures and obstructions",
+            "evidence_span": "근골격계: 흉터조직의수축으로관절운동범위제한",
+            "status": "direct_span"
+          }
+        ],
+        "links": [
+          "기능손실",
+          "흉터조직",
+          "관절운동 제한"
+        ],
+        "origin": "llm_grounded",
+        "evidence_status": "direct_span",
+        "canonical_status": "new",
+        "related_variants": [],
+        "related_descriptors": [],
+        "group": "치유",
+        "extraction_version": "concept_quality_v1",
+        "source_digest": "88092ef072481d69701a774689ee19fafe475674c360c473cf23b34b9526939c",
+        "extracted_at": "2026-08-16T07:35:41.261957+00:00"
+      },
+      {
+        "name": "궤양형성",
+        "keyword": "ulceration",
+        "aliases": [
+          "궤양"
+        ],
+        "weight": 3,
+        "page": 24,
+        "filename": "중간 4 염증과 치유.pdf",
+        "pages": [
+          24
+        ],
+        "occurrences": [
+          {
+            "filename": "중간 4 염증과 치유.pdf",
+            "page": 24,
+            "surface": "ulceration",
+            "evidence_span": "궤양형성(106730",
+            "status": "direct_span"
+          }
+        ],
+        "links": [
+          "치유 합병증",
+          "상처"
+        ],
+        "origin": "llm_grounded",
+        "evidence_status": "direct_span",
+        "canonical_status": "new",
+        "related_variants": [],
+        "related_descriptors": [],
+        "group": "염증과 치유",
+        "extraction_version": "concept_quality_v1",
+        "source_digest": "88092ef072481d69701a774689ee19fafe475674c360c473cf23b34b9526939c",
+        "extracted_at": "2026-08-16T07:35:41.261957+00:00"
+      },
+      {
+        "name": "기능손실",
+        "keyword": "Loss of function",
+        "aliases": [
+          "기능 상실"
+        ],
+        "weight": 3,
+        "page": 24,
+        "filename": "중간 4 염증과 치유.pdf",
+        "pages": [
+          24
+        ],
+        "occurrences": [
+          {
+            "filename": "중간 4 염증과 치유.pdf",
+            "page": 24,
+            "surface": "Loss of function",
+            "evidence_span": "만성적인기능AtAl(Loss of function)",
+            "status": "direct_span"
+          }
+        ],
+        "links": [
+          "치유 합병증",
+          "흉터",
+          "구축"
+        ],
+        "origin": "llm_grounded",
+        "evidence_status": "direct_span",
+        "canonical_status": "new",
+        "related_variants": [],
+        "related_descriptors": [],
+        "group": "치유",
+        "extraction_version": "concept_quality_v1",
+        "source_digest": "88092ef072481d69701a774689ee19fafe475674c360c473cf23b34b9526939c",
+        "extracted_at": "2026-08-16T07:35:41.261957+00:00"
+      },
+      {
+        "name": "류코트리엔",
+        "keyword": "류코트리엔",
+        "aliases": [
+          "Leukotriene"
+        ],
+        "weight": 3,
+        "page": 8,
+        "filename": "중간 4 염증과 치유.pdf",
+        "pages": [
+          8
+        ],
+        "occurrences": [
+          {
+            "filename": "중간 4 염증과 치유.pdf",
+            "page": 8,
+            "surface": "류코트리엔.84600606)",
+            "evidence_span": "류코트리엔.84600606) , 비만세포내아라키돈산63- 후기반응[ease 무세혈관투과성의증가.",
+            "status": "direct_span"
+          }
+        ],
+        "links": [
+          "아라키돈산",
+          "모세혈관투과성 증가",
+          "염증후기반응"
+        ],
+        "origin": "llm_grounded",
+        "evidence_status": "direct_span",
+        "canonical_status": "new",
+        "related_variants": [],
+        "related_descriptors": [],
+        "group": "염증",
+        "extraction_version": "concept_quality_v1",
+        "source_digest": "88092ef072481d69701a774689ee19fafe475674c360c473cf23b34b9526939c",
+        "extracted_at": "2026-08-16T07:35:41.261957+00:00"
+      },
+      {
+        "name": "비대형 반흔",
+        "keyword": "hypertrophic scar tissue",
+        "aliases": [
+          "비대성 반흔"
+        ],
+        "weight": 3,
+        "page": 24,
+        "filename": "중간 4 염증과 치유.pdf",
+        "pages": [
+          24
+        ],
+        "occurrences": [
+          {
+            "filename": "중간 4 염증과 치유.pdf",
+            "page": 24,
+            "surface": "hypertrophic scar tissue",
+            "evidence_span": "비대형반흔2Al(hypertrophic scar tissue): 과도한콜라겐침착",
+            "status": "direct_span"
+          }
+        ],
+        "links": [
+          "흉터",
+          "콜라겐 과다침착"
+        ],
+        "origin": "llm_grounded",
+        "evidence_status": "direct_span",
+        "canonical_status": "new",
+        "related_variants": [],
+        "related_descriptors": [],
+        "group": "치유",
+        "extraction_version": "concept_quality_v1",
+        "source_digest": "88092ef072481d69701a774689ee19fafe475674c360c473cf23b34b9526939c",
+        "extracted_at": "2026-08-16T07:35:41.261957+00:00"
+      },
+      {
+        "name": "식도열공탈장",
+        "keyword": "hiatal hernia",
+        "aliases": [],
+        "weight": 3,
+        "page": 25,
+        "filename": "중간 4 염증과 치유.pdf",
+        "pages": [
+          25
+        ],
+        "occurrences": [
+          {
+            "filename": "중간 4 염증과 치유.pdf",
+            "page": 25,
+            "surface": "횡격막 (hiatal hernia)",
+            "evidence_span": "횡격막 (hiatal hernia)",
+            "status": "direct_span"
+          }
+        ],
+        "links": [
+          "횡격막",
+          "식도반흔",
+          "반흔조직"
+        ],
+        "origin": "llm_grounded",
+        "evidence_status": "direct_span",
+        "canonical_status": "new",
+        "related_variants": [],
+        "related_descriptors": [],
+        "group": "손상",
+        "extraction_version": "concept_quality_v1",
+        "source_digest": "88092ef072481d69701a774689ee19fafe475674c360c473cf23b34b9526939c",
+        "extracted_at": "2026-08-16T07:35:41.261957+00:00"
+      },
+      {
+        "name": "유착",
+        "keyword": "adhesions",
+        "aliases": [
+          "조직 유착"
+        ],
+        "weight": 3,
+        "page": 24,
+        "filename": "중간 4 염증과 치유.pdf",
+        "pages": [
+          24
+        ],
+        "occurrences": [
+          {
+            "filename": "중간 4 염증과 치유.pdf",
+            "page": 24,
+            "surface": "adhesions",
+            "evidence_span": "유착(3 마165101709): 정상적으로분리되어있는두표면은흉터조직이결합시키는것",
+            "status": "direct_span"
+          }
+        ],
+        "links": [
+          "치유 합병증",
+          "흉터조직",
+          "소화기계"
+        ],
+        "origin": "llm_grounded",
+        "evidence_status": "direct_span",
+        "canonical_status": "new",
+        "related_variants": [],
+        "related_descriptors": [],
+        "group": "치유",
+        "extraction_version": "concept_quality_v1",
+        "source_digest": "88092ef072481d69701a774689ee19fafe475674c360c473cf23b34b9526939c",
+        "extracted_at": "2026-08-16T07:35:41.261957+00:00"
+      },
+      {
+        "name": "장액성 삼출물",
+        "keyword": "장액성",
+        "aliases": [
+          "serous"
+        ],
+        "weight": 3,
+        "page": 10,
+        "filename": "중간 4 염증과 치유.pdf",
+        "pages": [
+          10
+        ],
+        "occurrences": [
+          {
+            "filename": "중간 4 염증과 치유.pdf",
+            "page": 10,
+            "surface": "장액성",
+            "evidence_span": "삼출물): 장액성(66「045)",
+            "status": "direct_span"
+          }
+        ],
+        "links": [
+          "염증 삼출물"
+        ],
+        "origin": "llm_grounded",
+        "evidence_status": "direct_span",
+        "canonical_status": "new",
+        "related_variants": [
+          "Serous exudate"
+        ],
+        "related_descriptors": [],
+        "alias_relations_reclassified": [
+          "Serous exudate"
+        ],
+        "group": "치유",
+        "extraction_version": "concept_quality_v1",
+        "source_digest": "88092ef072481d69701a774689ee19fafe475674c360c473cf23b34b9526939c",
+        "extracted_at": "2026-08-16T07:35:41.261957+00:00"
+      },
+      {
+        "name": "치유지연요인",
+        "keyword": "치유지연요인",
+        "aliases": [
+          "Factors delaying healing"
+        ],
+        "weight": 3,
+        "page": 22,
+        "filename": "중간 4 염증과 치유.pdf",
+        "pages": [
+          22
+        ],
+        "occurrences": [
+          {
+            "filename": "중간 4 염증과 치유.pdf",
+            "page": 22,
+            "surface": "치유지연요인",
+            "evidence_span": "치유지연요인",
+            "status": "direct_span"
+          }
+        ],
+        "links": [
+          "영양결핍",
+          "혈액순환부전",
+          "감염",
+          "기저질환",
+          "스테로이드"
+        ],
+        "origin": "llm_grounded",
+        "evidence_status": "direct_span",
+        "canonical_status": "new",
+        "related_variants": [],
+        "related_descriptors": [],
+        "group": "치유",
+        "extraction_version": "concept_quality_v1",
+        "source_digest": "88092ef072481d69701a774689ee19fafe475674c360c473cf23b34b9526939c",
+        "extracted_at": "2026-08-16T07:35:41.261957+00:00"
+      },
+      {
+        "name": "치유촉진요인",
+        "keyword": "치유촉진요인",
+        "aliases": [
+          "Factors promoting healing"
+        ],
+        "weight": 3,
+        "page": 22,
+        "filename": "중간 4 염증과 치유.pdf",
+        "pages": [
+          22
+        ],
+        "occurrences": [
+          {
+            "filename": "중간 4 염증과 치유.pdf",
+            "page": 22,
+            "surface": "치유촉진요인",
+            "evidence_span": "치유촉진요인",
+            "status": "direct_span"
+          }
+        ],
+        "links": [
+          "영양",
+          "혈액순환",
+          "젊은 연령"
+        ],
+        "origin": "llm_grounded",
+        "evidence_status": "direct_span",
+        "canonical_status": "new",
+        "related_variants": [],
+        "related_descriptors": [],
+        "group": "치유",
+        "extraction_version": "concept_quality_v1",
+        "source_digest": "88092ef072481d69701a774689ee19fafe475674c360c473cf23b34b9526939c",
+        "extracted_at": "2026-08-16T07:35:41.261957+00:00"
+      },
+      {
+        "name": "켈로이드",
+        "keyword": "keloid",
+        "aliases": [],
+        "weight": 3,
+        "page": 24,
+        "filename": "중간 4 염증과 치유.pdf",
+        "pages": [
+          24
+        ],
+        "occurrences": [
+          {
+            "filename": "중간 4 염증과 치유.pdf",
+            "page": 24,
+            "surface": "keloid",
+            "evidence_span": "켈로이드(<61010)를형성",
+            "status": "direct_span"
+          }
+        ],
+        "links": [
+          "비대형 반흔",
+          "콜라겐 과다침착",
+          "흉터"
+        ],
+        "origin": "llm_grounded",
+        "evidence_status": "direct_span",
+        "canonical_status": "new",
+        "related_variants": [
+          "켈로이드 반흔"
+        ],
+        "related_descriptors": [],
+        "alias_relations_reclassified": [
+          "켈로이드 반흔"
+        ],
+        "group": "치유",
+        "extraction_version": "concept_quality_v1",
+        "source_digest": "88092ef072481d69701a774689ee19fafe475674c360c473cf23b34b9526939c",
+        "extracted_at": "2026-08-16T07:35:41.261957+00:00"
+      },
+      {
+        "name": "화농성 삼출물",
+        "keyword": "화농성",
+        "aliases": [
+          "purulent"
+        ],
+        "weight": 3,
+        "page": 31,
+        "filename": "중간 4 염증과 치유.pdf",
+        "pages": [
+          31
+        ],
+        "occurrences": [
+          {
+            "filename": "중간 4 염증과 치유.pdf",
+            "page": 31,
+            "surface": "화농성 삼출물",
+            "evidence_span": "화농성 삼출물",
+            "status": "direct_span",
+            "grounding_rule": "canonical_name_in_same_file",
+            "source_surface": "화농성"
+          }
+        ],
+        "links": [
+          "염증 삼출물"
+        ],
+        "origin": "llm_grounded",
+        "evidence_status": "direct_span",
+        "canonical_status": "new",
+        "related_variants": [
+          "Purulent exudate"
+        ],
+        "related_descriptors": [],
+        "alias_relations_reclassified": [
+          "Purulent exudate"
+        ],
+        "group": "염증",
+        "extraction_version": "concept_quality_v1",
+        "source_digest": "88092ef072481d69701a774689ee19fafe475674c360c473cf23b34b9526939c",
+        "extracted_at": "2026-08-16T07:35:41.261957+00:00"
+      }
+    ]
+  },
+  "committed": false,
+  "graph": null
+}

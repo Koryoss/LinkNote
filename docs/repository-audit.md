@@ -38,6 +38,7 @@ Current role:
 - These are development prompts for concept extraction and concept graph work.
 - They are not runtime-loaded files according to the current reference audit.
 - They document implementation history and expected behavior for `/reindex-concepts`, `/concepts`, `/reindex-graph`, and `/concept-graph`.
+- `docs/concept-extraction-quality.md` is the current source of truth for extraction behavior, quality gates, and the improvement roadmap.
 
 Recommended future structure:
 
@@ -138,4 +139,3 @@ This audit originally marked Recall Trace as future work. The current backend an
 - `GET /me/summary` counts successful explanation feedback records for My Page.
 
 The implementation remains local-first and JSON-backed. Future work may still add a full Recall History page or production storage, but the endpoint/UI presence above should be treated as implemented in the current codebase.
-

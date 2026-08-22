@@ -10,7 +10,9 @@ from search_engine import (
     normalized_keyword_score,
     preference_score,
     resolve_scope,
+    score_reason,
     semantic_score,
+    source_relevance_label,
     tokenize,
     weighted_score,
 )
@@ -61,7 +63,24 @@ class SearchEngineTests(unittest.TestCase):
         self.assertGreater(relevant, personalized)
 
     def test_algorithm_version_is_explicit(self):
-        self.assertEqual(SEARCH_ALGORITHM_VERSION, "hybrid_personalized_v1")
+        self.assertEqual(SEARCH_ALGORITHM_VERSION, "hybrid_personalized_v4")
+
+    def test_source_relevance_requires_direct_or_strong_semantic_evidence(self):
+        self.assertEqual(source_relevance_label({"semantic": 0.55, "keyword": 0.0, "concept": 0.0}), "")
+        self.assertEqual(source_relevance_label({"semantic": 0.0, "keyword": 0.7, "concept": 0.0}), "직접 일치")
+        self.assertEqual(source_relevance_label({"semantic": 0.75, "keyword": 0.0, "concept": 0.0}), "관련성 높음")
+
+    def test_source_reason_prioritizes_direct_evidence_over_personalization(self):
+        reason = score_reason({
+            "semantic": 0.0,
+            "keyword": 0.8,
+            "concept": 0.0,
+            "learning": 0.4,
+            "preference": 1.0,
+        }, ["본문"])
+        self.assertTrue(reason.startswith("질문 키워드가 포함되어 있습니다"))
+        self.assertIn("일치 영역: 본문", reason)
+        self.assertNotIn("자주 학습한 범위", reason)
 
 
 if __name__ == "__main__":

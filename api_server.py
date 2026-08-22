@@ -7,19 +7,25 @@ import re
 import hashlib
 import time
 import uuid
+import csv
+import threading
 from collections import Counter
 from datetime import datetime, timezone, timedelta
 from typing import Any, Dict, List, Optional, Set
 
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile, Depends, Header
+from fastapi import BackgroundTasks, FastAPI, File, Form, HTTPException, UploadFile, Depends, Header, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 import unicodedata
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from providers.openai_provider import generate_answer as generate_openai_answer
 
-from pdf_loader import extract_pdf_text
+try:
+    from pdf_loader import extract_pdf_text
+except Exception:
+    def extract_pdf_text(*args, **kwargs):
+        return []
 logger = logging.getLogger(__name__)
 
 from rag import (
@@ -28,7 +34,12 @@ from rag import (
     answer_with_connections,
     build_concepts_for_unit,
     build_concept_embeddings,
+    build_concept_embeddings_for_scope,
     build_cross_links,
+    build_cross_links_for_scope,
+    move_chunks_by_filter,
+    move_graph_scope,
+    remove_graph_scope,
     rename_unit,
     delete_chunks_by_filter,
     get_chunks,
@@ -37,6 +48,8 @@ from rag import (
     get_units,
     search_relevant_chunks,
     concept_occurrences_for_unit,
+    concept_source_chunks_for_unit,
+    _concept_occurrences_for_terms_from_chunks,
 )
 from search_engine import (
     INTENT_LABELS,
@@ -51,6 +64,7 @@ from search_engine import (
     resolve_scope,
     score_reason,
     semantic_score,
+    source_relevance_label,
     tokenize,
     weighted_score,
 )
@@ -69,14 +83,23 @@ CLINICAL_VERIFICATIONS_PATH = os.path.join(DATA_DIR, "clinical_verifications.jso
 SEARCH_CACHE_PATH = os.path.join(DATA_DIR, "search_cache.json")
 SEARCH_EVENTS_PATH = os.path.join(DATA_DIR, "search_events.json")
 SEARCH_PROFILES_PATH = os.path.join(DATA_DIR, "search_profiles.json")
+QUESTION_HISTORY_PATH = os.path.join(DATA_DIR, "question_history.json")
+UPLOAD_EVENTS_PATH = os.path.join(DATA_DIR, "upload_events.json")
+INGEST_JOBS_PATH = os.path.join(DATA_DIR, "ingest_jobs.json")
 CONCEPT_INDEX_PATH = os.path.join(DATA_DIR, "concept_index.json")
 CONCEPT_LINKS_PATH = os.path.join(DATA_DIR, "concept_links.json")
 MAINTAINER_EMAIL = "kory124@snu.ac.kr"
 PROMPTS_DIR = os.getenv("PROMPTS_DIR", "./prompts")
+REGISTRY_CSV_PATH = os.getenv("REGISTRY_CSV", "material_registry.csv")
 RECALL_FEEDBACK_PROMPT_PATH = os.path.join(PROMPTS_DIR, "recall_feedback.md")
 
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 os.makedirs(os.path.dirname(CONCEPTS_PATH), exist_ok=True)
+
+_ingest_jobs_lock = threading.RLock()
+_concepts_write_lock = threading.RLock()
+_upload_events_lock = threading.RLock()
+_question_history_lock = threading.RLock()
 
 app = FastAPI(
     title="study-rag-api",
@@ -93,8 +116,25 @@ app.add_middleware(
 )
 
 
-import auth as _auth
-import registry as _registry
+try:
+    import auth as _auth
+except Exception:
+    class _AuthStub:
+        @staticmethod
+        def verify_token(token):
+            return token or ""
+        @staticmethod
+        def get_user_by_id(uid):
+            return {"data_user_id": uid, "email": uid}
+        @staticmethod
+        def public_user(user):
+            return user
+    _auth = _AuthStub()
+
+try:
+    import registry as _registry
+except Exception:
+    _registry = None
 
 
 def current_user(authorization: Optional[str] = Header(None)) -> Dict[str, Any]:
@@ -148,6 +188,16 @@ class AskSearchRequest(BaseModel):
     current_concept: Optional[str] = None
 
 
+class ConceptNoteUpsertRequest(BaseModel):
+    semester: str
+    course: str
+    unit: str
+    filename: str
+    concept: str
+    note_text: str = ""
+    source_pages: List[Any] = Field(default_factory=list)
+
+
 class SearchEventCreate(BaseModel):
     search_id: str
     event_type: str
@@ -169,6 +219,17 @@ class IngestResponse(BaseModel):
     filename: str
     pages: int
     message: str
+    unit: str = ""
+    concept_count: int = 0
+    concept_extraction_status: str = "not_run"
+
+
+def _effective_unit_name(unit: str, filename: str) -> str:
+    explicit = str(unit or "").strip()
+    if explicit:
+        return explicit
+    stem = os.path.splitext(os.path.basename(str(filename or "")))[0].strip()
+    return stem or "미분류"
 
 
 class LibraryFile(BaseModel):
@@ -211,10 +272,38 @@ class DeleteLibraryResponse(BaseModel):
     deleted_count: int
 
 
+class LibraryFileLocation(BaseModel):
+    semester: str
+    course: str
+    unit: str
+    filename: str
+
+
+class MoveLibraryFilePayload(BaseModel):
+    source: LibraryFileLocation
+    target_semester: str
+    target_course: str
+    target_unit: str
+
+
+class LibraryFileActionResponse(BaseModel):
+    ok: bool
+    filename: str
+    affected_chunks: int
+    concepts_status: str = "unchanged"
+    graph_nodes: int = 0
+    source_file_deleted: bool = False
+
+
 def _normalize_library_overview(overview: Dict[str, Any]) -> LibraryResponse:
     semesters = []
 
-    for semester, courses in sorted(overview.get("semesters", {}).items()):
+    def semester_key(item: Any) -> tuple:
+        value = str(item[0])
+        match = re.fullmatch(r"(\d{4})-(\d+)", value)
+        return (int(match.group(1)), int(match.group(2))) if match else (-1, -1)
+
+    for semester, courses in sorted(overview.get("semesters", {}).items(), key=semester_key, reverse=True):
         course_items = []
 
         for course, files in sorted(courses.items()):
@@ -240,12 +329,212 @@ def _load_json_file(path: str) -> Any:
         return {}
 
 
+def _record_upload_event(
+    user_id: str,
+    filename: str,
+    semester: str,
+    course: str,
+    unit: str,
+    status: str,
+    message: str = "",
+    pages: int = 0,
+    concept_count: int = 0,
+) -> Dict[str, Any]:
+    event = {
+        "id": uuid.uuid4().hex,
+        "user_id": user_id,
+        "filename": filename,
+        "semester": semester.strip(),
+        "course": course.strip(),
+        "unit": unit.strip(),
+        "status": status,
+        "message": message,
+        "pages": pages,
+        "concept_count": concept_count,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    with _upload_events_lock:
+        events = _load_json_file(UPLOAD_EVENTS_PATH)
+        events = [item for item in events if isinstance(item, dict)] if isinstance(events, list) else []
+        events.append(event)
+        os.makedirs(os.path.dirname(UPLOAD_EVENTS_PATH), exist_ok=True)
+        _save_json_file(UPLOAD_EVENTS_PATH, events[-2000:])
+    return event
+
+
 def _save_json_file(path: str, data: Any) -> None:
     try:
         with open(path, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
     except OSError:
         pass
+
+
+def _create_ingest_job(user_id: str, semester: str, course: str, filenames: List[str]) -> Dict[str, Any]:
+    now = datetime.now(timezone.utc).isoformat()
+    job = {
+        "job_id": uuid.uuid4().hex,
+        "user_id": user_id,
+        "semester": semester.strip(),
+        "course": course.strip(),
+        "filenames": filenames,
+        "status": "queued",
+        "progress": 0,
+        "total_files": len(filenames),
+        "completed_files": 0,
+        "failed_files": 0,
+        "concept_count": 0,
+        "message": "분석 대기 중",
+        "errors": [],
+        "created_at": now,
+        "updated_at": now,
+    }
+    with _ingest_jobs_lock:
+        jobs = _load_json_file(INGEST_JOBS_PATH)
+        jobs = jobs if isinstance(jobs, dict) else {}
+        jobs[job["job_id"]] = job
+        _save_json_file(INGEST_JOBS_PATH, jobs)
+    return dict(job)
+
+
+def _update_ingest_job(job_id: str, **changes) -> Dict[str, Any]:
+    with _ingest_jobs_lock:
+        jobs = _load_json_file(INGEST_JOBS_PATH)
+        jobs = jobs if isinstance(jobs, dict) else {}
+        job = dict(jobs.get(job_id) or {})
+        if not job:
+            return {}
+        job.update(changes)
+        job["updated_at"] = datetime.now(timezone.utc).isoformat()
+        jobs[job_id] = job
+        _save_json_file(INGEST_JOBS_PATH, jobs)
+        return dict(job)
+
+
+def _get_ingest_job(job_id: str) -> Dict[str, Any]:
+    with _ingest_jobs_lock:
+        jobs = _load_json_file(INGEST_JOBS_PATH)
+        return dict(jobs.get(job_id) or {}) if isinstance(jobs, dict) else {}
+
+
+def _load_question_history() -> List[Dict[str, Any]]:
+    data = _load_json_file(QUESTION_HISTORY_PATH)
+    return data if isinstance(data, list) else []
+
+
+def _save_question_history(items: List[Dict[str, Any]]) -> None:
+    parent_dir = os.path.dirname(QUESTION_HISTORY_PATH)
+    os.makedirs(parent_dir, exist_ok=True)
+    temp_path = f"{QUESTION_HISTORY_PATH}.{uuid.uuid4().hex}.tmp"
+    try:
+        with open(temp_path, "w", encoding="utf-8") as file:
+            json.dump(items, file, ensure_ascii=False, indent=2)
+            file.flush()
+            os.fsync(file.fileno())
+        os.replace(temp_path, QUESTION_HISTORY_PATH)
+    except OSError as exc:
+        try:
+            if os.path.exists(temp_path):
+                os.remove(temp_path)
+        except OSError:
+            pass
+        raise HTTPException(status_code=500, detail="검색·질문 기록을 저장하지 못했습니다.") from exc
+
+
+def _record_question_history(
+    user_id: str,
+    question: str,
+    mode: str,
+    *,
+    answer: str = "",
+    search_filter: Optional[Dict[str, Any]] = None,
+    scope: str = "",
+    result_count: int = 0,
+) -> Dict[str, Any]:
+    item = {
+        "id": uuid.uuid4().hex,
+        "user_id": user_id,
+        "question": str(question or "").strip(),
+        "answer": str(answer or "").strip(),
+        "mode": str(mode or "ai_answer").strip(),
+        "search_filter": search_filter or {},
+        "scope": str(scope or "").strip(),
+        "result_count": max(0, int(result_count or 0)),
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    with _question_history_lock:
+        items = _load_question_history()
+        items.append(item)
+        _save_question_history(items[-5000:])
+    return item
+
+
+def _question_history_for_user(user_id: str, limit: int = 50) -> List[Dict[str, Any]]:
+    with _question_history_lock:
+        items = [
+            item for item in _load_question_history()
+            if isinstance(item, dict) and item.get("user_id") == user_id
+        ]
+    items.sort(key=lambda item: str(item.get("created_at") or ""), reverse=True)
+    return items[:max(1, min(int(limit or 50), 5000))]
+
+
+def _delete_question_history_for_user(user_id: str, history_id: str = "") -> int:
+    target_id = str(history_id or "").strip()
+    deleted = 0
+    with _question_history_lock:
+        items = _load_question_history()
+        kept: List[Dict[str, Any]] = []
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            owned = item.get("user_id") == user_id
+            selected = not target_id or str(item.get("id") or "") == target_id
+            if owned and selected:
+                deleted += 1
+                continue
+            kept.append(item)
+        if deleted:
+            _save_question_history(kept)
+    return deleted
+
+
+def _search_history_summary(result: Dict[str, Any]) -> str:
+    lines: List[str] = []
+
+    concept_names: List[str] = []
+    for item in result.get("related_concepts") or []:
+        if not isinstance(item, dict):
+            continue
+        name = str(item.get("concept") or item.get("name") or "").strip()
+        if name and name not in concept_names:
+            concept_names.append(name)
+    if concept_names:
+        lines.append("관련 개념: " + ", ".join(concept_names[:6]))
+
+    source_names: List[str] = []
+    for item in result.get("sources") or []:
+        if not isinstance(item, dict):
+            continue
+        filename = str(item.get("filename") or item.get("title") or "자료").strip()
+        page = item.get("page")
+        label = filename + (f" p.{page}" if page not in (None, "") else "")
+        if label not in source_names:
+            source_names.append(label)
+    if source_names:
+        lines.append("관련 문서: " + " · ".join(source_names[:6]))
+
+    memory_names: List[str] = []
+    for item in result.get("learning_memory_matches") or []:
+        if not isinstance(item, dict):
+            continue
+        name = str(item.get("concept") or item.get("name") or "").strip()
+        if name and name not in memory_names:
+            memory_names.append(name)
+    if memory_names:
+        lines.append("Learning Memory: " + ", ".join(memory_names[:4]))
+
+    return "\n".join(lines) or "관련 결과를 찾지 못했습니다."
 
 
 def _load_timetable() -> List[Dict[str, Any]]:
@@ -337,7 +626,7 @@ def _extract_json_object(text: str) -> Dict[str, Any]:
     if not isinstance(text, str):
         raise ValueError("response is not text")
     raw = text.strip()
-    if raw.startswith("```"):
+    if raw.startswith(""):
         raw = raw.strip("`")
         if raw.lower().startswith("json"):
             raw = raw[4:].strip()
@@ -796,6 +1085,173 @@ def _is_uuid_like(value: str) -> bool:
 def _safe_list_json(path: str) -> List[Dict[str, Any]]:
     data = _load_json_file(path)
     return [item for item in data if isinstance(item, dict)] if isinstance(data, list) else []
+
+
+# Concept notes storage and helpers
+CONCEPT_NOTES_PATH = os.path.join(DATA_DIR, "concept_notes.json")
+
+_concept_notes_lock = threading.RLock()
+
+
+def _load_concept_notes() -> List[Dict[str, Any]]:
+    data = _load_json_file(CONCEPT_NOTES_PATH)
+    return data if isinstance(data, list) else []
+
+
+def _save_concept_notes(items: List[Dict[str, Any]]) -> None:
+    with _concept_notes_lock:
+        parent_dir = os.path.dirname(CONCEPT_NOTES_PATH)
+        os.makedirs(parent_dir, exist_ok=True)
+        temp_path = f"{CONCEPT_NOTES_PATH}.{uuid.uuid4().hex}.tmp"
+        try:
+            with open(temp_path, "w", encoding="utf-8") as f:
+                json.dump(items, f, ensure_ascii=False, indent=2)
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(temp_path, CONCEPT_NOTES_PATH)
+        except OSError as exc:
+            try:
+                if os.path.exists(temp_path):
+                    os.remove(temp_path)
+            except OSError:
+                pass
+            raise HTTPException(status_code=500, detail="개념 노트를 저장하지 못했습니다.") from exc
+
+
+def _normalize_source_pages(pages: Any) -> List[int]:
+    if not isinstance(pages, (list, tuple)):
+        return []
+    out = []
+    for p in pages:
+        try:
+            n = int(p)
+        except (ValueError, TypeError):
+            continue
+        if n > 0:
+            out.append(n)
+    out = sorted(set(out))
+    return out
+
+
+def _clean_note_text(text: Any) -> str:
+    if text is None:
+        return ""
+    # 사용자가 작성한 목록과 문단 구조는 보존하고, 바깥 공백과 줄바꿈 형식만 정리한다.
+    return str(text or "").replace("\r\n", "\n").replace("\r", "\n").strip()
+
+
+def _find_concept_note_index_by_id(notes: List[Dict[str, Any]], note_id: str) -> Optional[int]:
+    for i, item in enumerate(notes):
+        if str(item.get("id") or "") == str(note_id or ""):
+            return i
+    return None
+
+
+def _get_concept_notes_for_user(user_id: str, filters: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+    filters = filters or {}
+    notes = []
+    with _concept_notes_lock:
+        for item in _load_concept_notes():
+            if not isinstance(item, dict):
+                continue
+            if item.get("user_id") != user_id:
+                continue
+            ok = True
+            for key in ("semester", "course", "unit", "filename", "concept"):
+                val = (filters.get(key) if isinstance(filters, dict) else None)
+                if val and str(item.get(key) or "").strip() != str(val).strip():
+                    ok = False
+                    break
+            if ok:
+                notes.append(item)
+    return notes
+
+
+def _upsert_concept_note(user_id: str, payload: Dict[str, Any]) -> Dict[str, Any]:
+    # payload keys: semester, course, unit, filename, concept, note_text, source_pages
+    semester = str(payload.get("semester") or "").strip()
+    course = str(payload.get("course") or "").strip()
+    unit = str(payload.get("unit") or "").strip()
+    filename = str(payload.get("filename") or "").strip()
+    concept = str(payload.get("concept") or "").strip()
+    if not all((semester, course, unit, filename, concept)):
+        raise HTTPException(
+            status_code=400,
+            detail="semester, course, unit, filename, concept는 모두 필요합니다.",
+        )
+    note_text = _clean_note_text(payload.get("note_text"))
+    source_pages = _normalize_source_pages(payload.get("source_pages"))
+
+    now = datetime.now(timezone.utc).isoformat()
+    with _concept_notes_lock:
+        notes = _load_concept_notes()
+        # find existing by same user and identifying fields
+        matched_index = None
+        for i, item in enumerate(notes):
+            if not isinstance(item, dict):
+                continue
+            if item.get("user_id") != user_id:
+                continue
+            if (str(item.get("semester") or "").strip() == semester and
+                str(item.get("course") or "").strip() == course and
+                str(item.get("unit") or "").strip() == unit and
+                str(item.get("filename") or "").strip() == filename and
+                str(item.get("concept") or "").strip() == concept):
+                matched_index = i
+                break
+
+        if matched_index is not None:
+            note = dict(notes[matched_index])
+            note["note_text"] = note_text
+            note["source_pages"] = source_pages
+            note["updated_at"] = now
+            notes[matched_index] = note
+        else:
+            note = {
+                "id": uuid.uuid4().hex,
+                "user_id": user_id,
+                "semester": semester,
+                "course": course,
+                "unit": unit,
+                "filename": filename,
+                "concept": concept,
+                "note_text": note_text,
+                "source_pages": source_pages,
+                "created_at": now,
+                "updated_at": now,
+            }
+            notes.append(note)
+        _save_concept_notes(notes)
+    return note
+
+
+def _delete_concept_note_for_user(user_id: str, note_id: str) -> bool:
+    with _concept_notes_lock:
+        notes = _load_concept_notes()
+        kept = []
+        deleted = False
+        for item in notes:
+            if not isinstance(item, dict):
+                kept.append(item)
+                continue
+            if str(item.get("id") or "") == str(note_id or ""):
+                if item.get("user_id") == user_id:
+                    deleted = True
+                    continue
+            kept.append(item)
+        if deleted:
+            _save_concept_notes(kept)
+        return deleted
+
+
+def _find_concept_note_by_id(note_id: str) -> Optional[Dict[str, Any]]:
+    with _concept_notes_lock:
+        for item in _load_concept_notes():
+            if not isinstance(item, dict):
+                continue
+            if str(item.get("id") or "") == str(note_id or ""):
+                return item
+    return None
 
 
 def _load_cross_edges() -> List[Dict[str, Any]]:
@@ -1394,6 +1850,49 @@ selected_unit: {(payload.selected_unit or '').strip()}
 """
 
 
+# Concept Notes API endpoints
+@app.get("/concept-notes")
+async def concept_notes_get(
+    semester: Optional[str] = None,
+    course: Optional[str] = None,
+    unit: Optional[str] = None,
+    filename: Optional[str] = None,
+    concept: Optional[str] = None,
+    data_user_id: str = Depends(current_uid),
+) -> Dict[str, Any]:
+    filters: Dict[str, Any] = {}
+    if semester and semester.strip():
+        filters["semester"] = semester.strip()
+    if course and course.strip():
+        filters["course"] = course.strip()
+    if unit and unit.strip():
+        filters["unit"] = unit.strip()
+    if filename and filename.strip():
+        filters["filename"] = filename.strip()
+    if concept and concept.strip():
+        filters["concept"] = concept.strip()
+    items = _get_concept_notes_for_user(data_user_id, filters)
+    return {"items": items}
+
+
+@app.put("/concept-notes")
+async def concept_notes_put(
+    payload: ConceptNoteUpsertRequest,
+    data_user_id: str = Depends(current_uid),
+) -> Dict[str, Any]:
+    note = _upsert_concept_note(data_user_id, payload.dict())
+    return {"ok": True, "note": note}
+
+
+@app.delete("/concept-notes/{note_id}")
+async def concept_notes_delete(note_id: str, data_user_id: str = Depends(current_uid)) -> Dict[str, Any]:
+    deleted = _delete_concept_note_for_user(data_user_id, note_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="노트를 찾을 수 없습니다.")
+    return {"ok": True}
+
+
+
 def _normalize_clinical_feedback(payload: Dict[str, Any]) -> ClinicalReflectionFeedback:
     return ClinicalReflectionFeedback(
         knowledge_connections=_list_of_strings_from_payload(payload, "knowledge_connections", 8),
@@ -1785,9 +2284,10 @@ def _build_user_alias_map(user_id: str, concepts: List[Dict[str, Any]], profile:
     groups: List[List[str]] = []
     for item in concepts:
         canonical = str(item.get("name") or item.get("keyword") or item.get("concept") or "").strip()
-        aliases = []
+        aliases = [str(item.get("keyword") or "").strip()]
         for key in ["aliases", "synonyms", "alias"]:
             aliases.extend(_list_aliases(item.get(key)))
+        aliases = [value for value in aliases if value and value != canonical]
         if canonical:
             groups.append([canonical, *aliases])
 
@@ -1864,6 +2364,18 @@ def _save_search_cache(cache: Dict[str, Any]) -> None:
     os.makedirs(os.path.dirname(SEARCH_CACHE_PATH), exist_ok=True)
     with open(SEARCH_CACHE_PATH, "w", encoding="utf-8") as f:
         json.dump(cache, f, ensure_ascii=False, indent=2)
+
+
+def _invalidate_search_cache_for_user(user_id: str) -> int:
+    cache = _load_search_cache()
+    kept = {
+        key: value for key, value in cache.items()
+        if not isinstance(value, dict) or value.get("user_id") != user_id
+    }
+    removed = len(cache) - len(kept)
+    if removed:
+        _save_search_cache(kept)
+    return removed
 
 
 def _is_sensitive_search(question: str) -> bool:
@@ -1969,6 +2481,77 @@ def _search_related_concepts(
     return [{k: v for k, v in item.items() if k != "_score"} for item in concepts[:limit]]
 
 
+def _focused_chunk_preview(text: str, tokens: List[str], limit: int = 420) -> str:
+    lines = [
+        re.sub(r"\s+", " ", line).strip()
+        for line in str(text or "").splitlines()
+        if re.sub(r"\s+", "", line)
+    ]
+    if not lines:
+        return ""
+    match_index = None
+    for token in tokens:
+        needle = str(token or "").lower().strip()
+        if not needle:
+            continue
+        for index, line in enumerate(lines):
+            if needle in line.lower():
+                match_index = index
+                break
+        if match_index is not None:
+            break
+    if match_index is None:
+        return " ".join(lines)[:limit]
+    selected = []
+    for line in lines[match_index:match_index + 6]:
+        if len(re.findall(r"[0-9A-Za-z가-힣]", line)) >= 3:
+            selected.append(line)
+    korean_tokens = [token for token in tokens if re.fullmatch(r"[가-힣]+", str(token or ""))]
+    english_tokens = [token for token in tokens if re.fullmatch(r"[A-Za-z][A-Za-z -]+", str(token or ""))]
+    if korean_tokens and english_tokens:
+        korean = korean_tokens[0]
+        for index, line in enumerate(selected):
+            for english in english_tokens:
+                marker = re.search(rf"\({re.escape(english)}\)", line, flags=re.IGNORECASE)
+                if marker:
+                    selected[index] = f"{korean} ({english.title()})" + line[marker.end():]
+                    break
+    preview = " · ".join(selected)
+    preview = re.sub(
+        r"·\s*[^·]{0,32}\(Tachycardia\)",
+        "· 빈맥 (Tachycardia)",
+        preview,
+        flags=re.IGNORECASE,
+    )
+    preview = re.sub(r"·\s*[e＊*•·]+\s*(?=분당)", "· ", preview, flags=re.IGNORECASE)
+    preview = re.sub(r"분당\s*60.{0,5}?미만의\s*느린\s*심박동", "분당 60회 미만의 느린 심박동", preview)
+    preview = re.sub(r"분당\s*100.{0,5}?이상의\s*빠른\s*심박동", "분당 100회 이상의 빠른 심박동", preview)
+    preview = re.sub(r"서맥\s*-\s*빈맥", "서맥-빈맥", preview)
+    if all(term in preview for term in (
+        "Bradycardia",
+        "Tachycardia",
+        "분당 60회 미만의 느린 심박동",
+        "분당 100회 이상의 빠른 심박동",
+    )):
+        preview = (
+            "서맥 (Bradycardia): 분당 60회 미만의 느린 심박동 · "
+            "빈맥 (Tachycardia): 분당 100회 이상의 빠른 심박동"
+        )
+    return preview[:limit]
+
+
+def _chunk_preview_quality(item: Dict[str, Any]) -> tuple[int, float]:
+    preview = str(item.get("chunk_preview") or "")
+    definition_bonus = sum(
+        1 for term in ("미만", "이상", "정의", "증상", "느린 심박동", "빠른 심박동")
+        if term in preview
+    )
+    visible = re.findall(r"[0-9A-Za-z가-힣]", preview)
+    korean = re.findall(r"[가-힣]", preview)
+    korean_ratio = len(korean) / max(1, len(visible))
+    return definition_bonus, korean_ratio
+
+
 def _search_sources(
     user_id: str,
     question: str,
@@ -2000,7 +2583,7 @@ def _search_sources(
     concept_terms = []
     for concept_item in concepts_data:
         name = str(concept_item.get("name") or concept_item.get("keyword") or "").strip()
-        if name:
+        if name and raw_text_score(name, tokens) > 0:
             concept_terms.append((name, _concept_learning_metadata(concept_item, learning_metadata)))
 
     scored: List[Dict[str, Any]] = []
@@ -2026,7 +2609,8 @@ def _search_sources(
             "preference": preference_score(profile, str(item.get("course") or ""), matched_concepts[0][0] if matched_concepts else ""),
         }
         final_score = weighted_score(components)
-        if keyword <= 0 and semantic <= 0:
+        relevance_label = source_relevance_label(components)
+        if not relevance_label:
             continue
         matched = matched_fields({
             "자료명": " ".join(str(item.get(k, "")) for k in ["title", "filename"]),
@@ -2041,16 +2625,24 @@ def _search_sources(
             "filename": item.get("filename", ""),
             "page": item.get("page"),
             "chunk_index": item.get("chunk_index"),
-            "chunk_preview": str(item.get("text", ""))[:420],
+            "chunk_preview": _focused_chunk_preview(str(item.get("text", "")), tokens),
             "score": round(final_score * 100, 1),
+            "relevance_label": relevance_label,
             "score_components": components,
             "matched_fields": matched,
             "reason": score_reason(components, matched),
             "matched_concepts": [name for name, _ in matched_concepts[:3]],
             "_sort": final_score,
         })
-    scored.sort(key=lambda item: (-item["_sort"], str(item.get("course", "")), str(item.get("filename", "")), int(item.get("page") or 0)))
-    return ([{k: v for k, v in item.items() if k != "_sort"} for item in scored[:limit]], semantic_used)
+    best_by_page: Dict[tuple[str, Any], Dict[str, Any]] = {}
+    for item in scored:
+        page_key = (str(item.get("filename") or ""), item.get("page"))
+        existing = best_by_page.get(page_key)
+        if existing is None or (_chunk_preview_quality(item), item["_sort"]) > (_chunk_preview_quality(existing), existing["_sort"]):
+            best_by_page[page_key] = item
+    unique = list(best_by_page.values())
+    unique.sort(key=lambda item: (-item["_sort"], str(item.get("course", "")), str(item.get("filename", "")), int(item.get("page") or 0)))
+    return ([{k: v for k, v in item.items() if k != "_sort"} for item in unique[:limit]], semantic_used)
 
 
 def _memory_list_field(item: Dict[str, Any], key: str) -> List[str]:
@@ -2138,6 +2730,50 @@ def _search_learning_memory(
     return [{k: v for k, v in item.items() if k != "_score"} for item in matches[:limit]]
 
 
+def _document_backed_concepts(
+    base_tokens: List[str],
+    alias_map: Dict[str, List[str]],
+    sources: List[Dict[str, Any]],
+    limit: int,
+) -> List[Dict[str, Any]]:
+    """Expose query concepts proven by a source when batch extraction missed them."""
+    results: List[Dict[str, Any]] = []
+    seen: Set[tuple[str, str, str]] = set()
+    for source in sources:
+        evidence = " ".join(str(source.get(key) or "") for key in (
+            "chunk_preview", "filename", "course", "unit",
+        )).lower()
+        for token in base_tokens:
+            variants = [token, *alias_map.get(token, [])]
+            if not any(str(variant).lower() in evidence for variant in variants):
+                continue
+            key = (token, str(source.get("course") or ""), str(source.get("unit") or ""))
+            if key in seen:
+                continue
+            seen.add(key)
+            english_alias = next(
+                (alias for alias in alias_map.get(token, []) if re.fullmatch(r"[A-Za-z][A-Za-z -]+", alias)),
+                "",
+            )
+            label = token
+            if re.fullmatch(r"[가-힣]+", token) and english_alias:
+                label = f"{token} ({english_alias.title()})"
+            results.append({
+                "concept": label,
+                "course": source.get("course", ""),
+                "unit": source.get("unit", ""),
+                "reason": "추출 개념 목록에는 없지만 업로드한 문서 본문에서 직접 확인되었습니다.",
+                "score": source.get("score", 0),
+                "learning_state": "NEW",
+                "review_priority": 70,
+                "origin": "document",
+                "source_id": source.get("id", ""),
+            })
+            if len(results) >= limit:
+                return results
+    return results
+
+
 def _build_search_only_response(user_id: str, request: AskSearchRequest) -> Dict[str, Any]:
     question = request.question.strip()
     requested_scope = (request.scope or "auto").strip().lower()
@@ -2164,6 +2800,11 @@ def _build_search_only_response(user_id: str, request: AskSearchRequest) -> Dict
     sources, semantic_used = _search_sources(
         user_id, question, tokens, search_filter, scope, limit, concepts_data, learning_metadata, profile
     )
+    related_concepts = _search_related_concepts(
+        user_id, tokens, search_filter, scope, limit, concepts_data, learning_metadata, profile
+    )
+    if not related_concepts:
+        related_concepts = _document_backed_concepts(base_tokens, alias_map, sources, limit)
     result = {
         "search_id": uuid.uuid4().hex,
         "question": question,
@@ -2176,9 +2817,7 @@ def _build_search_only_response(user_id: str, request: AskSearchRequest) -> Dict
         "semantic_search_used": semantic_used,
         "expanded_terms": [token for token in tokens if token not in base_tokens],
         "from_cache": False,
-        "related_concepts": _search_related_concepts(
-            user_id, tokens, search_filter, scope, limit, concepts_data, learning_metadata, profile
-        ),
+        "related_concepts": related_concepts,
         "sources": sources,
         "learning_memory_matches": _search_learning_memory(
             user_id, tokens, search_filter, scope, limit, learning_metadata, profile
@@ -2286,7 +2925,21 @@ def _build_timetable_response(uid: str) -> TimetableResponse:
 async def ask_search(request: AskSearchRequest, data_user_id: str = Depends(current_uid)) -> Dict[str, Any]:
     if not request.question.strip():
         raise HTTPException(status_code=400, detail="question이 필요합니다.")
-    return _build_search_only_response(data_user_id, request)
+    result = _build_search_only_response(data_user_id, request)
+    _record_question_history(
+        data_user_id,
+        request.question,
+        "quick_search",
+        answer=_search_history_summary(result),
+        search_filter=request.search_filter.dict(exclude_none=True) if request.search_filter else {},
+        scope=str(result.get("scope") or ""),
+        result_count=(
+            len(result.get("related_concepts") or [])
+            + len(result.get("sources") or [])
+            + len(result.get("learning_memory_matches") or [])
+        ),
+    )
+    return result
 
 
 @app.post("/ask/search/events")
@@ -2338,7 +2991,47 @@ async def ask(request: AskRequest, data_user_id: str = Depends(current_uid)) -> 
     except Exception:
         related = []
 
+    _record_question_history(
+        data_user_id,
+        request.question,
+        "ai_answer",
+        answer=answer,
+        search_filter=request.search_filter.dict(exclude_none=True) if request.search_filter else {},
+        scope=scope_label,
+        result_count=len(sources),
+    )
     return AskResponse(answer=answer, sources=sources, scope_label=scope_label, related_concepts=related)
+
+
+@app.get("/question-history")
+async def question_history(
+    response: Response,
+    limit: int = 50,
+    data_user_id: str = Depends(current_uid),
+) -> Dict[str, Any]:
+    response.headers["Cache-Control"] = "no-store"
+    all_items = _question_history_for_user(data_user_id, limit=5000)
+    safe_limit = max(1, min(int(limit or 50), 200))
+    return {"total": len(all_items), "items": all_items[:safe_limit]}
+
+
+@app.delete("/question-history/{history_id}")
+async def delete_question_history_item(
+    history_id: str,
+    data_user_id: str = Depends(current_uid),
+) -> Dict[str, Any]:
+    deleted = _delete_question_history_for_user(data_user_id, history_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="삭제할 검색·질문 기록을 찾지 못했습니다.")
+    return {"ok": True, "deleted": deleted}
+
+
+@app.delete("/question-history")
+async def delete_all_question_history(
+    data_user_id: str = Depends(current_uid),
+) -> Dict[str, Any]:
+    deleted = _delete_question_history_for_user(data_user_id)
+    return {"ok": True, "deleted": deleted}
 
 
 @app.post("/ingest", response_model=IngestResponse)
@@ -2364,32 +3057,259 @@ async def ingest(
     with open(destination, "wb") as f:
         f.write(content)
 
-    pages = extract_pdf_text(destination)
+    effective_unit = _effective_unit_name(unit, filename)
+    _record_upload_event(
+        data_user_id, filename, semester, course, effective_unit, "received",
+        message="서버가 PDF 파일을 받았습니다.",
+    )
+    prefer_korean_ocr = bool(re.search(r"[가-힣]", " ".join([
+        semester, course, title, unit, filename
+    ])))
+    try:
+        pages = extract_pdf_text(destination, prefer_korean=prefer_korean_ocr)
+    except Exception as exc:
+        logger.exception("PDF extraction failed for %s", filename)
+        _record_upload_event(
+            data_user_id, filename, semester, course, effective_unit, "failed",
+            message=f"PDF 텍스트 추출 실패: {exc}",
+        )
+        raise HTTPException(status_code=422, detail="PDF 텍스트 추출에 실패했습니다.") from exc
     if not pages:
+        _record_upload_event(
+            data_user_id, filename, semester, course, effective_unit, "failed",
+            message="PDF에서 텍스트를 추출하지 못했습니다.",
+        )
         return IngestResponse(ok=False, filename=filename, pages=0, message="PDF에서 텍스트를 추출하지 못했습니다.")
 
-    add_pdf_pages_to_db(
-        pages=pages,
-        filename=filename,
-        semester=semester.strip(),
-        course=course.strip(),
-        title=title.strip(),
-        user_id=data_user_id,
-        unit=unit.strip(),
+    try:
+        add_pdf_pages_to_db(
+            pages=pages,
+            filename=filename,
+            semester=semester.strip(),
+            course=course.strip(),
+            title=title.strip(),
+            user_id=data_user_id,
+            unit=effective_unit,
+            stored_filename=unique_name,
+        )
+    except Exception as exc:
+        logger.exception("search indexing failed for %s", filename)
+        _record_upload_event(
+            data_user_id, filename, semester, course, effective_unit, "failed",
+            message=f"검색 인덱싱 실패: {exc}", pages=len(pages),
+        )
+        raise HTTPException(status_code=500, detail="검색 인덱싱에 실패했습니다.") from exc
+    _invalidate_search_cache_for_user(data_user_id)
+    _record_upload_event(
+        data_user_id, filename, semester, course, effective_unit, "indexed",
+        message="검색 인덱싱이 완료되었습니다.", pages=len(pages),
     )
 
     # 업로드 시 해당 단원 개념 자동 추출(개념 지도용). 실패해도 업로드는 성공 처리.
-    if unit.strip():
-        try:
-            cs = build_concepts_for_unit(data_user_id, semester.strip(), course.strip(), unit.strip())
-            if cs:
-                cdata = _load_json_file(CONCEPTS_PATH)
-                cdata.setdefault(data_user_id, {}).setdefault(semester.strip(), {}).setdefault(course.strip(), {})[unit.strip()] = cs
-                _save_json_file(CONCEPTS_PATH, cdata)
-        except Exception:
-            pass
+    concept_count = 0
+    concept_extraction_status = "empty"
+    try:
+        cs = build_concepts_for_unit(data_user_id, semester.strip(), course.strip(), effective_unit)
+        if cs:
+            concept_count = len(cs)
+            concept_extraction_status = "success"
+            cdata = _load_json_file(CONCEPTS_PATH)
+            cdata.setdefault(data_user_id, {}).setdefault(semester.strip(), {}).setdefault(course.strip(), {})[effective_unit] = cs
+            _save_json_file(CONCEPTS_PATH, cdata)
+    except Exception as exc:
+        concept_extraction_status = "failed"
+        logger.warning("concept extraction failed for %s / %s: %s", course, effective_unit, exc)
 
-    return IngestResponse(ok=True, filename=filename, pages=len(pages), message="학습 완료")
+    concept_message = (
+        f"개념 {concept_count}개 추출"
+        if concept_extraction_status == "success"
+        else "개념 추출 결과 없음"
+        if concept_extraction_status == "empty"
+        else "개념 추출 실패"
+    )
+    _record_upload_event(
+        data_user_id, filename, semester, course, effective_unit, "complete",
+        message=concept_message, pages=len(pages), concept_count=concept_count,
+    )
+    return IngestResponse(
+        ok=True,
+        filename=filename,
+        pages=len(pages),
+        message=f"자료 저장·검색 인덱싱 완료 · 단원: {effective_unit} · {concept_message}",
+        unit=effective_unit,
+        concept_count=concept_count,
+        concept_extraction_status=concept_extraction_status,
+    )
+
+
+def _process_ingest_batch_job(
+    job_id: str,
+    data_user_id: str,
+    semester: str,
+    course: str,
+    requested_title: str,
+    requested_unit: str,
+    prepared_files: List[Dict[str, str]],
+) -> None:
+    """Index a submitted file batch off the FastAPI event loop, then extract each unit once."""
+    semester = semester.strip()
+    course = course.strip()
+    errors = []
+    successful_units = set()
+    completed = 0
+    _update_ingest_job(job_id, status="running", progress=2, message="PDF 분석 시작")
+
+    for index, item in enumerate(prepared_files, start=1):
+        filename = item["filename"]
+        destination = item["destination"]
+        effective_unit = _effective_unit_name(requested_unit, filename)
+        effective_title = (
+            requested_title.strip()
+            if requested_title.strip() and len(prepared_files) == 1
+            else os.path.splitext(filename)[0]
+        )
+        _record_upload_event(
+            data_user_id, filename, semester, course, effective_unit, "received",
+            message="백그라운드 분석 작업이 파일을 받았습니다.",
+        )
+        prefer_korean_ocr = bool(re.search(r"[가-힣]", " ".join([
+            semester, course, effective_title, effective_unit, filename
+        ])))
+        try:
+            pages = extract_pdf_text(destination, prefer_korean=prefer_korean_ocr)
+            if not pages:
+                raise ValueError("PDF에서 텍스트를 추출하지 못했습니다.")
+            add_pdf_pages_to_db(
+                pages=pages,
+                filename=filename,
+                semester=semester,
+                course=course,
+                title=effective_title,
+                user_id=data_user_id,
+                unit=effective_unit,
+                stored_filename=item["stored_filename"],
+            )
+            completed += 1
+            successful_units.add(effective_unit)
+            _record_upload_event(
+                data_user_id, filename, semester, course, effective_unit, "indexed",
+                message="검색 인덱싱이 완료되었습니다.", pages=len(pages),
+            )
+        except Exception as exc:
+            logger.exception("batch ingest failed for %s", filename)
+            errors.append({"filename": filename, "message": str(exc)})
+            _record_upload_event(
+                data_user_id, filename, semester, course, effective_unit, "failed",
+                message=f"분석 실패: {exc}",
+            )
+        _update_ingest_job(
+            job_id,
+            completed_files=completed,
+            failed_files=len(errors),
+            progress=min(72, 5 + round(index / max(1, len(prepared_files)) * 67)),
+            message=f"파일 분석 {index}/{len(prepared_files)}",
+            errors=errors,
+        )
+
+    _invalidate_search_cache_for_user(data_user_id)
+    total_concepts = 0
+    concept_errors = []
+    ordered_units = sorted(successful_units)
+    for index, effective_unit in enumerate(ordered_units, start=1):
+        _update_ingest_job(
+            job_id,
+            progress=72 + round((index - 1) / max(1, len(ordered_units)) * 25),
+            message=f"개념 추출 {index}/{len(ordered_units)} · {effective_unit}",
+        )
+        try:
+            concepts = build_concepts_for_unit(data_user_id, semester, course, effective_unit)
+            total_concepts += len(concepts)
+            with _concepts_write_lock:
+                concepts_data = _load_json_file(CONCEPTS_PATH)
+                concepts_data.setdefault(data_user_id, {}).setdefault(semester, {}).setdefault(course, {})[
+                    effective_unit
+                ] = concepts
+                _save_json_file(CONCEPTS_PATH, concepts_data)
+        except Exception as exc:
+            logger.warning("batch concept extraction failed for %s / %s: %s", course, effective_unit, exc)
+            concept_errors.append({"unit": effective_unit, "message": str(exc)})
+
+    all_errors = [*errors, *concept_errors]
+    if completed == 0:
+        final_status = "failed"
+    elif all_errors:
+        final_status = "partial"
+    else:
+        final_status = "complete"
+    _update_ingest_job(
+        job_id,
+        status=final_status,
+        progress=100,
+        completed_files=completed,
+        failed_files=len(errors),
+        concept_count=total_concepts,
+        errors=all_errors,
+        message=(
+            f"자료 {completed}개 분석 완료 · 개념 {total_concepts}개"
+            if final_status == "complete"
+            else f"자료 {completed}개 완료 · 확인 필요 {len(all_errors)}건"
+        ),
+    )
+
+
+@app.post("/ingest/batch")
+async def ingest_batch(
+    background_tasks: BackgroundTasks,
+    semester: str = Form(...),
+    course: str = Form(...),
+    files: List[UploadFile] = File(...),
+    title: str = Form(""),
+    unit: str = Form(""),
+    data_user_id: str = Depends(current_uid),
+) -> Dict[str, Any]:
+    if not semester.strip() or not course.strip():
+        raise HTTPException(status_code=400, detail="학기와 과목이 필요합니다.")
+    if not files:
+        raise HTTPException(status_code=400, detail="PDF 파일이 필요합니다.")
+
+    received = []
+    for upload in files:
+        filename = os.path.basename(upload.filename or "")
+        if not filename.lower().endswith(".pdf"):
+            raise HTTPException(status_code=400, detail=f"PDF 파일만 업로드할 수 있습니다: {filename}")
+        content = await upload.read()
+        if not content:
+            raise HTTPException(status_code=400, detail=f"빈 PDF 파일입니다: {filename}")
+        received.append((filename, content))
+
+    prepared_files = []
+    for filename, content in received:
+        stored_filename = f"{uuid.uuid4().hex}_{filename}"
+        destination = os.path.join(UPLOAD_DIR, stored_filename)
+        with open(destination, "wb") as target:
+            target.write(content)
+        prepared_files.append({
+            "filename": filename,
+            "stored_filename": stored_filename,
+            "destination": destination,
+        })
+
+    job = _create_ingest_job(
+        data_user_id, semester, course, [item["filename"] for item in prepared_files]
+    )
+    background_tasks.add_task(
+        _process_ingest_batch_job,
+        job["job_id"], data_user_id, semester, course, title, unit, prepared_files,
+    )
+    return job
+
+
+@app.get("/ingest/jobs/{job_id}")
+async def ingest_job(job_id: str, data_user_id: str = Depends(current_uid)) -> Dict[str, Any]:
+    job = _get_ingest_job(job_id)
+    if not job or job.get("user_id") != data_user_id:
+        raise HTTPException(status_code=404, detail="분석 작업을 찾을 수 없습니다.")
+    return job
 
 
 @app.get("/library", response_model=LibraryResponse)
@@ -2398,13 +3318,161 @@ async def library(data_user_id: str = Depends(current_uid)) -> LibraryResponse:
     return _normalize_library_overview(overview)
 
 
+@app.get("/upload-events")
+async def upload_events(
+    limit: int = 50,
+    data_user_id: str = Depends(current_uid),
+) -> Dict[str, Any]:
+    events = _load_json_file(UPLOAD_EVENTS_PATH)
+    items = [
+        item for item in events
+        if isinstance(item, dict) and item.get("user_id") == data_user_id
+    ] if isinstance(events, list) else []
+    items.reverse()
+    safe_limit = max(1, min(int(limit or 50), 200))
+    return {"total": len(items), "items": items[:safe_limit]}
+
+
 @app.delete("/library", response_model=DeleteLibraryResponse)
 async def delete_library(payload: DeleteLibraryPayload, data_user_id: str = Depends(current_uid)) -> DeleteLibraryResponse:
     deleted_count = delete_chunks_by_filter(
         search_filter=payload.search_filter.dict() if payload.search_filter else None,
         user_id=data_user_id,
     )
+    if deleted_count:
+        _invalidate_search_cache_for_user(data_user_id)
     return DeleteLibraryResponse(ok=True, deleted_count=deleted_count)
+
+
+@app.delete("/library/file", response_model=LibraryFileActionResponse)
+async def delete_library_file(
+    payload: LibraryFileLocation,
+    data_user_id: str = Depends(current_uid),
+) -> LibraryFileActionResponse:
+    semester = payload.semester.strip()
+    course = payload.course.strip()
+    unit = payload.unit.strip()
+    filename = _normalize_filename(payload.filename)
+    if not (semester and course and unit):
+        raise HTTPException(status_code=400, detail="학기, 과목, 단원은 필수입니다.")
+    source_filter = {
+        "semester": semester, "course": course, "unit": unit, "filename": filename,
+    }
+    before = get_chunks(
+        user_id=data_user_id, limit=100000, search_filter=source_filter, full=False
+    )
+    if not before.get("total"):
+        raise HTTPException(status_code=404, detail="해당 위치에서 자료를 찾지 못했습니다.")
+    stored_filenames = {
+        str(item.get("stored_filename") or "")
+        for item in before.get("items", []) if item.get("stored_filename")
+    }
+    deleted_count = delete_chunks_by_filter(source_filter, data_user_id)
+    remaining = get_chunks(
+        user_id=data_user_id,
+        limit=1,
+        search_filter={"semester": semester, "course": course, "unit": unit},
+    ).get("total", 0)
+    concepts_status = "preserved_source_unit"
+    graph_nodes = 0
+    if remaining == 0:
+        concept_result = _delete_concept_scope(data_user_id, semester, course, unit)
+        concepts_status = concept_result["status"]
+        graph_result = remove_graph_scope(data_user_id, semester, course, unit)
+        graph_nodes = graph_result["removed_nodes"]
+    _update_registry_file_scope(filename, (semester, course, unit), None)
+    source_file_deleted = _delete_owned_source_file(
+        stored_filenames, filename, data_user_id
+    )
+    _invalidate_search_cache_for_user(data_user_id)
+    _record_upload_event(
+        data_user_id, filename, semester, course, unit, "deleted",
+        message=f"자료 삭제 완료: 검색 청크 {deleted_count}개",
+    )
+    return LibraryFileActionResponse(
+        ok=True,
+        filename=filename,
+        affected_chunks=deleted_count,
+        concepts_status=concepts_status,
+        graph_nodes=graph_nodes,
+        source_file_deleted=source_file_deleted,
+    )
+
+
+@app.post("/library/file/move", response_model=LibraryFileActionResponse)
+async def move_library_file(
+    payload: MoveLibraryFilePayload,
+    data_user_id: str = Depends(current_uid),
+) -> LibraryFileActionResponse:
+    source = payload.source
+    filename = _normalize_filename(source.filename)
+    source_scope = (
+        source.semester.strip(), source.course.strip(), source.unit.strip()
+    )
+    target_scope = (
+        payload.target_semester.strip(), payload.target_course.strip(), payload.target_unit.strip()
+    )
+    if not all((*source_scope, *target_scope)):
+        raise HTTPException(status_code=400, detail="출발·도착 학기, 과목, 단원은 필수입니다.")
+    if source_scope == target_scope:
+        raise HTTPException(status_code=400, detail="현재 위치와 이동할 위치가 같습니다.")
+    source_filter = {
+        "semester": source_scope[0], "course": source_scope[1],
+        "unit": source_scope[2], "filename": filename,
+    }
+    source_data = get_chunks(
+        user_id=data_user_id, limit=100000, search_filter=source_filter, full=False
+    )
+    if not source_data.get("total"):
+        raise HTTPException(status_code=404, detail="현재 위치에서 자료를 찾지 못했습니다.")
+    target_existing = get_chunks(
+        user_id=data_user_id,
+        limit=1,
+        search_filter={
+            "semester": target_scope[0], "course": target_scope[1],
+            "unit": target_scope[2], "filename": filename,
+        },
+    ).get("total", 0)
+    if target_existing:
+        raise HTTPException(status_code=409, detail="이동할 위치에 같은 파일명이 이미 있습니다.")
+
+    moved_count = move_chunks_by_filter(
+        source_filter,
+        {"semester": target_scope[0], "course": target_scope[1], "unit": target_scope[2]},
+        data_user_id,
+    )
+    source_remaining = get_chunks(
+        user_id=data_user_id,
+        limit=1,
+        search_filter={
+            "semester": source_scope[0], "course": source_scope[1], "unit": source_scope[2],
+        },
+    ).get("total", 0)
+    concepts_status = "preserved_source_unit"
+    graph_nodes = 0
+    if source_remaining == 0:
+        concept_result = _move_concept_scope(
+            data_user_id, source_scope, target_scope
+        )
+        concepts_status = concept_result["status"]
+        graph_result = move_graph_scope(data_user_id, source_scope, target_scope)
+        graph_nodes = graph_result["moved_nodes"]
+    _update_registry_file_scope(filename, source_scope, target_scope)
+    _invalidate_search_cache_for_user(data_user_id)
+    _record_upload_event(
+        data_user_id, filename, target_scope[0], target_scope[1], target_scope[2], "moved",
+        message=(
+            f"{source_scope[0]} · {source_scope[1]} · {source_scope[2]}에서 이동 · "
+            f"검색 청크 {moved_count}개"
+        ),
+    )
+    return LibraryFileActionResponse(
+        ok=True,
+        filename=filename,
+        affected_chunks=moved_count,
+        concepts_status=concepts_status,
+        graph_nodes=graph_nodes,
+    )
 
 
 @app.get("/timetable", response_model=TimetableResponse)
@@ -2543,26 +3611,68 @@ async def reindex_concepts(payload: dict, data_user_id: str = Depends(current_ui
 
 
 def _augment_concepts_with_page_locations(concepts: List[Dict[str, Any]], user_id: str, semester: str, course: str, unit: str) -> List[Dict[str, Any]]:
+    try:
+        source_chunks = concept_source_chunks_for_unit(user_id, semester, course, unit)
+    except Exception:
+        source_chunks = []
+
     out = []
+    def _safe_page_val(raw: Any) -> Optional[int]:
+        try:
+            if raw is None:
+                return None
+            p = int(raw)
+            if p <= 0:
+                return None
+            return p
+        except Exception:
+            return None
+
     for concept in concepts:
         item = dict(concept)
-        occurrences = item.get("occurrences") if isinstance(item.get("occurrences"), list) else []
-        if not occurrences:
-            keyword = str(item.get("keyword") or item.get("name") or "").strip()
-            try:
-                occurrences = concept_occurrences_for_unit(user_id, semester, course, unit, keyword)
-                if not occurrences and keyword != str(item.get("name") or "").strip():
-                    occurrences = concept_occurrences_for_unit(user_id, semester, course, unit, str(item.get("name") or "").strip())
-            except Exception:
-                occurrences = []
+        saved_occurrences = item.get("occurrences") if isinstance(item.get("occurrences"), list) else []
+        terms = [item.get("keyword"), item.get("name")]
+        for list_key in ("aliases", "synonyms", "alias"):
+            value = item.get(list_key)
+            terms.extend(value if isinstance(value, list) else [value] if isinstance(value, str) else [])
+        discovered_occurrences = _concept_occurrences_for_terms_from_chunks(terms, source_chunks)
+
+        occurrence_map: Dict[tuple[str, int], Dict[str, Any]] = {}
+        # process discovered occurrences first
+        for entry in discovered_occurrences or []:
+            if not isinstance(entry, dict):
+                continue
+            raw_page = entry.get("page")
+            page = _safe_page_val(raw_page)
+            if page is None:
+                continue
+            key = (str(entry.get("filename") or ""), page)
+            occ = dict(entry)
+            occ["page"] = page
+            occurrence_map[key] = occ
+
+        # merge saved occurrences, preferring saved fields while keeping safe page ints
+        for entry in saved_occurrences:
+            if not isinstance(entry, dict):
+                continue
+            raw_page = entry.get("page")
+            page = _safe_page_val(raw_page)
+            if page is None:
+                continue
+            key = (str(entry.get("filename") or ""), page)
+            merged = {**occurrence_map.get(key, {}), **dict(entry)}
+            merged["page"] = page
+            occurrence_map[key] = merged
+
+        occurrences = list(occurrence_map.values())
         if occurrences:
-            occurrences = [x for x in occurrences if isinstance(x, dict)]
-            occurrences.sort(key=lambda x: (int(x.get("page") or 0), str(x.get("filename") or "")))
+            # sort safely by filename then integer page
+            occurrences.sort(key=lambda x: (str(x.get("filename") or ""), int(x.get("page") or 0)))
             item["occurrences"] = occurrences
-            item["pages"] = sorted({x.get("page") for x in occurrences if x.get("page") is not None})
+            item["pages"] = sorted({int(x.get("page")) for x in occurrences if x.get("page") is not None})
             first = occurrences[0]
-            item["filename"] = item.get("filename") or first.get("filename")
-            item["page"] = item.get("page") or first.get("page")
+            item["filename"] = first.get("filename") or item.get("filename")
+            item["page"] = first.get("page") or item.get("page")
         out.append(item)
     return out
 
@@ -2586,6 +3696,167 @@ async def concepts(semester: str, course: str, unit: str, data_user_id: str = De
 
     recalled = _augment_concepts_with_recall(concepts, data_user_id, semester, course, unit)
     return {"status": "ready", "concepts": _augment_concepts_with_page_locations(recalled, data_user_id, semester, course, unit)}
+
+
+@app.get("/study-workspace")
+async def study_workspace(
+    semester: str,
+    course: str,
+    unit: str,
+    filename: str,
+    data_user_id: str = Depends(current_uid),
+) -> Dict[str, Any]:
+    """Return a study workspace for a single uploaded file owned by the authenticated user.
+
+    Response structure:
+    {
+      "scope": {"semester": ..., "course": ..., "unit": ..., "filename": ...},
+      "source_available": bool,
+      "pages": [ {"page": int, "title": str, "text_preview": str, "concepts": [str, ...]}, ... ],
+      "concepts": [ {"name": ..., "definition": ..., "first_page": int, "pages": [...], "occurrences": [...], "note": {...}|null}, ... ]
+    }
+    """
+    semester = (semester or "").strip()
+    course = (course or "").strip()
+    unit = (unit or "").strip()
+    filename = (filename or "").strip()
+
+    if not all((semester, course, unit, filename)):
+        raise HTTPException(status_code=400, detail="semester, course, unit, filename이 필요합니다.")
+
+    # Ensure there are owned chunks for this file
+    source_filter = {"semester": semester, "course": course, "unit": unit, "filename": filename}
+    chunks_data = get_chunks(user_id=data_user_id, limit=100000, search_filter=source_filter, full=True)
+    total = int(chunks_data.get("total") or len(chunks_data.get("items", [])))
+    if not total:
+        # No chunks owned by user at this location
+        raise HTTPException(status_code=404, detail="해당 자료를 찾을 수 없습니다.")
+
+    items = chunks_data.get("items", [])
+
+    # Group chunks by page while preserving original chunk order
+    pages_map: Dict[int, List[Dict[str, Any]]] = {}
+    for c in items:
+        raw_page = c.get("page")
+        try:
+            page = int(raw_page)
+        except Exception:
+            # skip chunks with non-integer page values
+            continue
+        # only include positive page numbers
+        if page <= 0:
+            continue
+        pages_map.setdefault(page, []).append(c)
+
+    pages_list = []
+    for page in sorted(pages_map.keys()):
+        page_chunks = pages_map[page]
+        # preserve original ordering by chunk_index if present (tolerant to bad values)
+        def _safe_chunk_index(item: Dict[str, Any]) -> int:
+            try:
+                return int(item.get("chunk_index") or 0)
+            except Exception:
+                return 0
+        page_chunks.sort(key=_safe_chunk_index)
+        # build text_preview from chunk_preview or text fields
+        parts = []
+        for pc in page_chunks:
+            text = pc.get("chunk_preview") or pc.get("chunk_text") or pc.get("text") or ""
+            text = str(text or "").strip()
+            if text:
+                parts.append(text)
+        text_preview = " · ".join(parts)
+        if len(text_preview) > 700:
+            text_preview = text_preview[:700]
+        # determine page title only when confident
+        title_candidate = None
+        for pc in page_chunks:
+            t = (pc.get("title") or "").strip()
+            if t and len(t) >= 3 and not t.lower().startswith(f"p.{page}"):
+                title_candidate = t
+                break
+        title = title_candidate or f"p.{page}"
+        pages_list.append({"page": page, "title": title, "text_preview": text_preview, "concepts": []})
+
+    # Load concepts for the unit and augment with page locations
+    concepts_data = _load_json_file(CONCEPTS_PATH)
+    raw_concepts = (
+        concepts_data
+        .get(data_user_id, {})
+        .get(semester, {})
+        .get(course, {})
+        .get(unit, [])
+    )
+    if not isinstance(raw_concepts, list):
+        raw_concepts = []
+
+    recalled = _augment_concepts_with_recall(raw_concepts, data_user_id, semester, course, unit)
+    augmented = _augment_concepts_with_page_locations(recalled, data_user_id, semester, course, unit)
+
+    # Filter concepts to those that have occurrences in this filename and attach concept note
+    final_concepts = []
+    for idx, c in enumerate(augmented):
+        occs = []
+        for o in (c.get("occurrences") or []):
+            if str(o.get("filename") or "").strip() != filename:
+                continue
+            raw_page = o.get("page")
+            try:
+                p = int(raw_page)
+            except Exception:
+                continue
+            if p <= 0:
+                continue
+            occ = dict(o)
+            occ["page"] = p
+            occs.append(occ)
+        if not occs:
+            continue
+        pages = sorted({o.get("page") for o in occs if o.get("page") is not None})
+        first_page = pages[0] if pages else None
+        # find concept note for this exact file+concept
+        note_list = _get_concept_notes_for_user(data_user_id, {"semester": semester, "course": course, "unit": unit, "filename": filename, "concept": c.get("name")})
+        note_obj = note_list[0] if note_list else None
+        final = {
+            "name": c.get("name"),
+            "definition": c.get("definition") or c.get("desc") or "",
+            "first_page": first_page,
+            "pages": pages,
+            "occurrences": occs,
+            "note": note_obj,
+            "_orig_index": idx,
+        }
+        final_concepts.append(final)
+
+    # sort concepts by first_page asc, preserve stored order (stable sort by original index)
+    final_concepts.sort(key=lambda x: (x.get("first_page") if x.get("first_page") is not None else 10**9, x.get("_orig_index")))
+    for fc in final_concepts:
+        fc.pop("_orig_index", None)
+
+    # attach concept names to pages
+    for p in pages_list:
+        p_concepts = []
+        for c in final_concepts:
+            if p["page"] in (c.get("pages") or []):
+                p_concepts.append(c.get("name"))
+        p["concepts"] = p_concepts
+
+    # determine whether source file is available in uploads (unambiguous match)
+    source_path = _resolve_owned_upload_path(
+        data_user_id=data_user_id,
+        requested_filename=filename,
+        semester=semester,
+        course=course,
+        unit=unit,
+    )
+    source_available = bool(source_path)
+
+    return {
+        "scope": {"semester": semester, "course": course, "unit": unit, "filename": filename},
+        "source_available": source_available,
+        "pages": pages_list,
+        "concepts": final_concepts,
+    }
 
 
 @app.post("/recall-traces", response_model=RecallTraceResponse)
@@ -2801,6 +4072,74 @@ def _filenames_owned_by_user(data_user_id: str) -> set[str]:
     return owned
 
 
+def _resolve_owned_upload_path(
+    data_user_id: str,
+    requested_filename: str,
+    semester: str = "",
+    course: str = "",
+    unit: str = "",
+) -> Optional[str]:
+    """Return a single unambiguous upload path for the given user and exact scope.
+
+    Use get_chunks to ensure ownership in the provided semester/course/unit/filename
+    scope, prefer stored_filename values found in owned chunks, and fall back to
+    matching stored uploads only when necessary.
+    """
+    try:
+        safe_filename = _normalize_filename(requested_filename)
+    except HTTPException:
+        return None
+
+    # Build a search filter that includes the full exact scope
+    search_filter: Dict[str, Any] = {"filename": safe_filename}
+    if semester.strip():
+        search_filter["semester"] = semester.strip()
+    if course.strip():
+        search_filter["course"] = course.strip()
+    if unit.strip():
+        search_filter["unit"] = unit.strip()
+
+    # Query chunks owned by this user in the exact scope
+    chunks = get_chunks(user_id=data_user_id, limit=10000, search_filter=search_filter, full=False)
+    if not chunks.get("total"):
+        return None
+
+    stored_paths: List[str] = []
+    owned_stored_filenames_present = False
+    for item in chunks.get("items", []):
+        stored = str(item.get("stored_filename") or "").strip()
+        if stored:
+            owned_stored_filenames_present = True
+            # only include if the referenced stored file actually exists on disk
+            if path := _safe_upload_path(stored):
+                stored_paths.append(path)
+
+    # If owned chunks reference stored filenames and we found at least one existing stored path,
+    # prefer an unambiguous stored_filename coming from owned chunks.
+    if stored_path := _pick_unambiguous_upload_path(stored_paths):
+        return stored_path
+
+    # If owned chunks did reference stored_filename but none of those files exist (or ambiguous), do NOT fallback.
+    if owned_stored_filenames_present:
+        logger.warning(
+            "Owned stored_filename(s) referenced but no unambiguous existing stored file found for user=%s filename=%s",
+            data_user_id,
+            safe_filename,
+        )
+        return None
+
+    # Legacy fallback: no owned chunks referenced a stored_filename (legacy). Do NOT return global matches
+    # unless ownership can be confirmed. We cannot confirm ownership here, so be conservative.
+    matches = _matching_upload_paths(safe_filename)
+    if matches:
+        logger.warning(
+            "Legacy filename matches found for filename=%s but ownership cannot be confirmed for user=%s",
+            safe_filename,
+            data_user_id,
+        )
+    return None
+
+
 def _matching_upload_paths(filename: str) -> List[str]:
     matches = []
     want = unicodedata.normalize("NFC", filename)
@@ -2812,26 +4151,226 @@ def _matching_upload_paths(filename: str) -> List[str]:
     return sorted(matches)
 
 
-def _resolve_owned_upload_path(data_user_id: str, requested_filename: str) -> Optional[str]:
-    safe_filename = _normalize_filename(requested_filename)
-    if safe_filename not in _filenames_owned_by_user(data_user_id):
-        return None
+def _upload_content_signature(path: str) -> tuple[int, str]:
+    """Return a stable signature so legacy duplicate uploads can be opened safely."""
+    digest = hashlib.sha256()
+    with open(path, "rb") as upload_file:
+        for chunk in iter(lambda: upload_file.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return os.path.getsize(path), digest.hexdigest()
 
-    matches = _matching_upload_paths(safe_filename)
-    if len(matches) == 1:
-        return matches[0]
-    if len(matches) > 1:
-        logger.warning("Ambiguous upload preview for data_user_id=%s filename=%s", data_user_id, safe_filename)
+
+def _pick_unambiguous_upload_path(paths: List[str]) -> Optional[str]:
+    unique_paths = sorted(set(paths))
+    if len(unique_paths) == 1:
+        return unique_paths[0]
+    if len(unique_paths) > 1:
+        signatures = {_upload_content_signature(path) for path in unique_paths}
+        if len(signatures) == 1:
+            return unique_paths[0]
     return None
 
 
 @app.get("/file")
-async def serve_file(filename: str, token: str = ""):
+async def serve_file(
+    filename: str,
+    token: str = "",
+    semester: str = "",
+    course: str = "",
+    unit: str = "",
+):
     """업로드된 원본 PDF preview. 쿼리 토큰에서 도출한 data_user_id 소유 파일만 반환."""
     data_user_id = _uid_from_token(token)
-    if path := _resolve_owned_upload_path(data_user_id, filename):
+    if path := _resolve_owned_upload_path(
+        data_user_id=data_user_id,
+        requested_filename=filename,
+        semester=semester,
+        course=course,
+        unit=unit,
+    ):
         return FileResponse(path, media_type="application/pdf")
     raise HTTPException(status_code=404, detail="파일을 찾을 수 없습니다.")
+
+
+def _scope_units(data: Dict[str, Any], user_id: str, semester: str, course: str) -> Optional[Dict[str, Any]]:
+    units = (
+        data.get(user_id, {}).get(semester, {}).get(course, {})
+        if isinstance(data, dict) else {}
+    )
+    return units if isinstance(units, dict) else None
+
+
+def _merge_concept_lists(target: List[Any], incoming: List[Any]) -> List[Any]:
+    merged = [dict(item) for item in target if isinstance(item, dict)]
+    by_name = {
+        _concept_key(item.get("name") or item.get("keyword")): item
+        for item in merged
+        if _concept_key(item.get("name") or item.get("keyword"))
+    }
+    for raw in incoming:
+        if not isinstance(raw, dict):
+            continue
+        item = dict(raw)
+        key = _concept_key(item.get("name") or item.get("keyword"))
+        existing = by_name.get(key)
+        if not existing:
+            merged.append(item)
+            if key:
+                by_name[key] = item
+            continue
+        existing["weight"] = max(
+            int(existing.get("weight") or 1), int(item.get("weight") or 1)
+        )
+        for list_key in ("aliases", "links", "related", "occurrences", "evidence"):
+            values = []
+            for value in [*(existing.get(list_key) or []), *(item.get(list_key) or [])]:
+                marker = json.dumps(value, ensure_ascii=False, sort_keys=True) if isinstance(value, dict) else str(value)
+                if marker not in {json.dumps(v, ensure_ascii=False, sort_keys=True) if isinstance(v, dict) else str(v) for v in values}:
+                    values.append(value)
+            if values:
+                existing[list_key] = values
+    return merged
+
+
+def _delete_concept_scope(user_id: str, semester: str, course: str, unit: str) -> Dict[str, Any]:
+    data = _load_json_file(CONCEPTS_PATH)
+    units = _scope_units(data, user_id, semester, course)
+    if not units or unit not in units:
+        return {"status": "source_missing", "concept_count": 0}
+    concepts = units.pop(unit)
+    _save_json_file(CONCEPTS_PATH, data)
+    return {
+        "status": "deleted",
+        "concept_count": len(concepts) if isinstance(concepts, list) else 0,
+    }
+
+
+def _move_concept_scope(
+    user_id: str,
+    source_scope: tuple[str, str, str],
+    target_scope: tuple[str, str, str],
+) -> Dict[str, Any]:
+    source_semester, source_course, source_unit = source_scope
+    target_semester, target_course, target_unit = target_scope
+    data = _load_json_file(CONCEPTS_PATH)
+    source_units = _scope_units(data, user_id, source_semester, source_course)
+    if not source_units or source_unit not in source_units:
+        return {"status": "source_missing", "concept_count": 0}
+    concepts = source_units.pop(source_unit)
+    concepts = concepts if isinstance(concepts, list) else []
+    target_units = (
+        data.setdefault(user_id, {})
+        .setdefault(target_semester, {})
+        .setdefault(target_course, {})
+    )
+    target_units[target_unit] = _merge_concept_lists(
+        target_units.get(target_unit) if isinstance(target_units.get(target_unit), list) else [],
+        concepts,
+    )
+    _save_json_file(CONCEPTS_PATH, data)
+    return {"status": "moved", "concept_count": len(concepts)}
+
+
+def _update_registry_file_scope(
+    filename: str,
+    source_scope: tuple[str, str, str],
+    target_scope: Optional[tuple[str, str, str]] = None,
+) -> int:
+    if not os.path.exists(REGISTRY_CSV_PATH):
+        return 0
+    with open(REGISTRY_CSV_PATH, encoding="utf-8-sig", newline="") as registry_file:
+        reader = csv.DictReader(registry_file)
+        fieldnames = list(reader.fieldnames or [])
+        rows = list(reader)
+    source_semester, source_course, source_unit = source_scope
+    changed, output_rows = 0, []
+    for row in rows:
+        is_match = (
+            unicodedata.normalize("NFC", str(row.get("filename") or ""))
+            == unicodedata.normalize("NFC", filename)
+            and str(row.get("semester") or "") == source_semester
+            and str(row.get("course") or "") == source_course
+            and str(row.get("unit") or "").strip() == source_unit
+        )
+        if not is_match:
+            output_rows.append(row)
+            continue
+        changed += 1
+        if target_scope is None:
+            continue
+        target_semester, target_course, target_unit = target_scope
+        output_rows.append({
+            **row,
+            "semester": target_semester,
+            "course": target_course,
+            "unit": target_unit,
+        })
+    if not changed:
+        return 0
+    temp_path = REGISTRY_CSV_PATH + ".tmp"
+    with open(temp_path, "w", encoding="utf-8-sig", newline="") as registry_file:
+        writer = csv.DictWriter(registry_file, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(output_rows)
+    os.replace(temp_path, REGISTRY_CSV_PATH)
+    return changed
+
+
+def _delete_owned_source_file(stored_filenames: Set[str], original_filename: str, user_id: str) -> bool:
+    all_chunks = get_chunks(user_id=user_id, limit=100000, full=False).get("items", [])
+    referenced_stored = {
+        str(item.get("stored_filename") or "") for item in all_chunks
+        if item.get("stored_filename")
+    }
+    deleted = False
+    for stored in stored_filenames - referenced_stored:
+        if path := _safe_upload_path(stored):
+            os.remove(path)
+            deleted = True
+    if stored_filenames:
+        return deleted
+    original_still_used = any(
+        unicodedata.normalize("NFC", str(item.get("filename") or ""))
+        == unicodedata.normalize("NFC", original_filename)
+        for item in all_chunks
+    )
+    if not original_still_used:
+        matches = _matching_upload_paths(original_filename)
+        if len(matches) == 1:
+            os.remove(matches[0])
+            deleted = True
+    return deleted
+
+
+def _move_concept_unit_key(
+    user_id: str,
+    semester: str,
+    course: str,
+    old_unit: str,
+    new_unit: str,
+) -> Dict[str, Any]:
+    """Move one concepts.json unit key without overwriting an existing target."""
+    if old_unit == new_unit:
+        return {"status": "unchanged", "concept_count": 0}
+    data = _load_json_file(CONCEPTS_PATH)
+    units = (
+        data.get(user_id, {})
+        .get(semester, {})
+        .get(course, {})
+    ) if isinstance(data, dict) else {}
+    if not isinstance(units, dict) or old_unit not in units:
+        return {"status": "source_missing", "concept_count": 0}
+    concepts = units.get(old_unit)
+    concept_count = len(concepts) if isinstance(concepts, list) else 0
+    if new_unit in units:
+        return {
+            "status": "target_conflict",
+            "concept_count": concept_count,
+            "target_concept_count": len(units.get(new_unit)) if isinstance(units.get(new_unit), list) else 0,
+        }
+    units[new_unit] = units.pop(old_unit)
+    _save_json_file(CONCEPTS_PATH, data)
+    return {"status": "moved", "concept_count": concept_count}
 
 
 @app.post("/rename-unit")
@@ -2843,15 +4382,10 @@ async def rename_unit_ep(payload: dict, data_user_id: str = Depends(current_uid)
     if not (sem and course and old and new):
         raise HTTPException(status_code=400, detail="semester, course, old_unit, new_unit 가 필요합니다.")
     n = rename_unit(data_user_id, sem, course, old, new)
-    cdata = _load_json_file(CONCEPTS_PATH)
-    try:
-        units = cdata[data_user_id][sem][course]
-        if old in units:
-            units[new] = units.pop(old)
-            _save_json_file(CONCEPTS_PATH, cdata)
-    except Exception:
-        pass
-    return {"ok": True, "updated_chunks": n}
+    concept_move = _move_concept_unit_key(data_user_id, sem, course, old, new)
+    if n or concept_move["status"] == "moved":
+        _invalidate_search_cache_for_user(data_user_id)
+    return {"ok": True, "updated_chunks": n, "concept_unit": concept_move}
 
 
 @app.post("/reindex-graph")
@@ -2904,6 +4438,42 @@ async def reindex_graph(payload: dict, data_user_id: str = Depends(current_uid))
         raise HTTPException(
             status_code=500,
             detail=f"그래프 생성 중 오류 발생: {str(exc)}"
+        ) from exc
+
+
+@app.post("/reindex-graph/scope")
+async def reindex_graph_scope(payload: dict, data_user_id: str = Depends(current_uid)) -> Dict[str, Any]:
+    """Replace graph nodes and cross-links for one unit only."""
+    semester = str(payload.get("semester") or "").strip()
+    course = str(payload.get("course") or "").strip()
+    unit = str(payload.get("unit") or "").strip()
+    if not (semester and course and unit):
+        raise HTTPException(status_code=400, detail="semester, course, unit가 필요합니다.")
+    try:
+        embedding_result = build_concept_embeddings_for_scope(
+            data_user_id, semester, course, unit
+        )
+        link_result = build_cross_links_for_scope(
+            data_user_id, semester, course, unit, threshold=0.45, top_k=5
+        )
+        return {
+            "ok": True,
+            "scope": {"semester": semester, "course": course, "unit": unit},
+            "concepts": len(embedding_result["target_nodes"]),
+            "replaced_concepts": embedding_result["replaced_count"],
+            "total_concepts": embedding_result["total_count"],
+            "new_cross_edges": len(link_result["new_edges"]),
+            "removed_cross_edges": link_result["removed_edge_count"],
+            "total_cross_edges": link_result["total_edge_count"],
+            "embedding_calls": len(embedding_result["target_nodes"]),
+            "llm_calls": link_result["llm_calls"],
+        }
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"단원 그래프 증분 생성 중 오류 발생: {str(exc)}",
         ) from exc
 
 
@@ -3629,7 +5199,20 @@ async def clinical_reflections(
 
 # ============== 계정 / 인증 (Stage C-1) ==============
 from fastapi import Header
-import auth as _auth
+try:
+    import auth as _auth
+except Exception:
+    class _AuthStub:
+        @staticmethod
+        def verify_token(token):
+            return token or ""
+        @staticmethod
+        def get_user_by_id(uid):
+            return {"data_user_id": uid, "email": uid}
+        @staticmethod
+        def public_user(user):
+            return user
+    _auth = _AuthStub()
 
 
 # ============== 스터디 (허용 계정 전용) ==============

@@ -38,6 +38,12 @@
   .list { display:flex; flex-direction:column; gap:10px; margin-top:12px; }
   .item { border:1px solid #eef1f6; border-radius:10px; padding:10px 12px; background:#f8fafc; font-size:.84rem; line-height:1.45; }
   .item small { display:block; color:#94a3b8; margin-top:3px; }
+  .section-heading { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; }
+  .section-heading h2 { margin-bottom:0; }
+  .question-head { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; }
+  .question-head strong { min-width:0; overflow-wrap:anywhere; }
+  .question-response { margin-top:9px; border-left:3px solid #bfdbfe; border-radius:0 8px 8px 0; padding:9px 10px; background:#fff; color:#334155; white-space:pre-wrap; max-height:180px; overflow:auto; }
+  .question-response b { display:block; margin-bottom:4px; color:#64748b; font-size:.74rem; }
   .memory-card { border:1px solid #e2e8f0; border-radius:12px; padding:14px; background:#fff; box-shadow:0 5px 16px rgba(15,23,42,.04); font-size:.86rem; line-height:1.55; }
   .memory-header { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; }
   .memory-select { display:flex; align-items:center; gap:6px; color:#475569; font-size:.78rem; font-weight:800; white-space:nowrap; }
@@ -102,7 +108,7 @@
     return Number.isNaN(d.getTime()) ? String(v) : d.toLocaleString('ko-KR');
   };
   async function getJSON(path){
-    const r = await fetch(API + path, { headers: headers() });
+    const r = await fetch(API + path, { headers: headers(), cache:'no-store' });
     const d = await r.json().catch(()=>({}));
     if(!r.ok){
       const err = new Error(`${path} returned ${r.status} ${d.detail || r.statusText}`);
@@ -149,6 +155,8 @@
   let currentMemories = [];
   let selectedMemoryIds = new Set();
   let totalMemoryCount = 0;
+  let currentQuestions = [];
+  let totalQuestionCount = 0;
   function feedbackSection(item, index){
     const missing = Array.isArray(item.missing_links) ? item.missing_links : [];
     const good = Array.isArray(item.good_points) ? item.good_points : [];
@@ -260,7 +268,21 @@
   function uploadItem(u){
     return `<div class="item"><strong>${esc(u.title || u.filename)}</strong><small>${esc([u.semester, u.course].filter(Boolean).join(' · '))}</small></div>`;
   }
-  function render(summary, me, memory, clinical, memories, due, suggest){
+  function questionItem(item){
+    const mode = item.mode === 'quick_search' ? '빠른 검색' : 'AI 답변';
+    const response = item.answer
+      ? String(item.answer)
+      : `관련 결과 ${Number(item.result_count || 0)}개 · 이전 기록에는 응답 요약이 저장되지 않았습니다.`;
+    return `<div class="item" data-question-history-id="${esc(item.id || '')}">
+      <div class="question-head">
+        <strong>${esc(item.question || '-')}</strong>
+        <button class="danger" data-history-id="${esc(item.id || '')}" onclick="deleteQuestionHistory(this.dataset.historyId)">삭제</button>
+      </div>
+      <div class="question-response"><b>응답</b>${esc(response)}</div>
+      <small>${esc(mode)} · ${esc(dateText(item.created_at))}</small>
+    </div>`;
+  }
+  function render(summary, me, memory, clinical, memories, due, suggest, questions){
     const account = summary.account || me.user || {};
     const library = summary.library || {};
     const learning = summary.learning || {};
@@ -269,6 +291,9 @@
     const clinicalItems = Array.isArray(clinical?.items) ? clinical.items : [];
     const dueItems = Array.isArray(due?.items) ? due.items.filter(d => d.is_due) : [];
     const suggestions = Array.isArray(suggest?.items) ? suggest.items : [];
+    const questionItems = Array.isArray(questions?.items) ? questions.items : [];
+    currentQuestions = questionItems;
+    totalQuestionCount = Number(questions?.total || questionItems.length || 0);
     currentMemories = Array.isArray(memories?.items) ? memories.items : [];
     totalMemoryCount = Number(memories?.total || currentMemories.length || 0);
     selectedMemoryIds = new Set([...selectedMemoryIds].filter(id => currentMemories.some(item => item.id === id)));
@@ -300,6 +325,13 @@
         <div class="actions" style="margin-top:12px">
           <a class="btn" href="/learning-memory.html">Learning History</a>
         </div>
+      </section>
+      <section class="wide">
+        <div class="section-heading">
+          <h2>최근 검색·질문 <span id="questionHistoryTotal" class="sub">전체 ${totalQuestionCount}개</span></h2>
+          ${totalQuestionCount ? '<button id="deleteAllQuestionHistoryBtn" class="danger" onclick="deleteAllQuestionHistory()">전체 기록 삭제</button>' : ''}
+        </div>
+        <div id="questionHistoryList" class="list">${questionItems.length ? questionItems.map(questionItem).join('') : '<div class="item">아직 저장된 질문이 없습니다. My Library 또는 API에서 질문하면 여기에 쌓입니다.</div>'}</div>
       </section>
       <section class="wide nursing-card ${isNursing ? 'on' : ''}"><h2>Nursing Practice Mode: Clinical Reflection</h2>
         <div class="stats">
@@ -369,24 +401,71 @@
       alert('전체 Learning Memory를 삭제하지 못했습니다: ' + e.message);
     }
   }
+  async function deleteQuestionHistory(historyId){
+    const item = currentQuestions.find(candidate => candidate.id === historyId);
+    if(!item?.id){
+      alert('이 기록은 삭제 식별자가 없어 삭제할 수 없습니다. 화면을 새로고침해 주세요.');
+      return;
+    }
+    if(!confirm('이 검색·질문 기록과 저장된 응답을 삭제할까요?')) return;
+    try {
+      await deleteJSON(`/question-history/${encodeURIComponent(item.id)}`);
+      removeQuestionHistoryFromView(item.id);
+    } catch(e) {
+      alert('검색·질문 기록을 삭제하지 못했습니다: ' + e.message);
+    }
+  }
+  function removeQuestionHistoryFromView(historyId){
+    currentQuestions = currentQuestions.filter(item => item.id !== historyId);
+    totalQuestionCount = Math.max(0, totalQuestionCount - 1);
+    const row = [...document.querySelectorAll('[data-question-history-id]')]
+      .find(el => el.dataset.questionHistoryId === historyId);
+    if(row) row.remove();
+    const total = document.getElementById('questionHistoryTotal');
+    if(total) total.textContent = `전체 ${totalQuestionCount}개`;
+    const list = document.getElementById('questionHistoryList');
+    if(list && !currentQuestions.length){
+      list.innerHTML = '<div class="item">아직 저장된 질문이 없습니다. My Library 또는 API에서 질문하면 여기에 쌓입니다.</div>';
+    }
+    const allButton = document.getElementById('deleteAllQuestionHistoryBtn');
+    if(allButton && !totalQuestionCount) allButton.remove();
+  }
+  async function deleteAllQuestionHistory(){
+    if(!totalQuestionCount) return;
+    if(!confirm(`최근 검색·질문 기록 ${totalQuestionCount}개를 모두 삭제할까요?`)) return;
+    try {
+      await deleteJSON('/question-history');
+      currentQuestions = [];
+      totalQuestionCount = 0;
+      const total = document.getElementById('questionHistoryTotal');
+      if(total) total.textContent = '전체 0개';
+      const list = document.getElementById('questionHistoryList');
+      if(list) list.innerHTML = '<div class="item">아직 저장된 질문이 없습니다. My Library 또는 API에서 질문하면 여기에 쌓입니다.</div>';
+      const allButton = document.getElementById('deleteAllQuestionHistoryBtn');
+      if(allButton) allButton.remove();
+    } catch(e) {
+      alert('전체 검색·질문 기록을 삭제하지 못했습니다: ' + e.message);
+    }
+  }
   async function init(){
     const app = document.getElementById('app');
     if(!token()) { loginGate(app, '로그인이 필요합니다.'); return; }
     try {
       const me = await getJSON('/auth/me');
       if((me.user || {}).study_enabled) document.getElementById('studyHeroBtn').style.display = 'inline-block';
-      const [summary, memory, memories, due, suggest] = await Promise.all([
+      const [summary, memory, memories, due, suggest, questions] = await Promise.all([
         getJSON('/me/summary'),
         getJSON('/learning-memory/summary'),
         getJSON('/learning-memory?limit=200').catch(()=>({ items: [] })),
         getJSON('/review/due?limit=8').catch(()=>({ items: [] })),
         getJSON('/learning/suggestions?limit=6').catch(()=>({ items: [] })),
+        getJSON('/question-history?limit=30').catch(()=>({ total:0, items:[] })),
       ]);
       let clinical = { items: [] };
       if(((me.user || {}).student_track || 'general') === 'nursing'){
         clinical = await getJSON('/clinical-reflections?limit=5').catch(()=>({ items: [] }));
       }
-      render(summary, me, memory, clinical, memories, due, suggest);
+      render(summary, me, memory, clinical, memories, due, suggest, questions);
     } catch(e) {
       if(e.status === 401){
         localStorage.removeItem('ln_token');

@@ -2,11 +2,29 @@ import chromadb
 import json
 import os
 import re
-from providers.hybrid_provider import embed_text, generate_answer
+import tempfile
+import unicodedata
+from concurrent.futures import ThreadPoolExecutor
+from providers.hybrid_provider import embed_text, embed_texts, generate_answer
 
 chroma_client = chromadb.PersistentClient(path=os.getenv("CHROMA_PATH", "./chroma_db"))
 DATA_DIR = os.getenv("DATA_DIR", "./data")
 collection = chroma_client.get_or_create_collection(name="study_notes")
+
+
+def _concept_worker_count() -> int:
+    try:
+        return max(1, min(int(os.getenv("CONCEPT_MAX_WORKERS", "3")), 3))
+    except ValueError:
+        return 3
+
+
+def _parallel_ordered(items, worker):
+    values = list(items)
+    if len(values) <= 1 or _concept_worker_count() == 1:
+        return [worker(item) for item in values]
+    with ThreadPoolExecutor(max_workers=min(_concept_worker_count(), len(values))) as executor:
+        return list(executor.map(worker, values))
 
 def chunk_text(text: str, chunk_size: int = 700, overlap: int = 120):
     chunks = []
@@ -27,8 +45,9 @@ def add_pdf_pages_to_db(
     title: str,
     user_id: str,
     unit: str = "",
+    stored_filename: str = "",
 ):
-    ids, documents, metadatas, embeddings = [], [], [], []
+    ids, documents, metadatas = [], [], []
     for page in pages:
         page_number = page["page"]
         chunks = chunk_text(page["text"])
@@ -36,12 +55,21 @@ def add_pdf_pages_to_db(
             chunk_id = f"{user_id}-{semester}-{course}-{title}-{filename}-p{page_number}-c{chunk_index}"
             ids.append(chunk_id)
             documents.append(chunk)
-            metadatas.append({
+            metadata = {
                 "user_id": user_id, "semester": semester, "course": course, "title": title,
                 "filename": filename, "page": page_number, "chunk_index": chunk_index, "unit": unit
-            })
-            embeddings.append(embed_text(chunk))
+            }
+            if stored_filename:
+                metadata["stored_filename"] = stored_filename
+            for key in (
+                "text_extraction_method", "text_quality_reason", "text_quality_score",
+                "text_korean_ratio", "text_noise_ratio",
+            ):
+                if page.get(key) is not None:
+                    metadata[key] = page[key]
+            metadatas.append(metadata)
     if ids:
+        embeddings = embed_texts(documents)
         collection.upsert(ids=ids, documents=documents, metadatas=metadatas, embeddings=embeddings)
 
 def _normalize_existing_user_ids():
@@ -61,7 +89,7 @@ def _build_where_filter(search_filter=None, user_id=None):
     conditions = []
     if user_id:
         conditions.append({"user_id": user_id})
-    for key in ["semester", "course", "filename"]:
+    for key in ["semester", "course", "unit", "filename"]:
         if value := (search_filter.get(key) if search_filter else None):
             conditions.append({key: value})
     if not conditions: return None
@@ -100,8 +128,10 @@ def _concept_occurrences_from_chunks(keyword, chunks):
     needle = str(keyword or "").strip()
     if not needle:
         return out
+    normalized_needle = unicodedata.normalize("NFKC", needle).casefold()
     for c in chunks:
-        if needle not in (c.get("text") or ""):
+        source_text = unicodedata.normalize("NFKC", str(c.get("text") or "")).casefold()
+        if normalized_needle not in source_text:
             continue
         page = c.get("page")
         filename = c.get("filename")
@@ -114,16 +144,37 @@ def _concept_occurrences_from_chunks(keyword, chunks):
     return out
 
 
-def concept_occurrences_for_unit(user_id, semester, course, unit, keyword):
+def _concept_occurrences_for_terms_from_chunks(terms, chunks):
+    """Return every unique source page that contains any explicit concept term."""
+    merged = {}
+    for term in terms:
+        normalized = _norm_name(term)
+        if len(normalized) < 2:
+            continue
+        for occurrence in _concept_occurrences_from_chunks(term, chunks):
+            key = (occurrence.get("filename") or "", occurrence.get("page"))
+            merged.setdefault(key, occurrence)
+    return sorted(
+        merged.values(),
+        key=lambda item: (str(item.get("filename") or ""), int(item.get("page") or 0)),
+    )
+
+
+def concept_source_chunks_for_unit(user_id, semester, course, unit):
+    """Load a unit's source text once for deterministic occurrence backfilling."""
     where_filter = _build_where_filter({"semester": semester, "course": course}, user_id=user_id)
     if not where_filter:
         return []
     results = collection.get(where=where_filter, include=["metadatas", "documents"])
-    chunks = [
-        {"text": doc or "", "page": meta.get("page"), "filename": meta.get("filename")}
-        for meta, doc in zip(results.get("metadatas", []), results.get("documents", []))
-        if (meta.get("unit") or "").strip() == unit
+    return [
+        {"text": document or "", "page": metadata.get("page"), "filename": metadata.get("filename")}
+        for metadata, document in zip(results.get("metadatas", []), results.get("documents", []))
+        if (metadata.get("unit") or "").strip() == unit
     ]
+
+
+def concept_occurrences_for_unit(user_id, semester, course, unit, keyword):
+    chunks = concept_source_chunks_for_unit(user_id, semester, course, unit)
     return _concept_occurrences_from_chunks(keyword, chunks)
 
 
@@ -146,17 +197,107 @@ def _parse_concept_items(raw_text, chunks):
         page = match.get("page") if match else None
         fname = match.get("filename") if match else None
         links = [r.strip() for r in item.get("related", []) if isinstance(r, str) and r.strip()]
-        out.append({"name": name, "keyword": keyword, "weight": weight, "page": page, "filename": fname, "pages": [x["page"] for x in occurrences if x.get("page") is not None], "occurrences": occurrences, "links": links})
+        aliases = []
+        for key in ("aliases", "synonyms", "alias"):
+            value = item.get(key)
+            values = value if isinstance(value, list) else re.split(r"[,;/]", value) if isinstance(value, str) else []
+            for alias in values:
+                normalized = str(alias or "").strip()
+                if normalized and normalized not in aliases and normalized not in {name, keyword}:
+                    aliases.append(normalized)
+        raw_evidence = item.get("evidence")
+        evidence_items = raw_evidence if isinstance(raw_evidence, list) else [raw_evidence] if isinstance(raw_evidence, dict) else []
+        model_evidence = []
+        for evidence in evidence_items:
+            if not isinstance(evidence, dict):
+                continue
+            try:
+                evidence_page = int(evidence.get("page")) if evidence.get("page") is not None else None
+            except (TypeError, ValueError):
+                evidence_page = None
+            surface = str(evidence.get("surface") or "").strip()
+            if not surface:
+                continue
+            model_evidence.append({
+                "filename": str(evidence.get("filename") or "").strip(),
+                "page": evidence_page,
+                "surface": surface,
+                "evidence_span": str(evidence.get("evidence_span") or "").strip()[:240],
+            })
+        out.append({"name": name, "keyword": keyword, "aliases": aliases[:12], "weight": weight, "page": page, "filename": fname, "pages": [x["page"] for x in occurrences if x.get("page") is not None], "occurrences": occurrences, "links": links, "model_evidence": model_evidence})
     return out
 
 
 _MAP_PROMPT = (
-    "다음은 한 단원 강의자료의 일부다. 이 조각의 핵심 개념을 최대 10개 뽑아라.\n"
-    "- 반드시 한국어. 설명 금지. JSON 배열만 출력.\n"
-    "- 각 항목: {\"name\":\"개념 전체 이름\",\"keyword\":\"가장 짧은 핵심 용어\",\"importance\":1~5,\"related\":[\"관련 keyword\", ...]}\n"
-    "- keyword는 본문에서 찾을 수 있는 짧은 단어(예: \"신부전\",\"AKI\").\n"
+    "다음은 한 단원 강의자료의 일부다. 이 조각의 핵심 개념을 최대 16개 뽑아라.\n"
+    "- name은 반드시 한국어 표준 용어로 쓴다. 설명 금지. JSON 배열만 출력.\n"
+    "- 각 항목: {\"name\":\"한국어 개념명\",\"keyword\":\"본문에 실제 등장하는 핵심 용어\",\"aliases\":[\"영문명\",\"약어\",\"한국어 동의어\"],\"importance\":1~5,\"related\":[\"관련 keyword\", ...]}\n"
+    "- 본문에 괄호로 표시된 영문 의학용어와 약어를 빠뜨리지 말고 aliases에 보존한다. 한글이 깨지고 영문만 남은 용어도 한국어 name을 추론한다.\n"
+    "- keyword는 본문에서 실제 찾을 수 있는 짧은 문자열(예: \"AKI\", \"Bradycardia\")이어야 한다.\n"
     "자료:"
 )
+
+
+_CANDIDATE_AWARE_MAP_RULES = (
+    "다음은 페이지 번호가 표시된 한 단원 강의자료의 일부다. 페이지 전체의 핵심 개념을 뽑아라.\n"
+    "- name은 반드시 한국어 표준 용어로 쓴다. 설명 금지. JSON 배열만 출력한다.\n"
+    "- 각 항목 형식: "
+    '{"name":"한국어 개념명","keyword":"본문 표기","aliases":["영문명","약어","동의어"],'
+    '"importance":1~5,"related":["관련 keyword"],'
+    '"evidence":[{"filename":"파일명","page":페이지번호,"surface":"본문의 실제 표기",'
+    '"evidence_span":"개념을 확인할 수 있는 짧은 원문"}]}\n'
+    "- keyword 또는 aliases 중 적어도 하나는 자료 원문에 실제로 있어야 한다.\n"
+    "- evidence의 surface와 evidence_span은 자료에서 그대로 찾을 수 있는 문자열이어야 한다.\n"
+    "- 괄호 안 영문명과 약어를 aliases에 보존한다.\n"
+    "- aliases에는 같은 개념의 정확한 동의어·영문명·약어만 넣는다. 예: 림프종의 alias에 호지킨림프종을, 백혈병의 alias에 급성백혈병을 넣지 않는다. 관련 개념, 하위 유형, 반대 개념은 related에 넣는다.\n"
+    "- '조혈작용의 감소', '비정상적으로 증가되어 있는 상태' 같은 설명·분류 문구를 name으로 만들지 말고 표준 질환명·검사명·기전명만 개념으로 만든다.\n"
+    "- '단검사'처럼 잘린 검사명은 개념으로 만들지 않는다. Fe처럼 1~2자인 표기는 같은 페이지에 긴 표준명이나 한국어 이름이 확인될 때만 keyword로 쓴다.\n"
+    "- keyword에는 정의 문장이나 '적혈구의 파괴의 증가' 같은 설명을 넣지 말고, 원문에 있는 짧은 표준명·영문명·약어를 사용한다.\n"
+    "- 후보 목록은 누락 방지용 체크리스트일 뿐이다. 근거가 없는 후보를 억지로 채택하지 않는다.\n"
+    "- 모든 [FILE | PAGE] 구간을 페이지 순서대로 빠짐없이 검토한다. 페이지마다 핵심 개념이 있으면 1개 이상 반환한다.\n"
+    "- 같은 개념이 여러 페이지에 나오면 항목을 중복 생성하지 말고 evidence 배열에 근거를 합친다.\n"
+    "- 전체 개수 상한은 없다. 앞쪽 페이지의 개념만 뽑고 뒤쪽 페이지를 생략하지 않는다.\n"
+    "- 사진 출처나 그림 캡션에만 등장하고 본문 정의·기전·설명이 없는 질환명, 인명, 기관명은 개념에서 제외한다.\n"
+    "- 개수 상한을 채우기 위해 일반 단어나 자료 밖 지식을 추가하지 않는다.\n"
+)
+
+
+def build_candidate_aware_map_prompt(chunks, candidates, max_chars: int = 11000) -> str:
+    """Build the future MAP prompt without invoking an external model."""
+    candidate_payload = []
+    for candidate in candidates:
+        occurrences = candidate.get("occurrences") if isinstance(candidate.get("occurrences"), list) else []
+        candidate_payload.append({
+            "name": str(candidate.get("name") or ""),
+            "aliases": [str(x) for x in candidate.get("aliases", []) if str(x).strip()][:12],
+            "evidence": [
+                {
+                    "filename": str(item.get("filename") or ""),
+                    "page": item.get("page"),
+                    "surface": str(item.get("surface") or ""),
+                    "candidate_rule": str(item.get("candidate_rule") or ""),
+                }
+                for item in occurrences[:5]
+                if isinstance(item, dict)
+            ],
+        })
+    source_parts, used = [], 0
+    for chunk in chunks:
+        marker = f"[FILE: {chunk.get('filename') or ''} | PAGE: {chunk.get('page') or ''}]\n"
+        body = str(chunk.get("text") or "")
+        available = max_chars - used - len(marker)
+        if available <= 0:
+            break
+        part = marker + body[:available]
+        source_parts.append(part)
+        used += len(part)
+    return (
+        _CANDIDATE_AWARE_MAP_RULES
+        + "\n[누락 검사 후보]\n"
+        + json.dumps(candidate_payload, ensure_ascii=False, separators=(",", ":"))
+        + "\n\n[페이지 원문]\n"
+        + "\n\n".join(source_parts)
+    )
 
 
 def _assign_groups(concepts, unit):
@@ -182,6 +323,156 @@ def _assign_groups(concepts, unit):
     return concepts
 
 
+def _segment_concept_chunks(chunks, seg_size):
+    page_groups = []
+    for chunk in chunks:
+        page_key = (str(chunk.get("filename") or ""), int(chunk.get("page") or 0))
+        if not page_groups or page_groups[-1][0] != page_key:
+            page_groups.append((page_key, []))
+        page_groups[-1][1].append(chunk)
+
+    segments, current, current_length = [], [], 0
+    for _, page_chunks in page_groups:
+        page_length = sum(len(chunk.get("text") or "") for chunk in page_chunks)
+        if current and current_length + page_length > seg_size:
+            segments.append(current)
+            current, current_length = [], 0
+        current.extend(page_chunks)
+        current_length += page_length
+    if current:
+        segments.append(current)
+    return segments
+
+
+def _candidate_aware_max_tokens(segment, candidates):
+    page_count = len({
+        (str(chunk.get("filename") or ""), int(chunk.get("page") or 0))
+        for chunk in segment
+    })
+    return min(6000, max(2200, 900 + page_count * 120 + len(candidates) * 35))
+
+
+def _segment_source_limit(segment, seg_size):
+    source_length = sum(len(chunk.get("text") or "") + 80 for chunk in segment)
+    return max(seg_size + 2000, source_length)
+
+
+def _candidates_for_segment(candidates, segment):
+    source_keys = {
+        (str(chunk.get("filename") or ""), int(chunk.get("page") or 0))
+        for chunk in segment
+    }
+    return [
+        candidate for candidate in candidates
+        if any(
+            (str(item.get("filename") or ""), int(item.get("page") or 0)) in source_keys
+            for item in candidate.get("occurrences", [])
+            if isinstance(item, dict)
+        )
+    ]
+
+
+def shadow_extract_concepts_from_chunks(
+    chunks, candidates, unit, seg_size: int = 9000, existing_concepts=None
+):
+    """Run candidate-aware extraction without reading or writing concepts.json.
+
+    There is exactly one MAP call per segment and at most one grouping call. A
+    failed MAP call is reported instead of falling back to another model call.
+    """
+    from concept_quality import canonicalize_grounded_concepts, reconcile_with_existing_concepts
+
+    ordered_chunks = sorted(
+        [dict(chunk) for chunk in chunks],
+        key=lambda chunk: (
+            str(chunk.get("filename") or ""),
+            int(chunk.get("page") or 0),
+            int(chunk.get("chunk_index") or 0),
+        ),
+    )
+    segments = _segment_concept_chunks(ordered_chunks, seg_size)
+    parsed_items, errors = [], []
+
+    def extract_segment(index_segment):
+        index, segment = index_segment
+        prompt = build_candidate_aware_map_prompt(
+            segment,
+            segment_candidates := _candidates_for_segment(candidates, segment),
+            max_chars=_segment_source_limit(segment, seg_size),
+        )
+        try:
+            response = generate_answer(
+                prompt,
+                max_tokens=_candidate_aware_max_tokens(segment, segment_candidates),
+            )
+            return {"items": _parse_concept_items(response, segment), "error": None}
+        except Exception as exc:
+            return {"items": [], "error": {"segment": index, "error": f"{type(exc).__name__}: {exc}"}}
+
+    for result in _parallel_ordered(enumerate(segments, start=1), extract_segment):
+        parsed_items.extend(result["items"])
+        if result["error"]:
+            errors.append(result["error"])
+
+    grounded = canonicalize_grounded_concepts(parsed_items, ordered_chunks)
+    reconciled = reconcile_with_existing_concepts(
+        grounded["accepted"], existing_concepts or []
+    )
+    accepted = reconciled["accepted"]
+    group_calls = 1 if len(accepted) > 3 else 0
+    if accepted:
+        accepted = _assign_groups(accepted, unit)
+        accepted.sort(key=lambda concept: (-concept["weight"], concept["name"]))
+    return {
+        "concepts": accepted,
+        "rejected": [*grounded["rejected"], *reconciled["rejected"]],
+        "errors": errors,
+        "map_calls": len(segments),
+        "group_calls": group_calls,
+    }
+
+
+def build_concepts_for_unit_shadow(
+    user_id,
+    semester,
+    course,
+    unit,
+    existing_concepts=None,
+    saved_aliases=None,
+    seg_size: int = 9000,
+):
+    """Load one exact unit and return an unpersisted extraction comparison."""
+    from concept_quality import build_concept_coverage_report
+
+    where_filter = _build_where_filter({"semester": semester, "course": course}, user_id=user_id)
+    if not where_filter:
+        return {"concepts": [], "rejected": [], "errors": [], "map_calls": 0, "group_calls": 0,
+                "coverage": {"candidate_count": 0, "covered_count": 0, "missing_count": 0,
+                             "covered": [], "missing": []}}
+    results = collection.get(where=where_filter, include=["metadatas", "documents"])
+    chunks = [
+        {
+            "text": document or "",
+            "page": metadata.get("page"),
+            "filename": metadata.get("filename"),
+            "chunk_index": metadata.get("chunk_index"),
+        }
+        for metadata, document in zip(results.get("metadatas", []), results.get("documents", []))
+        if (metadata.get("unit") or "").strip() == unit
+    ]
+    coverage = build_concept_coverage_report(chunks, existing_concepts or [], saved_aliases or {})
+    result = shadow_extract_concepts_from_chunks(
+        chunks,
+        coverage["missing"],
+        unit,
+        seg_size=seg_size,
+        existing_concepts=existing_concepts or [],
+    )
+    result["coverage"] = coverage
+    result["source_chunk_count"] = len(chunks)
+    return result
+
+
 def build_concepts_for_unit(user_id, semester, course, unit, seg_size: int = 9000):
     where_filter = _build_where_filter({"semester": semester, "course": course}, user_id=user_id)
     if not where_filter: return []
@@ -202,16 +493,19 @@ def build_concepts_for_unit(user_id, semester, course, unit, seg_size: int = 900
             segments.append(cur); cur, cur_len = [], 0
     if cur: segments.append(cur)
 
-    raw = []
-    for seg in segments:
+    def extract_segment(seg):
         text = "".join(c["text"] for c in seg)[:seg_size + 2000]
         try:
-            raw += _parse_concept_items(generate_answer(_MAP_PROMPT + text, max_tokens=1600), seg)
+            return _parse_concept_items(generate_answer(_MAP_PROMPT + text, max_tokens=2200), seg)
         except Exception:
-            continue
+            return []
+
+    raw = []
+    for extracted in _parallel_ordered(segments, extract_segment):
+        raw.extend(extracted)
     if not raw:
         sampled = "".join(c["text"] for c in chunks)[:11000]
-        raw = _parse_concept_items(generate_answer(_MAP_PROMPT + sampled, max_tokens=1600), chunks)
+        raw = _parse_concept_items(generate_answer(_MAP_PROMPT + sampled, max_tokens=2200), chunks)
     if not raw: return []
 
     # REDUCE: keyword 기준 중복 병합
@@ -223,6 +517,7 @@ def build_concepts_for_unit(user_id, semester, course, unit, seg_size: int = 900
         if e:
             e["weight"] = max(e["weight"], c["weight"])
             e["links"] = list({*e["links"], *c["links"]})
+            e["aliases"] = list(dict.fromkeys([*(e.get("aliases") or []), *(c.get("aliases") or [])]))[:12]
             if e.get("page") is None: e["page"] = c.get("page")
             if e.get("filename") is None: e["filename"] = c.get("filename")
             merged_occurrences = {
@@ -250,6 +545,28 @@ def delete_chunks_by_filter(search_filter, user_id: str):
     if not ids_to_delete: return 0
     collection.delete(ids=ids_to_delete)
     return len(ids_to_delete)
+
+
+def move_chunks_by_filter(search_filter, updates, user_id: str):
+    """Move matching chunks by changing only their library-scope metadata."""
+    where_filter = _build_where_filter(search_filter, user_id=user_id)
+    if not where_filter:
+        return 0
+    result = collection.get(where=where_filter, include=["metadatas"])
+    ids, metadatas = [], []
+    allowed_updates = {
+        key: str(value or "").strip()
+        for key, value in (updates or {}).items()
+        if key in {"semester", "course", "unit"} and str(value or "").strip()
+    }
+    if not allowed_updates:
+        return 0
+    for chunk_id, metadata in zip(result.get("ids", []), result.get("metadatas", [])):
+        ids.append(chunk_id)
+        metadatas.append({**(metadata or {}), **allowed_updates})
+    if ids:
+        collection.update(ids=ids, metadatas=metadatas)
+    return len(ids)
 
 def reset_collection(user_id: str):
     where_filter = _build_where_filter(None, user_id=user_id)
@@ -302,7 +619,12 @@ def get_units(user_id: str, semester: str, course: str):
         if unit_name not in units: units[unit_name] = {"files": set(), "pages": set()}
         if filename := meta.get("filename"): units[unit_name]["files"].add(filename)
         if page := meta.get("page"): units[unit_name]["pages"].add(page)
-    return [{"unit": name, "file_count": len(info["files"]), "page_count": len(info["pages"])} for name, info in sorted(units.items())]
+    return [{
+        "unit": name,
+        "file_count": len(info["files"]),
+        "page_count": len(info["pages"]),
+        "files": sorted(info["files"]),
+    } for name, info in sorted(units.items())]
 
 def get_chunks(user_id, limit=50, offset=0, search_filter=None, full=False):
     where_filter = _build_where_filter(search_filter, user_id=user_id)
@@ -428,6 +750,104 @@ def build_concept_embeddings(user_id: str):
     with open(index_path, "w", encoding="utf-8") as f: json.dump(embeddings_index, f, ensure_ascii=False, indent=2)
     return embeddings_index
 
+
+def _write_json_atomic(path, payload):
+    """Write JSON beside the destination and replace it in one filesystem step."""
+    directory = os.path.dirname(path) or "."
+    os.makedirs(directory, exist_ok=True)
+    temp_path = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w", encoding="utf-8", dir=directory, delete=False
+        ) as temp_file:
+            temp_path = temp_file.name
+            json.dump(payload, temp_file, ensure_ascii=False, indent=2)
+            temp_file.flush()
+            os.fsync(temp_file.fileno())
+        os.replace(temp_path, path)
+    finally:
+        if temp_path and os.path.exists(temp_path):
+            os.unlink(temp_path)
+
+
+def _concept_scope_prefix(user_id, semester, course, unit):
+    return f"{user_id}::{semester}::{course}::{unit}::"
+
+
+def _node_in_scope(node, user_id, semester, course, unit):
+    return (
+        isinstance(node, dict)
+        and node.get("user_id") == user_id
+        and node.get("semester") == semester
+        and node.get("course") == course
+        and node.get("unit") == unit
+    )
+
+
+def build_concept_embeddings_for_scope(user_id, semester, course, unit):
+    """Replace graph embeddings for one unit while preserving every other node."""
+    concepts_path = os.path.join(DATA_DIR, "concepts.json")
+    index_path = os.path.join(DATA_DIR, "concept_index.json")
+    if not os.path.exists(concepts_path):
+        raise ValueError("concepts.json이 없습니다.")
+
+    with open(concepts_path, "r", encoding="utf-8") as concepts_file:
+        concepts_data = json.load(concepts_file)
+    concepts = (
+        concepts_data.get(user_id, {})
+        .get(semester, {})
+        .get(course, {})
+        .get(unit)
+    )
+    if not isinstance(concepts, list):
+        raise ValueError("지정한 범위의 개념 목록을 찾지 못했습니다.")
+
+    existing_index = []
+    if os.path.exists(index_path):
+        with open(index_path, "r", encoding="utf-8") as index_file:
+            loaded_index = json.load(index_file)
+        if isinstance(loaded_index, list):
+            existing_index = loaded_index
+
+    target_nodes = []
+    for concept in concepts:
+        if not isinstance(concept, dict):
+            continue
+        name = str(concept.get("name") or "").strip()
+        if not name:
+            continue
+        keyword = str(concept.get("keyword") or name).strip()
+        embedding = embed_text(f"{keyword} {name}".strip())
+        if not embedding:
+            raise RuntimeError(f"개념 임베딩 생성 실패: {name}")
+        target_nodes.append({
+            "id": f"{_concept_scope_prefix(user_id, semester, course, unit)}{name}",
+            "user_id": user_id,
+            "semester": semester,
+            "course": course,
+            "unit": unit,
+            "name": name,
+            "keyword": keyword,
+            "weight": concept.get("weight", 1),
+            "embedding": embedding,
+        })
+
+    if concepts and not target_nodes:
+        raise RuntimeError("지정한 범위의 개념 임베딩을 생성하지 못했습니다.")
+
+    preserved_nodes = [
+        node for node in existing_index
+        if not _node_in_scope(node, user_id, semester, course, unit)
+    ]
+    updated_index = preserved_nodes + target_nodes
+    _write_json_atomic(index_path, updated_index)
+    return {
+        "target_nodes": target_nodes,
+        "replaced_count": len(existing_index) - len(preserved_nodes),
+        "preserved_count": len(preserved_nodes),
+        "total_count": len(updated_index),
+    }
+
 def _norm_name(x):
     return "".join(ch for ch in str(x).lower() if ch.isalnum())
 
@@ -480,3 +900,225 @@ def build_cross_links(user_id: str, threshold: float = 0.40, top_k: int = 8, llm
     with open(links_path, "w", encoding="utf-8") as f:
         json.dump({"user_id": user_id, "edges": cross_edges}, f, ensure_ascii=False, indent=2)
     return cross_edges
+
+
+def build_cross_links_for_scope(
+    user_id,
+    semester,
+    course,
+    unit,
+    threshold=0.45,
+    top_k=5,
+    auto_accept_score=0.85,
+    max_similarity_exclusive=0.92,
+):
+    """Rebuild only cross-course edges touching one unit, without LLM calls."""
+    index_path = os.path.join(DATA_DIR, "concept_index.json")
+    links_path = os.path.join(DATA_DIR, "concept_links.json")
+    if not os.path.exists(index_path):
+        raise ValueError("concept_index.json이 없습니다.")
+
+    with open(index_path, "r", encoding="utf-8") as index_file:
+        embeddings_index = json.load(index_file)
+    user_nodes = [
+        node for node in embeddings_index
+        if isinstance(node, dict)
+        and node.get("user_id") == user_id
+        and node.get("embedding")
+    ]
+    target_nodes = [
+        node for node in user_nodes
+        if _node_in_scope(node, user_id, semester, course, unit)
+    ]
+    if not target_nodes:
+        raise ValueError("지정한 범위의 그래프 노드를 찾지 못했습니다.")
+
+    links_payload = {"user_id": user_id, "edges": []}
+    if os.path.exists(links_path):
+        with open(links_path, "r", encoding="utf-8") as links_file:
+            loaded_links = json.load(links_file)
+        if isinstance(loaded_links, dict):
+            links_payload = dict(loaded_links)
+    existing_edges = links_payload.get("edges", [])
+    if not isinstance(existing_edges, list):
+        existing_edges = []
+
+    scope_prefix = _concept_scope_prefix(user_id, semester, course, unit)
+    preserved_edges = []
+    for edge in existing_edges:
+        if not isinstance(edge, dict):
+            continue
+        endpoint_a = str(edge.get("a") or edge.get("source") or "")
+        endpoint_b = str(edge.get("b") or edge.get("target") or "")
+        if endpoint_a.startswith(scope_prefix) or endpoint_b.startswith(scope_prefix):
+            continue
+        preserved_edges.append(edge)
+
+    new_edges, seen_pairs = [], set()
+    for concept_a in target_nodes:
+        similarities = []
+        for concept_b in user_nodes:
+            if (
+                concept_a["id"] == concept_b.get("id")
+                or concept_a.get("course") == concept_b.get("course")
+            ):
+                continue
+            score = _cosine_similarity(
+                concept_a.get("embedding"), concept_b.get("embedding")
+            )
+            if not (threshold <= score < max_similarity_exclusive):
+                continue
+            if _norm_name(concept_a.get("name")) == _norm_name(concept_b.get("name")):
+                continue
+            adjusted_score = score * (
+                1 + 0.1 * ((concept_a.get("weight", 1) + concept_b.get("weight", 1)) / 10)
+            )
+            similarities.append((adjusted_score, score, concept_b))
+
+        similarities.sort(key=lambda item: item[0], reverse=True)
+        for adjusted_score, score, concept_b in similarities[:top_k]:
+            if score < auto_accept_score:
+                continue
+            pair_key = tuple(sorted((concept_a["id"], concept_b["id"])))
+            if pair_key in seen_pairs:
+                continue
+            seen_pairs.add(pair_key)
+            new_edges.append({
+                "a": concept_a["id"],
+                "b": concept_b["id"],
+                "score": adjusted_score,
+                "type": "cross",
+                "reason": "High similarity score (incremental, no LLM)",
+            })
+
+    links_payload["user_id"] = user_id
+    links_payload["edges"] = preserved_edges + new_edges
+    _write_json_atomic(links_path, links_payload)
+    return {
+        "target_node_count": len(target_nodes),
+        "removed_edge_count": len(existing_edges) - len(preserved_edges),
+        "new_edges": new_edges,
+        "preserved_edge_count": len(preserved_edges),
+        "total_edge_count": len(links_payload["edges"]),
+        "llm_calls": 0,
+    }
+
+
+def remove_graph_scope(user_id, semester, course, unit):
+    """Remove one empty library scope from the persisted concept graph."""
+    index_path = os.path.join(DATA_DIR, "concept_index.json")
+    links_path = os.path.join(DATA_DIR, "concept_links.json")
+    if not os.path.exists(index_path):
+        return {"removed_nodes": 0, "removed_edges": 0}
+    with open(index_path, encoding="utf-8") as index_file:
+        index = json.load(index_file)
+    index = index if isinstance(index, list) else []
+    removed_ids = {
+        str(node.get("id") or "")
+        for node in index
+        if _node_in_scope(node, user_id, semester, course, unit)
+    }
+    prefix = _concept_scope_prefix(user_id, semester, course, unit)
+    kept_nodes = [node for node in index if str(node.get("id") or "") not in removed_ids]
+    _write_json_atomic(index_path, kept_nodes)
+
+    removed_edges = 0
+    if os.path.exists(links_path):
+        with open(links_path, encoding="utf-8") as links_file:
+            links = json.load(links_file)
+        links = links if isinstance(links, dict) else {"user_id": user_id, "edges": []}
+        edges = links.get("edges") if isinstance(links.get("edges"), list) else []
+        kept_edges = []
+        for edge in edges:
+            endpoint_a = str(edge.get("a") or edge.get("source") or "")
+            endpoint_b = str(edge.get("b") or edge.get("target") or "")
+            if (
+                endpoint_a in removed_ids or endpoint_b in removed_ids
+                or endpoint_a.startswith(prefix) or endpoint_b.startswith(prefix)
+            ):
+                removed_edges += 1
+                continue
+            kept_edges.append(edge)
+        links["edges"] = kept_edges
+        _write_json_atomic(links_path, links)
+    return {"removed_nodes": len(removed_ids), "removed_edges": removed_edges}
+
+
+def move_graph_scope(user_id, source_scope, target_scope):
+    """Relocate graph node IDs and their edge endpoints without new embeddings."""
+    source_semester, source_course, source_unit = source_scope
+    target_semester, target_course, target_unit = target_scope
+    index_path = os.path.join(DATA_DIR, "concept_index.json")
+    links_path = os.path.join(DATA_DIR, "concept_links.json")
+    if not os.path.exists(index_path):
+        return {"moved_nodes": 0, "deduplicated_nodes": 0, "updated_edges": 0}
+    with open(index_path, encoding="utf-8") as index_file:
+        index = json.load(index_file)
+    index = index if isinstance(index, list) else []
+    target_prefix = _concept_scope_prefix(
+        user_id, target_semester, target_course, target_unit
+    )
+    existing_target_ids = {
+        str(node.get("id") or "")
+        for node in index
+        if _node_in_scope(
+            node, user_id, target_semester, target_course, target_unit
+        )
+    }
+    remap, moved_nodes, deduplicated = {}, 0, 0
+    updated_nodes = []
+    for node in index:
+        if not _node_in_scope(
+            node, user_id, source_semester, source_course, source_unit
+        ):
+            updated_nodes.append(node)
+            continue
+        old_id = str(node.get("id") or "")
+        new_id = target_prefix + str(node.get("name") or node.get("keyword") or "")
+        remap[old_id] = new_id
+        moved_nodes += 1
+        if new_id in existing_target_ids:
+            deduplicated += 1
+            continue
+        existing_target_ids.add(new_id)
+        updated_nodes.append({
+            **node,
+            "id": new_id,
+            "semester": target_semester,
+            "course": target_course,
+            "unit": target_unit,
+        })
+    _write_json_atomic(index_path, updated_nodes)
+
+    updated_edges = 0
+    if os.path.exists(links_path) and remap:
+        with open(links_path, encoding="utf-8") as links_file:
+            links = json.load(links_file)
+        links = links if isinstance(links, dict) else {"user_id": user_id, "edges": []}
+        edges = links.get("edges") if isinstance(links.get("edges"), list) else []
+        deduped_edges, seen = [], set()
+        for edge in edges:
+            changed = False
+            item = dict(edge)
+            for key in ("a", "b", "source", "target"):
+                endpoint = str(item.get(key) or "")
+                if endpoint in remap:
+                    item[key] = remap[endpoint]
+                    changed = True
+            endpoint_a = str(item.get("a") or item.get("source") or "")
+            endpoint_b = str(item.get("b") or item.get("target") or "")
+            if not endpoint_a or not endpoint_b or endpoint_a == endpoint_b:
+                continue
+            pair = tuple(sorted((endpoint_a, endpoint_b)))
+            if pair in seen:
+                continue
+            seen.add(pair)
+            deduped_edges.append(item)
+            updated_edges += bool(changed)
+        links["edges"] = deduped_edges
+        _write_json_atomic(links_path, links)
+    return {
+        "moved_nodes": moved_nodes,
+        "deduplicated_nodes": deduplicated,
+        "updated_edges": updated_edges,
+    }

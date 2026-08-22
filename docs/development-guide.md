@@ -291,6 +291,10 @@ Authorization: Bearer <token>
 
 ### Ingestion
 
+PDF 텍스트는 우선 PyMuPDF의 native extraction을 사용한다. 과목명·단원명·파일명에 한국어가 있는데 페이지의 한글 비율이 비정상적으로 낮으면 `kor+eng` OCR을 선택적으로 재시도한다. 이 fallback을 사용하려면 시스템 Tesseract에 `kor.traineddata`가 설치되어 있어야 한다. native extraction이 충분한 페이지는 OCR하지 않는다.
+
+업로드의 `unit`이 비어 있으면 확장자를 제외한 PDF 파일명을 단원명으로 사용한다. My Library가 과목 아래에서 단원을 탐색하는 구조이므로 빈 unit metadata를 만들지 않는다.
+
 `POST /ingest` 흐름:
 
 1. PDF upload
@@ -314,14 +318,15 @@ My Library에는 두 모드가 있다.
 | 빠른 검색 | `POST /ask/search` | 없음 | 관련 chunks, concepts, Learning Memory/Recall 찾기 |
 | AI 답변 | `POST /ask` | 있음 | 자료 기반 답변 생성 |
 
-`/ask/search`는 `hybrid_personalized_v1` search-only endpoint다. GPT 답변은 생성하지 않으며 다음 순서로 동작한다.
+`/ask/search`는 `hybrid_personalized_v2` search-only endpoint다. GPT 답변은 생성하지 않으며 다음 순서로 동작한다.
 
-1. 한국어 조사 정규화와 사용자별 concept alias를 포함해 검색어를 확장한다.
+1. 한국어 조사 정규화와 사용자별 concept alias를 포함해 검색어를 확장한다. 추출 개념의 한국어 `name`, 본문 `keyword`, 영문명·약어 `aliases`는 양방향 용어 그룹으로 취급한다.
 2. 질문을 definition, comparison, mechanism, review, connection, source location, personal memory, general intent로 분류한다.
 3. 명시 필터를 우선하고, 필터가 없으면 의도에 따라 single/multi 범위를 결정한다.
 4. ChromaDB 의미 검색과 로컬 keyword/concept 검색을 합친다. embedding 실패 시 keyword fallback으로 계속 동작한다.
 5. Learning Memory의 내 설명, AI 피드백, 개선 요약, Missing Links, Follow-up Question, strengths를 필드별로 검색한다.
-6. semantic 40%, keyword 25%, concept 15%, learning relevance 14%, preference 6%로 source 점수를 계산하고 이유와 score components를 반환한다.
+6. semantic 40%, keyword 25%, 질문과 직접 일치한 concept 15%, learning relevance 14%, preference 6%로 source 점수를 계산한다.
+7. 직접 keyword/concept 일치 또는 강한 semantic 근거가 없는 chunk는 제외하고, UI에는 원점수 대신 `직접 일치` 또는 `관련성 높음`을 표시한다.
 
 개인화는 `learning + preference <= 20%`로 제한한다. `/ask/search/events`는 result opened, refined, helpful, AI answer requested, explanation started 이벤트만 저장한다. 민감/임상 query 원문은 cache나 event에 남기지 않는다. `tests/fixtures/search_cases.json`과 `tests/test_search_engine.py`가 대표 질문의 의도, 범위, 핵심어, 개인화 상한을 고정한다.
 
@@ -337,6 +342,8 @@ My Library에는 두 모드가 있다.
 - 출처는 과목, 단원, 파일명, page 형식으로 표시한다.
 
 ## 9. 개념 추출과 그래프
+
+개념 추출의 현재 동작, 알려진 누락 유형, 품질 지표와 단계별 개선 계획은 [개념 추출 품질 계획](concept-extraction-quality.md)을 기준으로 한다. 루트의 `COPILOT_PROMPT_concepts.md`와 `COPILOT_PROMPT_concept_graph.md`는 구현 이력을 설명하는 과거 설계 기록이다.
 
 ### Concept extraction
 
@@ -355,9 +362,12 @@ My Library에는 두 모드가 있다.
 
 - `name`
 - `keyword`
+- `aliases`
 - `weight`
 - `page`
 - `filename`
+- `pages`
+- `occurrences`
 - `links`
 - `group`
 
