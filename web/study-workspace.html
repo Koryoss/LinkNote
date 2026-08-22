@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LinkNote · 학습 작업대</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif; background: #fbfcfe; color: #1f2937; }
+  .topbar { position: sticky; top: 0; z-index: 70; display: flex; align-items: center; gap: 14px; padding: 12px 24px; background: rgba(255,255,255,.94); backdrop-filter: blur(6px); border-bottom: 1px solid #eef1f6; }
+  .brand { font-size: 1.18rem; font-weight: 800; color: #1e293b; text-decoration: none; white-space: nowrap; }
+  .scope-crumb { color: #64748b; font-size: .82rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .spacer { flex: 1; }
+  .btn, button { border: 1px solid #d8dee9; background: #fff; color: #2563eb; border-radius: 8px; padding: 8px 12px; font-size: .84rem; font-weight: 700; text-decoration: none; cursor: pointer; }
+  .btn.primary { background: #2563eb; border-color: #2563eb; color: #fff; }
+  .icon-btn { border: none; background: transparent; color: #64748b; font-size: 1rem; padding: 4px 8px; cursor: pointer; }
+  .mobile-only { display: none; }
+
+  #app { width: min(720px, calc(100vw - 32px)); margin: 60px auto; text-align: center; color: #64748b; font-size: .95rem; line-height: 1.7; }
+  #app.error-state, #app.empty-state { border: 1px dashed #d8dee9; border-radius: 14px; padding: 28px; background: #fff; }
+  #app.error-state { border-color: #fecaca; color: #b91c1c; background: #fff7f7; }
+
+  .workspace { display: grid; grid-template-columns: 260px 1fr 360px; gap: 16px; padding: 16px 24px 32px; align-items: start; }
+  @media (max-width: 1300px) { .workspace { grid-template-columns: 230px 1fr 310px; } }
+
+  .toc-panel, .concept-panel, .source-panel { background: #fff; border: 1px solid #e8ebf2; border-radius: 14px; box-shadow: 0 8px 24px rgba(15,23,42,.06); }
+  .toc-panel, .source-panel { max-height: calc(100vh - 90px); overflow-y: auto; position: sticky; top: 76px; }
+  .concept-panel { min-height: 60vh; padding: 16px; }
+  .panel-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 14px 16px; border-bottom: 1px solid #eef1f6; font-weight: 800; color: #0f172a; position: sticky; top: 0; background: #fff; z-index: 1; }
+
+  #tocList { padding: 8px; }
+  .toc-segment { margin-bottom: 6px; }
+  .toc-segment-head { display: block; width: 100%; text-align: left; border: none; background: transparent; border-radius: 10px; padding: 9px 10px; font-size: .84rem; font-weight: 700; color: #1e293b; cursor: pointer; }
+  .toc-segment.active > .toc-segment-head { background: #eff6ff; color: #1d4ed8; }
+  .toc-pages { display: flex; flex-direction: column; gap: 2px; padding-left: 8px; }
+  .toc-page { display: flex; gap: 8px; align-items: baseline; border: none; background: transparent; border-radius: 8px; padding: 6px 8px; text-align: left; cursor: pointer; font-size: .78rem; color: #475569; }
+  .toc-page:hover { background: #f8fafc; }
+  .toc-page.active { background: #dbeafe; color: #1d4ed8; font-weight: 700; }
+  .toc-page-num { flex: 0 0 auto; color: #94a3b8; font-size: .72rem; }
+  .toc-page.active .toc-page-num { color: #2563eb; }
+  .toc-page-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  .concept-card { border: 1px solid #eef1f6; border-radius: 12px; padding: 14px; margin-bottom: 12px; }
+  .concept-name { font-weight: 800; color: #0f172a; font-size: 1rem; }
+  .concept-def { color: #475569; font-size: .86rem; margin-top: 6px; line-height: 1.5; }
+  .occurrence-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+  .occurrence-chip { border: 1px solid #dbeafe; background: #eff6ff; color: #1d4ed8; border-radius: 999px; padding: 3px 10px; font-size: .74rem; font-weight: 700; }
+  .note-label { display: block; margin-top: 12px; font-size: .76rem; font-weight: 700; color: #64748b; }
+  .note-input { width: 100%; min-height: 64px; margin-top: 6px; border: 1px solid #d8dee9; border-radius: 10px; padding: 8px 10px; font-size: .85rem; font-family: inherit; resize: vertical; }
+  .note-status { margin-top: 4px; font-size: .74rem; color: #94a3b8; min-height: 1em; }
+  .note-status.saved { color: #059669; }
+  .note-status.failed { color: #b91c1c; }
+  .muted-note { color: #94a3b8; font-size: .85rem; padding: 12px; }
+
+  .source-frame { width: 100%; height: calc(100vh - 160px); border: none; display: block; background: #f8fafc; }
+
+  @media (max-width: 899px) {
+    .mobile-only { display: inline-flex; }
+    .workspace { grid-template-columns: 1fr; padding: 12px 12px 24px; }
+    .toc-panel, .source-panel {
+      position: fixed; top: 0; bottom: 0; z-index: 65; width: min(400px, 92vw);
+      max-height: none; box-shadow: 0 20px 60px rgba(15,23,42,.25);
+      transition: transform .2s ease;
+    }
+    .toc-panel { left: 0; transform: translateX(-100%); }
+    .toc-panel.open { transform: translateX(0); }
+    .source-panel { right: 0; transform: translateX(100%); }
+    .source-panel.open { transform: translateX(0); }
+    .toc-scrim, .source-scrim { position: fixed; inset: 0; background: rgba(15,23,42,.35); z-index: 60; }
+  }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <a class="brand" href="/">LinkNote</a>
+    <div class="scope-crumb" id="scopeCrumb"></div>
+    <span class="spacer"></span>
+    <button type="button" id="tocToggleBtn" class="btn mobile-only" onclick="StudyWorkspace.toggleToc()">목차</button>
+    <button type="button" id="sourceToggleBtn" class="btn mobile-only" onclick="StudyWorkspace.toggleSource()">원문</button>
+    <a class="btn" href="/">My Library</a>
+  </div>
+
+  <div id="app" class="loading">학습 작업대를 불러오는 중입니다…</div>
+
+  <div class="workspace" id="workspace" hidden>
+    <aside class="toc-panel" id="tocPanel" aria-label="목차">
+      <div class="panel-head"><span>목차</span><button type="button" class="icon-btn mobile-only" onclick="StudyWorkspace.toggleToc(false)" aria-label="목차 닫기">✕</button></div>
+      <div id="tocList"></div>
+    </aside>
+    <div class="toc-scrim mobile-only" id="tocScrim" onclick="StudyWorkspace.toggleToc(false)" hidden></div>
+
+    <main class="concept-panel" id="conceptPanel" aria-label="개념과 노트">
+      <div id="conceptList"></div>
+    </main>
+
+    <aside class="source-panel" id="sourcePanel" aria-label="원문">
+      <div class="panel-head">
+        <span>원문</span>
+        <div style="display:flex; gap:8px; align-items:center;">
+          <button type="button" class="btn" id="openFullBtn">자료 전체 열기</button>
+          <button type="button" class="icon-btn mobile-only" onclick="StudyWorkspace.toggleSource(false)" aria-label="원문 닫기">✕</button>
+        </div>
+      </div>
+      <div id="sourceBody"></div>
+    </aside>
+    <div class="source-scrim mobile-only" id="sourceScrim" onclick="StudyWorkspace.toggleSource(false)" hidden></div>
+  </div>
+
+<script src="/study-workspace-logic.js"></script>
+<script src="/study-workspace.js"></script>
+</body>
+</html>

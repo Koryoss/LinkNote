@@ -1173,7 +1173,7 @@
       <div class="unit-cols" id="unitCols">
         <div class="doc-panel"><div class="doc-head">${clinicalEnabled()
             ? `<button class="doc-tab on" id="docTabDoc" onclick="docTab('doc')">📄 원문</button><button class="doc-tab" id="docTabClin" onclick="docTab('clinical')">🩺 임상 검증</button>`
-            : `<span class="doc-title">📄 파일 원문</span>`}<select id="doc_sel" onchange="docShow()"></select><button class="mini-btn" onclick="openMoveFileModal(event)">자료 이동</button><button class="mini-btn danger" onclick="deleteCurrentFile(event)">자료 삭제</button><button class="mini-btn" onclick="toggleDocPanel()" id="docToggleBtn">PDF 닫기</button><div id="concept_page_nav" class="concept-page-nav" hidden></div></div><iframe id="doc_frame" class="doc-frame" title="원문 PDF"></iframe>${clinicalEnabled() ? clinicalPanelHTML() : ''}</div>
+            : `<span class="doc-title">📄 파일 원문</span>`}<select id="doc_sel" onchange="docShow()"></select><button class="mini-btn" onclick="openMoveFileModal(event)">자료 이동</button><button class="mini-btn danger" onclick="deleteCurrentFile(event)">자료 삭제</button><button class="mini-btn" onclick="openStudyWorkspace()" id="studyWorkspaceBtn">학습 작업대</button><button class="mini-btn" onclick="toggleDocPanel()" id="docToggleBtn">PDF 닫기</button><div id="concept_page_nav" class="concept-page-nav" hidden></div></div><iframe id="doc_frame" class="doc-frame" title="원문 PDF"></iframe>${clinicalEnabled() ? clinicalPanelHTML() : ''}</div>
         <div class="unit-main">${inlineQuestionHTML(state.course)}<div class="drill-bar"><button class="mini-btn" onclick="startRecallForActive()">설명해보기</button><span class="muted" style="font-size:.72rem">개념 클릭 = 연관 펼치기</span></div>${recallPanelHTML()}<div class="graph-panel" id="graphPanel"><div class="graph-head"><span class="graph-title">개념 지도</span><button class="mini-btn" onclick="toggleGraphPanel()" id="graphToggleBtn">지도 닫기</button></div><div id="canvas"><div class="graph-tools"><button class="mini-btn" onclick="drillReset()">핵심만</button><button class="mini-btn" onclick="drillAll()">전체 보기</button></div><svg id="lines"></svg></div></div></div>
       </div>`;
     drillVisible = null;
@@ -1984,6 +1984,12 @@
   function currentDocumentFilename(){
     const sel=document.getElementById('doc_sel');
     return sel ? (sel.value||'').trim() : '';
+  }
+  function openStudyWorkspace(){
+    const filename = currentDocumentFilename();
+    if(!filename){ alert('먼저 자료를 선택하세요.'); return; }
+    const q = new URLSearchParams({ semester: state.semester||'', course: state.course||'', unit: state.unit||'', filename });
+    location.href = `/study-workspace.html?${q.toString()}`;
   }
   let managedFileContext = null;
   let deleteFileContext = null;

@@ -1,0 +1,101 @@
+// Pure grouping/filtering helpers for the study workspace table of contents.
+//
+// GET /study-workspace does not provide chapter/section headings: the only
+// per-page "title" field it returns is the whole file's upload-time title,
+// identical on every page (see docs/development-roles.md and rag.py
+// add_pdf_pages_to_db). So the left-hand table of contents is built instead
+// from concept.first_page boundaries: whenever a new concept first appears,
+// that page starts a new "구간" (page range). This file has no DOM/API
+// access so it can run unmodified in the browser and under `node --test`.
+(function (root) {
+  'use strict';
+
+  function normalizePages(pages) {
+    return (pages || [])
+      .map(function (p) {
+        return {
+          page: Number(p.page),
+          title: p.title,
+          text_preview: p.text_preview,
+          concepts: Array.isArray(p.concepts) ? p.concepts : [],
+        };
+      })
+      .filter(function (p) { return Number.isFinite(p.page); })
+      .sort(function (a, b) { return a.page - b.page; });
+  }
+
+  function segmentLabel(startPage, endPage, conceptName) {
+    var range = startPage === endPage ? (startPage + 'p') : (startPage + '~' + endPage + 'p');
+    return conceptName ? (range + ' · 대표 개념: ' + conceptName) : range;
+  }
+
+  // Builds ordered page-range segments ("구간") from concept first-appearance
+  // boundaries. Pages before the first concept's first_page join the first
+  // segment rather than forming their own unlabeled group. When no concept
+  // has a valid first_page in range, returns a single unlabeled segment so
+  // callers can still render a flat, ungrouped page list.
+  function buildSegments(pages, concepts) {
+    var sortedPages = normalizePages(pages);
+    if (!sortedPages.length) return [];
+
+    var minPage = sortedPages[0].page;
+    var maxPage = sortedPages[sortedPages.length - 1].page;
+
+    var boundaryConcepts = {};
+    (concepts || []).forEach(function (c) {
+      var fp = Number(c && c.first_page);
+      if (!Number.isFinite(fp) || fp < minPage || fp > maxPage) return;
+      if (!(fp in boundaryConcepts)) boundaryConcepts[fp] = c;
+    });
+    var boundaries = Object.keys(boundaryConcepts)
+      .map(Number)
+      .sort(function (a, b) { return a - b; });
+
+    if (!boundaries.length) {
+      return [{
+        startPage: minPage,
+        endPage: maxPage,
+        label: segmentLabel(minPage, maxPage, null),
+        representativeConcept: null,
+        pages: sortedPages,
+      }];
+    }
+
+    return boundaries.map(function (boundary, i) {
+      var start = i === 0 ? minPage : boundary;
+      var end = i === boundaries.length - 1 ? maxPage : boundaries[i + 1] - 1;
+      var segPages = sortedPages.filter(function (p) { return p.page >= start && p.page <= end; });
+      var conceptName = boundaryConcepts[boundary].name;
+      return {
+        startPage: start,
+        endPage: end,
+        label: segmentLabel(start, end, conceptName),
+        representativeConcept: conceptName,
+        pages: segPages,
+      };
+    });
+  }
+
+  // Concepts that occur on at least one page inside the segment, in the same
+  // order as the source concepts[] array (already first_page-sorted by the
+  // backend).
+  function conceptsForSegment(segment, concepts) {
+    var namesInSegment = new Set();
+    (segment && segment.pages || []).forEach(function (p) {
+      (p.concepts || []).forEach(function (name) { namesInSegment.add(name); });
+    });
+    return (concepts || []).filter(function (c) { return namesInSegment.has(c && c.name); });
+  }
+
+  var api = {
+    buildSegments: buildSegments,
+    conceptsForSegment: conceptsForSegment,
+    segmentLabel: segmentLabel,
+  };
+
+  if (typeof module !== 'undefined' && module.exports) {
+    module.exports = api;
+  } else {
+    root.StudyWorkspaceLogic = api;
+  }
+})(typeof window !== 'undefined' ? window : this);
