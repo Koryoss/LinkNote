@@ -4143,6 +4143,7 @@ def _upload_content_signature(path: str) -> tuple[int, str]:
     return os.path.getsize(path), digest.hexdigest()
 
 
+
 def _pick_unambiguous_upload_path(paths: List[str]) -> Optional[str]:
     unique_paths = sorted(set(paths))
     if len(unique_paths) == 1:
@@ -4151,6 +4152,57 @@ def _pick_unambiguous_upload_path(paths: List[str]) -> Optional[str]:
         signatures = {_upload_content_signature(path) for path in unique_paths}
         if len(signatures) == 1:
             return unique_paths[0]
+    return None
+
+
+def _resolve_owned_upload_path(
+    data_user_id: str,
+    requested_filename: str,
+    semester: str = "",
+    course: str = "",
+    unit: str = "",
+) -> Optional[str]:
+    """Resolve only source files directly referenced by chunks in the owned scope."""
+    try:
+        safe_filename = _normalize_filename(requested_filename)
+    except HTTPException:
+        return None
+
+    search_filter: Dict[str, Any] = {"filename": safe_filename}
+    for key, value in (("semester", semester), ("course", course), ("unit", unit)):
+        if str(value or "").strip():
+            search_filter[key] = str(value).strip()
+    chunks = get_chunks(
+        user_id=data_user_id,
+        limit=10000,
+        search_filter=search_filter,
+        full=False,
+    )
+    if not chunks.get("total"):
+        return None
+
+    stored_names = {
+        str(item.get("stored_filename") or "").strip()
+        for item in chunks.get("items", [])
+        if str(item.get("stored_filename") or "").strip()
+    }
+    stored_paths = [path for stored in stored_names if (path := _safe_upload_path(stored))]
+    if path := _pick_unambiguous_upload_path(stored_paths):
+        return path
+    if stored_names:
+        logger.warning(
+            "Owned stored_filename(s) unavailable or ambiguous for user=%s filename=%s",
+            data_user_id,
+            safe_filename,
+        )
+        return None
+
+    if _matching_upload_paths(safe_filename):
+        logger.warning(
+            "Legacy filename matches are not returned without attributable ownership for user=%s filename=%s",
+            data_user_id,
+            safe_filename,
+        )
     return None
 
 
@@ -4698,6 +4750,50 @@ async def concept_graph_overview(
         "ranking_info": _ranking_info(),
     }
 
+
+
+@app.get("/concept-notes")
+async def concept_notes_get(
+    semester: Optional[str] = None,
+    course: Optional[str] = None,
+    unit: Optional[str] = None,
+    filename: Optional[str] = None,
+    concept: Optional[str] = None,
+    data_user_id: str = Depends(current_uid),
+) -> Dict[str, Any]:
+    filters = {
+        key: value.strip()
+        for key, value in {
+            "semester": semester,
+            "course": course,
+            "unit": unit,
+            "filename": filename,
+            "concept": concept,
+        }.items()
+        if value and value.strip()
+    }
+    return {
+        "items": _get_concept_notes_for_user(data_user_id, filters),
+    }
+
+
+@app.put("/concept-notes")
+async def concept_notes_put(
+    payload: ConceptNoteUpsertRequest,
+    data_user_id: str = Depends(current_uid),
+) -> Dict[str, Any]:
+    note = _upsert_concept_note(data_user_id, payload.dict())
+    return {"ok": True, "note": note}
+
+
+@app.delete("/concept-notes/{note_id}")
+async def concept_notes_delete(
+    note_id: str,
+    data_user_id: str = Depends(current_uid),
+) -> Dict[str, Any]:
+    if not _delete_concept_note_for_user(data_user_id, note_id):
+        raise HTTPException(status_code=404, detail="노트를 찾을 수 없습니다.")
+    return {"ok": True}
 
 
 @app.post("/learning-session/start")

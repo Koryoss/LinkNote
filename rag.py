@@ -133,7 +133,12 @@ def _concept_occurrences_from_chunks(keyword, chunks):
         source_text = unicodedata.normalize("NFKC", str(c.get("text") or "")).casefold()
         if normalized_needle not in source_text:
             continue
-        page = c.get("page")
+        try:
+            page = int(c.get("page"))
+        except (TypeError, ValueError):
+            continue
+        if page <= 0:
+            continue
         filename = c.get("filename")
         key = (filename or "", page)
         if key in seen:
@@ -145,10 +150,10 @@ def _concept_occurrences_from_chunks(keyword, chunks):
 
 
 def _concept_occurrences_for_terms_from_chunks(terms, chunks):
-    """Return every unique source page that contains any explicit concept term."""
+    """Return every unique positive source page containing an explicit concept term."""
     merged = {}
     for term in terms:
-        normalized = _norm_name(term)
+        normalized = unicodedata.normalize("NFKC", str(term or "")).casefold().strip()
         if len(normalized) < 2:
             continue
         for occurrence in _concept_occurrences_from_chunks(term, chunks):
@@ -162,14 +167,16 @@ def _concept_occurrences_for_terms_from_chunks(terms, chunks):
 
 def concept_source_chunks_for_unit(user_id, semester, course, unit):
     """Load a unit's source text once for deterministic occurrence backfilling."""
-    where_filter = _build_where_filter({"semester": semester, "course": course}, user_id=user_id)
+    where_filter = _build_where_filter(
+        {"semester": semester, "course": course, "unit": unit},
+        user_id=user_id,
+    )
     if not where_filter:
         return []
     results = collection.get(where=where_filter, include=["metadatas", "documents"])
     return [
         {"text": document or "", "page": metadata.get("page"), "filename": metadata.get("filename")}
         for metadata, document in zip(results.get("metadatas", []), results.get("documents", []))
-        if (metadata.get("unit") or "").strip() == unit
     ]
 
 
