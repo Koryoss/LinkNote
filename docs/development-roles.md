@@ -1,6 +1,6 @@
 # LinkNote 개발 역할·승인 운영 지침
 
-기준일: 2026-08-16
+기준일: 2026-08-22
 문서 소유자 및 최종 감독자: 정유진
 
 ## 현재 개발 현황
@@ -8,10 +8,11 @@
 | 영역 | 상태 | 근거 | 다음 책임자 |
 | --- | --- | --- | --- |
 | `concept_notes` 저장 구조와 API | GitHub 통합 완료 | PR #13, merge `00af84e` | Codex 회귀 검수 |
-| `/study-workspace`와 안전한 `/file` 연결 | GitHub 통합 완료 | PR #14, merge `2bd349e` | Claude Cowork UI 연결 |
-| 3열 학습 작업대 UI | 구현 대기 | 최신 main 확인 후 별도 feature branch 필요 | Claude Cowork |
-| Manus UX 프로토타입 | 참고안·조건부 승인 | `Koryoss/linknote-concept-ux` | Claude Cowork가 제품 구조에 맞게 적용 |
-| 기존 로컬 LinkNote 저장소 | dirty, `origin/main`보다 뒤처짐 | 사용자 미통합 변경 다수 | Codex만 분리 검수; pull/reset 금지 |
+| `/study-workspace`와 안전한 `/file` 연결 | GitHub 통합 완료 | PR #14, merge `2bd349e` | Codex 회귀 검수 |
+| 3열 학습 작업대 UI | 구현 완료, 병합 대기 | `web/study-workspace.html`/`.js`/`-logic.js`, PR #17에 포함. 기존 `GET /study-workspace`·`GET/PUT /concept-notes`·`GET /file` 응답만 사용, 백엔드 무변경 | 감독자 최종 승인 → merge |
+| 기존 로컬 저장소(`study-rag-api`) dirty 상태 | 정리 완료 | `backup/local-work-20260822` 브랜치로 4,400여 줄 백업·커밋·push, `origin/main`과 병합 충돌(3개 파일, 23곳) 해결, 인증 fallback 스텁 제거, 문서 버전 표기 수정 | — |
+| PR #17 (`backup/local-work-20260822` → `main`) | `MERGEABLE`, 병합 대기 | 테스트 172개 통과(원래 22개에서 증가), 실사용 서버로 학습 작업대·개념 노트 저장 재검증 완료 | 감독자 최종 승인 후 Codex가 merge |
+| Manus UX 프로토타입 | 참고안·조건부 승인 | `Koryoss/linknote-concept-ux` | 학습 작업대 UI에 부분 반영 완료 |
 | CareFlow `<스터디>` 연계 | 부분 구현 | `/study/import`, `/study/ask`, `/study/claim`, claims CRUD 존재 | 계약 검수 후 양쪽 제품별 구현 |
 | `/study/audit` | 미구현·계획 경계 | `AGENTS.md`에 접점만 존재하고 실제 route 없음 | 감독자 우선순위 승인 후 설계 |
 
