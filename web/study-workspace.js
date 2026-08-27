@@ -107,8 +107,6 @@
     var levels = [
       ['semester', scope.semester, '학기'],
       ['course', scope.course, '과목'],
-      ['unit', scope.unit, '단원'],
-      ['filename', scope.filename, '자료'],
     ];
     nav.innerHTML = '<button type="button" class="scope-pill home" data-scope-home>홈</button>' +
       levels.filter(function (item) { return item[1]; }).map(function (item) {
@@ -117,6 +115,23 @@
       }).join('');
     nav.querySelector('[data-scope-home]').addEventListener('click', function () { location.href = '/'; });
     nav.querySelectorAll('[data-scope-level]').forEach(function (button) {
+      button.addEventListener('click', function (event) {
+        openScopeMenu(button.dataset.scopeLevel, button, event);
+      });
+    });
+    renderDocumentContext();
+  }
+
+  function renderDocumentContext() {
+    var context = el('documentContext');
+    if (!context) return;
+    context.innerHTML = '<div class="document-context-main">' +
+      '<h1>' + esc(scope.course || '과목') + ' · 단원</h1>' +
+      '<p class="document-context-file">' + esc(scope.unit || '단원') + (scope.filename ? ' · ' + esc(scope.filename) : '') + '</p></div>' +
+      '<div class="document-context-actions">' +
+      '<button type="button" class="context-picker" data-scope-level="unit" aria-label="단원 선택" aria-haspopup="listbox" aria-expanded="false" title="' + esc(scope.unit) + '">단원 변경</button>' +
+      '<button type="button" class="context-picker" data-scope-level="filename" aria-label="자료 선택" aria-haspopup="listbox" aria-expanded="false" title="' + esc(scope.filename) + '">자료 변경</button></div>';
+    context.querySelectorAll('[data-scope-level]').forEach(function (button) {
       button.addEventListener('click', function (event) {
         openScopeMenu(button.dataset.scopeLevel, button, event);
       });
