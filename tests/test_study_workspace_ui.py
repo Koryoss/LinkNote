@@ -18,6 +18,14 @@ class StudyWorkspaceUiTests(unittest.TestCase):
         self.assertIn("getJSON('/units?'", self.script)
         self.assertIn("workspaceUrl(nextScope)", self.script)
 
+    def test_source_preview_refits_with_panel_width_and_shows_page_number(self):
+        self.assertIn('class="source-page-indicator"', self.script)
+        self.assertIn("Logic.sourcePageLabel(state.activePage, state.pages)", self.script)
+        self.assertIn("Logic.sourceViewHash(state.activePage)", self.script)
+        self.assertIn("function scheduleSourceRefit()", self.script)
+        self.assertIn("scheduleSourceRefit();", self.script)
+        self.assertIn(".source-page-indicator", self.html)
+
 
 if __name__ == "__main__":
     unittest.main()
