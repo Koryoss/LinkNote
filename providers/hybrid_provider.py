@@ -6,6 +6,10 @@ from providers.openai_provider import generate_answer
 #  - 기본(로컬): Ollama (무료, 로컬)
 #  - 웹 배포(Render 등): EMBED_PROVIDER=openai  → OpenAI 임베딩 (Ollama 불필요)
 if os.getenv("EMBED_PROVIDER", "ollama").lower() == "openai":
-    from providers.openai_provider import embed_text
+    from providers.openai_provider import embed_text, embed_texts
 else:
     from providers.ollama_provider import embed_text
+
+    def embed_texts(texts, batch_size=None):
+        """Local provider compatibility fallback."""
+        return [embed_text(text) for text in texts]

@@ -1,0 +1,38 @@
+{
+  "version": 1,
+  "terms": [
+    {
+      "canonical_name": "평균적혈구용적",
+      "aliases": ["적혈구용적평균"],
+      "preferred_keywords": ["Mean cell volume", "MCV"],
+      "source": "https://www.amc.seoul.kr/asan/healthinfo/management/managementDetail.do?managementId=117&tabIndex=1"
+    },
+    {
+      "canonical_name": "운동실조",
+      "aliases": ["운동실조증"],
+      "preferred_keywords": ["ataxia"],
+      "source": "https://health.kdca.go.kr/healthinfo/biz/health/gnrlzHealthInfo/gnrlzHealthInfo/gnrlzHealthInfoView.do?cntnts_sn=6569"
+    },
+    {
+      "canonical_name": "적혈구증가증",
+      "aliases": [],
+      "preferred_keywords": ["Erythrocytosis", "Polycythemia"],
+      "sources": [
+        "https://www.snuh.org/health/nMedInfo/nView.do?category=TEST&medid=BA000050",
+        "https://www.ncbi.nlm.nih.gov/books/NBK526081/"
+      ]
+    },
+    {
+      "canonical_name": "급성골수성백혈병",
+      "aliases": ["급성 골수성 백혈병"],
+      "preferred_keywords": ["acute myelogenous leukemia", "AML"],
+      "source": "lecture_pdf:중간 6 혈액 및 림프계 질환.pdf#pages=23,26"
+    },
+    {
+      "canonical_name": "섬유아세포",
+      "aliases": ["섬유모세포"],
+      "preferred_keywords": ["fibroblast"],
+      "source": "lecture_pdf:중간 4 염증과 치유.pdf#pages=15,23"
+    }
+  ]
+}

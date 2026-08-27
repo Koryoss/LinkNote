@@ -228,6 +228,7 @@ See [Recall and Learning Memory](docs/recall-learning-memory.md).
 - [Development guide](docs/development-guide.md)
 - [Deployment notes](docs/deployment.md)
 - [Current search algorithm](docs/search-algorithm.md)
+- [Concept extraction quality plan](docs/concept-extraction-quality.md)
 - [Recall and Learning Memory](docs/recall-learning-memory.md)
 - [Repository audit](docs/repository-audit.md)
 

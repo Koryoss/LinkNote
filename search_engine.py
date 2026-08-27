@@ -6,7 +6,7 @@ import re
 from typing import Any, Dict, Iterable, List, Mapping, Sequence, Tuple
 
 
-SEARCH_ALGORITHM_VERSION = "hybrid_personalized_v1"
+SEARCH_ALGORITHM_VERSION = "hybrid_personalized_v4"
 
 _STOP_WORDS = {
     "그리고", "그러나", "관련", "자료", "찾아줘", "보여줘", "설명", "정리", "대해", "대한",
@@ -150,6 +150,19 @@ def weighted_score(components: Mapping[str, float], weights: Mapping[str, float]
     return round(max(0.0, min(1.0, total)), 4)
 
 
+def source_relevance_label(components: Mapping[str, float]) -> str:
+    semantic = float(components.get("semantic", 0.0) or 0.0)
+    keyword = float(components.get("keyword", 0.0) or 0.0)
+    concept = float(components.get("concept", 0.0) or 0.0)
+    if concept >= 1.0 or keyword >= 0.55:
+        return "직접 일치"
+    if semantic >= 0.72 or (semantic >= 0.62 and keyword >= 0.15):
+        return "관련성 높음"
+    if keyword >= 0.35:
+        return "관련성 높음"
+    return ""
+
+
 def score_reason(components: Mapping[str, float], matched_fields: Iterable[str] = ()) -> str:
     labels = {
         "semantic": "질문과 의미가 가깝습니다",
@@ -158,8 +171,21 @@ def score_reason(components: Mapping[str, float], matched_fields: Iterable[str] 
         "learning": "현재 복습 흐름과 관련이 있습니다",
         "preference": "자주 학습한 범위와 관련이 있습니다",
     }
-    ranked = sorted(components.items(), key=lambda item: float(item[1] or 0), reverse=True)
-    reasons = [labels[key] for key, value in ranked if value > 0 and key in labels][:2]
+    direct_keys = ("keyword", "concept", "semantic")
+    personal_keys = ("learning", "preference")
+    ranked_direct = sorted(
+        ((key, float(components.get(key, 0.0) or 0.0)) for key in direct_keys),
+        key=lambda item: item[1],
+        reverse=True,
+    )
+    ranked_personal = sorted(
+        ((key, float(components.get(key, 0.0) or 0.0)) for key in personal_keys),
+        key=lambda item: item[1],
+        reverse=True,
+    )
+    direct_reasons = [labels[key] for key, value in ranked_direct if value > 0][:2]
+    personal_reasons = [labels[key] for key, value in ranked_personal if value > 0][:2]
+    reasons = direct_reasons or personal_reasons
     fields = [str(field) for field in matched_fields if str(field)]
     if fields:
         reasons.append(f"일치 영역: {', '.join(fields[:3])}")
