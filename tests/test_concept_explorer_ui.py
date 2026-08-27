@@ -11,7 +11,7 @@ class ConceptExplorerUiTests(unittest.TestCase):
 
     def test_explorer_is_the_default_view(self):
         self.assertIn("let currentMode = 'understand';", self.html)
-        self.assertIn("let currentView = 'map';", self.html)
+        self.assertIn("let currentView = 'relationships';", self.html)
         self.assertIn("<h1>개념 탐색기</h1>", self.html)
 
     def test_focus_map_limits_neighbors_and_keeps_full_map_optional(self):
@@ -19,12 +19,25 @@ class ConceptExplorerUiTests(unittest.TestCase):
         self.assertIn(".slice(0, 8)", self.html)
         self.assertIn("onclick=\"setMode('full')\">전체 보기", self.html)
 
-    def test_three_panel_explorer_supports_search_and_relationship_selection(self):
-        self.assertIn("grid-template-columns:220px minmax(0, 1fr) 340px", self.html)
+    def test_relationship_cards_are_primary_and_map_is_optional(self):
+        self.assertIn("grid-template-columns:240px minmax(0, 1fr)", self.html)
         self.assertIn("class=\"concept-search\"", self.html)
+        self.assertIn("function relationshipWorkspaceHTML(node)", self.html)
+        self.assertIn("function relationshipCardsHTML(node)", self.html)
+        self.assertIn("onclick=\"setView('relationships')\">관계 카드", self.html)
+        self.assertIn("onclick=\"setView('map')\">지도 보기", self.html)
+        self.assertIn("function openSourceForNode(id)", self.html)
+        self.assertIn("getJSON('/units?'", self.html)
+        self.assertIn("'/study-workspace.html?'", self.html)
+        self.assertIn(">원문 보기</button>", self.html)
+        self.assertIn(">설명해보기</a>", self.html)
+
+    def test_optional_map_keeps_accessible_relationship_selection(self):
         self.assertIn("class=\"edge-hit\"", self.html)
         self.assertIn("function showEdgeDetails(edge)", self.html)
-        self.assertIn("연결선을 눌러보세요", self.html)
+        self.assertIn(".edge { stroke:#94a3b8; stroke-width:2.25; opacity:.9; }", self.html)
+        self.assertIn(".concept-rail{display:block;max-height:320px;}", self.html)
+        self.assertIn("관계 카드를 먼저 확인해 보세요", self.html)
 
     def test_selected_concept_loads_free_source_evidence(self):
         self.assertIn("quickSearchNode(node.id);", self.html)
