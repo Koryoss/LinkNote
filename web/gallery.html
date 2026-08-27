@@ -62,6 +62,10 @@
   .card .ctag { font-size: 0.7rem; font-weight: 700; color: #2563eb; letter-spacing: .03em; }
   .card .ctitle { font-size: 1.08rem; font-weight: 700; margin-top: 8px; color: #1e293b; word-break: keep-all; }
   .card .cmeta { font-size: 0.76rem; color: #9ca3af; margin-top: 14px; }
+  .card-primary-row { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+  .card-primary-row .cmeta { margin-top:0; }
+  .unit-map-entry { border:1px solid #d8dee9; background:#fff; color:#475569; border-radius:7px; padding:5px 9px; font-size:0.72rem; font-weight:700; cursor:pointer; white-space:nowrap; }
+  .unit-map-entry:hover { border-color:#2563eb; color:#2563eb; background:#f8faff; }
   .empty { margin: 10px 24px 30px; padding: 26px; border: 1px dashed #d8dee9; border-radius: 14px; color: #6b7280; font-size: 0.86rem; background:#fff; }
 
   #canvas { position: relative; height: 470px; border: 1px solid #eef1f6; border-radius: 0 0 16px 16px; background:#fff; overflow: hidden; }
@@ -1135,10 +1139,10 @@
         <button class="addmini" onclick="openAddForCourse()">＋ 자료 추가</button>
       </div></div>
       <div class="grid" id="unitGrid">${sorted.map((u,i)=>`
-        <div class="card" draggable="true" data-unit="${esc(u.unit)}" onclick='openUnit(${JSON.stringify(u.unit)})'
+        <div class="card" draggable="true" data-unit="${esc(u.unit)}" data-filename="${esc((u.files||[])[0]||'')}" onclick="openStudyWorkspaceForUnit(event.currentTarget)"
              ondragstart="unitDragStart(event)" ondragend="unitDragEnd(event)" ondragover="unitDragOver(event)" ondrop="unitDrop(event)">
-          <div><div class="ctag">⠿ 단원</div><div class="ctitle">${esc(u.unit)}</div></div>
-          <div class="cmeta">파일 ${u.file_count||0} · 페이지 ${u.page_count||0}</div>
+          <div><div class="ctag">⠿ 학습 작업대</div><div class="ctitle">${esc(u.unit)}</div></div>
+          <div class="card-primary-row"><div class="cmeta">파일 ${u.file_count||0} · 페이지 ${u.page_count||0}</div><button type="button" class="unit-map-entry" data-unit="${esc(u.unit)}" onclick="openConceptMap(event)">개념 지도</button></div>
           <div class="unit-files">${(u.files||[]).map(filename=>`
             <div class="unit-file-row" onclick="event.stopPropagation()">
               <span class="unit-file-name" title="${esc(filename)}">📄 ${esc(filename)}</span>
@@ -1163,6 +1167,18 @@
     await loadSidebar();
     updateBackButton();
     renderConfirmPanel();
+  }
+  function openStudyWorkspaceForUnit(card){
+    const unit = card ? (card.dataset.unit||'').trim() : '';
+    const filename = card ? (card.dataset.filename||'').trim() : '';
+    if(!filename){ alert('학습 작업대로 열 자료가 없습니다. 개념 지도를 엽니다.'); openUnit(unit); return; }
+    const q = new URLSearchParams({ semester:state.semester||'', course:state.course||'', unit:unit||'', filename });
+    location.href = `/study-workspace.html?${q.toString()}`;
+  }
+  function openConceptMap(event){
+    if(event){ event.preventDefault(); event.stopPropagation(); }
+    const unit = event && event.currentTarget ? (event.currentTarget.dataset.unit||'').trim() : '';
+    openUnit(unit);
   }
   function renderConcepts(unit, nodes, demo, notReady){
     setCrumbs([['홈','loadHome()'], [state.semester, 'openSemesterMenu(event)', 'menu'], [state.course, 'openCourseMenu(event)', 'menu'], [unit, 'openUnitMenu(event)', 'menu']]);
