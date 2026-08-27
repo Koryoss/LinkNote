@@ -25,6 +25,41 @@ class MyPageUiTests(unittest.TestCase):
         self.assertIn('id="deleteAllQuestionHistoryBtn"', self.html)
         self.assertIn("if(allButton) allButton.remove();", self.html)
 
+    def test_delete_all_button_names_its_actual_scope(self):
+        # "전체 삭제" alone doesn't say what's being deleted; the button and its
+        # confirm text must both name the target (설명 기록 + AI 피드백).
+        self.assertIn('id="deleteAllMemoriesBtn"', self.html)
+        self.assertIn(">내 설명 기록 전체 삭제<", self.html)
+        self.assertNotIn('>전체 삭제<', self.html)
+        self.assertIn(
+            "내 설명 기록 ${totalMemoryCount}개와 연결된 AI 피드백을 모두 삭제합니다. "
+            "이 작업은 되돌릴 수 없습니다.",
+            self.html,
+        )
+        self.assertIn(
+            "선택한 설명 기록 ${ids.length}개와 연결된 AI 피드백을 삭제합니다. "
+            "이 작업은 되돌릴 수 없습니다.",
+            self.html,
+        )
+
+    def test_empty_delete_targets_show_guidance_not_a_silent_no_op(self):
+        self.assertIn("alert('삭제할 설명 기록이 없습니다.')", self.html)
+
+    def test_memory_deletes_use_post_or_bodyless_delete_not_delete_with_body(self):
+        # DELETE-with-JSON-body isn't reliably delivered by every WebView
+        # (Tauri's WKWebView included), so the new UI avoids it entirely.
+        self.assertIn("await deleteJSON('/learning-memory/all')", self.html)
+        self.assertIn("await postJSON('/learning-memory/delete', { ids })", self.html)
+        self.assertNotIn("deleteJSON('/learning-memory', { delete_all:true })", self.html)
+        self.assertNotIn("deleteJSON('/learning-memory', { ids })", self.html)
+
+    def test_memory_delete_buttons_guard_against_duplicate_requests(self):
+        self.assertIn("let memoryDeleteInFlight = false;", self.html)
+        self.assertIn("if(memoryDeleteInFlight) return;", self.html)
+        self.assertIn("memoryDeleteInFlight = true;", self.html)
+        self.assertIn("memoryDeleteInFlight = false;", self.html)
+        self.assertIn("btn.disabled = true;", self.html)
+
 
 if __name__ == "__main__":
     unittest.main()

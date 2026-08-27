@@ -918,6 +918,10 @@ class LearningMemoryBulkDeleteRequest(BaseModel):
     concept: Optional[str] = None
 
 
+class LearningMemorySelectedDeleteRequest(BaseModel):
+    ids: List[str] = Field(default_factory=list)
+
+
 class LearningMemoryAiSummariesResponse(BaseModel):
     items: List[Dict[str, Any]]
 
@@ -5202,7 +5206,16 @@ def _delete_learning_memories_for_user(
     course: Optional[str] = None,
     unit: Optional[str] = None,
     concept: Optional[str] = None,
+    strict: bool = True,
 ) -> Dict[str, Any]:
+    """Delete recall traces (and their linked AI feedback) owned by data_user_id.
+
+    strict=True (default, used by the single-id and legacy bulk routes) 404s if
+    any requested id isn't owned by this user. strict=False (used by the
+    multi-id POST route) silently skips ids that don't exist or belong to
+    someone else instead of failing the whole batch — a mixed selection still
+    deletes the valid ones.
+    """
     requested_ids = {str(item or "").strip() for item in (target_ids or set()) if str(item or "").strip()}
     if not delete_all and not requested_ids:
         raise HTTPException(status_code=400, detail="삭제할 Learning Memory id가 필요합니다.")
@@ -5233,10 +5246,11 @@ def _delete_learning_memories_for_user(
     if delete_all:
         related_ids = set(deletable_ids)
     else:
+        owned_ids = requested_ids & user_ids
         missing_ids = requested_ids - user_ids
-        if missing_ids:
+        if missing_ids and strict:
             raise HTTPException(status_code=404, detail="Learning Memory를 찾을 수 없습니다.")
-        related_ids = set(requested_ids)
+        related_ids = set(owned_ids)
 
     changed = True
     while changed:
@@ -5274,6 +5288,11 @@ async def delete_learning_memories(
     payload: LearningMemoryBulkDeleteRequest,
     data_user_id: str = Depends(current_uid),
 ) -> Dict[str, Any]:
+    """Deprecated: kept for older desktop app builds. Some WebViews (Tauri's
+    WKWebView included) don't reliably deliver a body on DELETE requests, so
+    the current mypage.html uses `DELETE /learning-memory/all` and
+    `POST /learning-memory/delete` instead. Do not remove without confirming
+    no installed build still calls this."""
     return _delete_learning_memories_for_user(
         data_user_id=data_user_id,
         target_ids=set(payload.ids or []),
@@ -5282,6 +5301,28 @@ async def delete_learning_memories(
         unit=payload.unit,
         concept=payload.concept,
     )
+
+
+# Registered ahead of the /{memory_id} route below so "all" is never captured
+# as a memory_id path parameter.
+@app.delete("/learning-memory/all")
+async def delete_all_learning_memories(data_user_id: str = Depends(current_uid)) -> Dict[str, Any]:
+    """Body-less full delete, safe for WebViews that drop DELETE request bodies."""
+    return _delete_learning_memories_for_user(data_user_id=data_user_id, delete_all=True)
+
+
+@app.post("/learning-memory/delete")
+async def delete_selected_learning_memories(
+    payload: LearningMemorySelectedDeleteRequest,
+    data_user_id: str = Depends(current_uid),
+) -> Dict[str, Any]:
+    """POST variant of selective delete for the same WebView reason as above.
+    Ids that don't exist or belong to another user are silently skipped rather
+    than failing the whole batch."""
+    ids = [str(item or "").strip() for item in (payload.ids or []) if str(item or "").strip()]
+    if not ids:
+        raise HTTPException(status_code=400, detail="삭제할 Learning Memory id가 필요합니다.")
+    return _delete_learning_memories_for_user(data_user_id=data_user_id, target_ids=set(ids), strict=False)
 
 
 @app.delete("/learning-memory/{memory_id}")
