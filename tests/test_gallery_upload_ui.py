@@ -57,6 +57,11 @@ class GalleryUploadUiTests(unittest.TestCase):
         self.assertIn('onclick="openConceptMap(event)"', self.html)
         self.assertIn("function openConceptMap(event)", self.html)
 
+    def test_unit_cards_prioritize_full_titles_without_repeated_workspace_label(self):
+        self.assertIn("minmax(min(320px, 100%), 1fr)", self.html)
+        self.assertIn("word-break: normal; overflow-wrap: anywhere", self.html)
+        self.assertNotIn('class="ctag">⠿ 학습 작업대', self.html)
+
     def test_pdf_preview_request_includes_library_scope(self):
         self.assertIn("params.set('semester',state.semester)", self.html)
         self.assertIn("params.set('course',state.course)", self.html)
