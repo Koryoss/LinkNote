@@ -34,12 +34,15 @@
     activeSegmentIndex: 0,
     activePage: null,
     sourceAvailable: false,
+    library: null,
+    navigationUnits: [],
   };
 
   var noteTimers = {};
   var lectureNoteTimers = {};
   var lectureNoteDrafts = {};
   var lastFocusedBeforeDrawer = null;
+  var lastScopeMenuAnchor = null;
   var sourceWidthStorageKey = 'ln_study_source_width';
   var sourceResizeBound = false;
 
@@ -97,8 +100,131 @@
     setStage('error-state', '학습 작업대를 불러오지 못했습니다: ' + esc(message) + '<div style="margin-top:12px"><button class="btn primary" onclick="StudyWorkspace.init()">다시 시도</button></div>');
   }
 
-  function scopeCrumbHTML() {
-    return [scope.semester, scope.course, scope.unit, scope.filename].filter(Boolean).map(esc).join(' · ');
+  function renderScopeNavigation() {
+    var nav = el('scopeNav');
+    if (!nav) return;
+    var levels = [
+      ['semester', scope.semester, '학기'],
+      ['course', scope.course, '과목'],
+      ['unit', scope.unit, '단원'],
+      ['filename', scope.filename, '자료'],
+    ];
+    nav.innerHTML = '<button type="button" class="scope-pill home" data-scope-home>홈</button>' +
+      levels.filter(function (item) { return item[1]; }).map(function (item) {
+        return '<span class="scope-sep" aria-hidden="true">›</span>' +
+          '<button type="button" class="scope-pill menu" data-scope-level="' + item[0] + '" aria-label="' + item[2] + ' 선택" aria-haspopup="listbox" aria-expanded="false" title="' + esc(item[1]) + '">' + esc(item[1]) + '</button>';
+      }).join('');
+    nav.querySelector('[data-scope-home]').addEventListener('click', function () { location.href = '/'; });
+    nav.querySelectorAll('[data-scope-level]').forEach(function (button) {
+      button.addEventListener('click', function (event) {
+        openScopeMenu(button.dataset.scopeLevel, button, event);
+      });
+    });
+  }
+
+  function closeScopeMenu(returnFocus) {
+    var menu = el('scopeMenu');
+    if (menu) menu.remove();
+    document.querySelectorAll('[data-scope-level][aria-expanded="true"]').forEach(function (button) {
+      button.setAttribute('aria-expanded', 'false');
+    });
+    if (returnFocus && lastScopeMenuAnchor && document.body.contains(lastScopeMenuAnchor)) {
+      lastScopeMenuAnchor.focus();
+    }
+    lastScopeMenuAnchor = null;
+  }
+
+  function openScopeMenu(level, anchor, event) {
+    event.stopPropagation();
+    var wasOpen = !!el('scopeMenu') && anchor.getAttribute('aria-expanded') === 'true';
+    closeScopeMenu();
+    if (wasOpen) return;
+    var options = Logic.scopeNavigationOptions(level, scope, state.library, state.navigationUnits);
+    if (!options.length) return;
+    var current = scope[level];
+    var menu = document.createElement('div');
+    menu.id = 'scopeMenu';
+    menu.className = 'scope-menu';
+    menu.setAttribute('role', 'listbox');
+    menu.setAttribute('aria-label', anchor.getAttribute('aria-label'));
+    menu.innerHTML = options.map(function (option) {
+      return '<button type="button" class="scope-menu-item" role="option" aria-selected="' + (option === current) + '" data-scope-value="' + esc(option) + '">' + (option === current ? '✓ ' : '') + esc(option) + '</button>';
+    }).join('');
+    document.body.appendChild(menu);
+    var rect = anchor.getBoundingClientRect();
+    menu.style.left = Math.min(rect.left, window.innerWidth - menu.offsetWidth - 12) + 'px';
+    menu.style.top = Math.min(rect.bottom + 6, window.innerHeight - menu.offsetHeight - 12) + 'px';
+    anchor.setAttribute('aria-expanded', 'true');
+    lastScopeMenuAnchor = anchor;
+    menu.querySelectorAll('[data-scope-value]').forEach(function (button, index) {
+      button.addEventListener('click', function (pickEvent) {
+        pickEvent.stopPropagation();
+        selectScopeOption(level, options[index]);
+      });
+    });
+    var selected = menu.querySelector('[aria-selected="true"]') || menu.querySelector('button');
+    if (selected) selected.focus();
+  }
+
+  function workspaceUrl(nextScope) {
+    return '/study-workspace.html?' + new URLSearchParams(nextScope).toString();
+  }
+
+  function navigateToScope(nextScope) {
+    closeScopeMenu();
+    if (!nextScope || !nextScope.semester || !nextScope.course || !nextScope.unit || !nextScope.filename) {
+      location.href = '/';
+      return;
+    }
+    location.href = workspaceUrl(nextScope);
+  }
+
+  function loadNavigationUnits(semester, course) {
+    return getJSON('/units?' + new URLSearchParams({ semester: semester, course: course }).toString())
+      .then(function (result) { return result.units || []; });
+  }
+
+  function navigateWithinCourse(semester, course) {
+    if (!semester || !course) { location.href = '/'; return; }
+    loadNavigationUnits(semester, course).then(function (units) {
+      var selectedUnit = units.find(function (item) { return item.unit === scope.unit; }) || units[0];
+      var files = selectedUnit && Array.isArray(selectedUnit.files) ? selectedUnit.files : [];
+      var filename = files.indexOf(scope.filename) >= 0 ? scope.filename : files[0];
+      navigateToScope({ semester: semester, course: course, unit: selectedUnit && selectedUnit.unit, filename: filename });
+    }).catch(function () { location.href = '/'; });
+  }
+
+  function selectScopeOption(level, value) {
+    if (value === scope[level]) { closeScopeMenu(); return; }
+    if (level === 'semester') {
+      var semester = (state.library && state.library.semesters || []).find(function (item) { return item.semester === value; });
+      var courses = semester && Array.isArray(semester.courses) ? semester.courses : [];
+      var selectedCourse = courses.find(function (item) { return item.course === scope.course; }) || courses[0];
+      navigateWithinCourse(value, selectedCourse && selectedCourse.course);
+      return;
+    }
+    if (level === 'course') { navigateWithinCourse(scope.semester, value); return; }
+    if (level === 'unit') {
+      var unit = state.navigationUnits.find(function (item) { return item.unit === value; });
+      var files = unit && Array.isArray(unit.files) ? unit.files : [];
+      navigateToScope({ semester: scope.semester, course: scope.course, unit: value, filename: files.indexOf(scope.filename) >= 0 ? scope.filename : files[0] });
+      return;
+    }
+    if (level === 'filename') {
+      navigateToScope({ semester: scope.semester, course: scope.course, unit: scope.unit, filename: value });
+    }
+  }
+
+  function loadScopeNavigation() {
+    renderScopeNavigation();
+    Promise.all([
+      getJSON('/library').catch(function () { return null; }),
+      loadNavigationUnits(scope.semester, scope.course).catch(function () { return []; }),
+    ]).then(function (results) {
+      state.library = results[0];
+      state.navigationUnits = results[1];
+      renderScopeNavigation();
+    });
   }
 
   // ---- TOC (목차) ----
@@ -507,7 +633,7 @@
     if (!token()) { loginRequiredStage(); return; }
     if (!hasFullScope()) { missingScopeStage(); return; }
     if (!noteDelegationBound) { bindNoteInputDelegation(); noteDelegationBound = true; }
-    el('scopeCrumb').textContent = scopeCrumbHTML();
+    loadScopeNavigation();
     el('openFullBtn').onclick = openFull;
     setStage('loading', '학습 작업대를 불러오는 중입니다…');
     Promise.all([
@@ -542,7 +668,13 @@
     toggleLectureTag: toggleLectureTag,
     toggleToc: toggleToc,
     toggleSource: toggleSource,
+    closeScopeMenu: closeScopeMenu,
   };
+
+  document.addEventListener('click', closeScopeMenu);
+  document.addEventListener('keydown', function (event) {
+    if (event.key === 'Escape' && el('scopeMenu')) closeScopeMenu(true);
+  });
 
   init();
 })();
