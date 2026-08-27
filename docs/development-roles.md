@@ -1,6 +1,6 @@
 # LinkNote 개발 역할·승인 운영 지침
 
-기준일: 2026-08-22
+기준일: 2026-08-27
 문서 소유자 및 최종 감독자: 정유진
 
 ## 현재 개발 현황
@@ -9,9 +9,10 @@
 | --- | --- | --- | --- |
 | `concept_notes` 저장 구조와 API | GitHub 통합 완료 | PR #13, merge `00af84e` | Codex 회귀 검수 |
 | `/study-workspace`와 안전한 `/file` 연결 | GitHub 통합 완료 | PR #14, merge `2bd349e` | Codex 회귀 검수 |
+| `이 구간 수업 필기` MVP | 실제 앱 검증 | PR #19, merge `3ad52e1`. 페이지 구간별 자유 필기, 600ms 자동 저장·복원, 중요·시험·질문 표시, 사용자·학기·과목·단원·자료·페이지 구간 격리 저장. Python 25개·JavaScript 8개 및 백업 런타임 전체 175개 테스트 통과, 데스크탑 0.1.1 단독 실행 확인 | 감독자가 AI 반영 범위를 별도 승인하면 다음 단계 설계 |
 | 3열 학습 작업대 UI | 구현 완료, 병합 대기 | `web/study-workspace.html`/`.js`/`-logic.js`, PR #17에 포함. 기존 `GET /study-workspace`·`GET/PUT /concept-notes`·`GET /file` 응답만 사용, 백엔드 무변경 | 감독자 최종 승인 → merge |
 | 기존 로컬 저장소(`study-rag-api`) dirty 상태 | 정리 완료 | `backup/local-work-20260822` 브랜치로 4,400여 줄 백업·커밋·push, `origin/main`과 병합 충돌(3개 파일, 23곳) 해결, 인증 fallback 스텁 제거, 문서 버전 표기 수정 | — |
-| PR #17 (`backup/local-work-20260822` → `main`) | `MERGEABLE`, 병합 대기 | 테스트 172개 통과(원래 22개에서 증가), 실사용 서버로 학습 작업대·개념 노트 저장 재검증 완료 | 감독자 최종 승인 후 Codex가 merge |
+| PR #17 (`backup/local-work-20260822` → `main`) | `CONFLICTING`, 재정리 필요 | PR #19 병합으로 `main`이 `3ad52e1`까지 전진. 백업 런타임 전체 테스트 175개 통과, 실사용 서버로 학습 작업대·개념 노트·수업 필기 저장 재검증 완료 | Codex가 PR #19 중복 변경을 보존적으로 정리한 뒤 감독자에게 병합 재승인 요청 |
 | Manus UX 프로토타입 | 참고안·조건부 승인 | `Koryoss/linknote-concept-ux` | 학습 작업대 UI에 부분 반영 완료 |
 | CareFlow `<스터디>` 연계 | 부분 구현 | `/study/import`, `/study/ask`, `/study/claim`, claims CRUD 존재 | 계약 검수 후 양쪽 제품별 구현 |
 | `/study/audit` | 미구현·계획 경계 | `AGENTS.md`에 접점만 존재하고 실제 route 없음 | 감독자 우선순위 승인 후 설계 |
