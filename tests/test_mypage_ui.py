@@ -25,6 +25,55 @@ class MyPageUiTests(unittest.TestCase):
         self.assertIn('id="deleteAllQuestionHistoryBtn"', self.html)
         self.assertIn("if(allButton) allButton.remove();", self.html)
 
+    def test_delete_all_button_names_its_actual_scope(self):
+        # "전체 삭제" alone doesn't say what's being deleted; the button and its
+        # confirm text must both name the target (설명 기록 + AI 피드백).
+        self.assertIn('id="deleteAllMemoriesBtn"', self.html)
+        self.assertIn(">내 설명 기록 전체 삭제<", self.html)
+        self.assertNotIn('>전체 삭제<', self.html)
+        self.assertIn(
+            "내 설명 기록 ${totalMemoryCount}개와 연결된 AI 피드백을 모두 삭제합니다. "
+            "이 작업은 되돌릴 수 없습니다.",
+            self.html,
+        )
+        self.assertIn(
+            "선택한 설명 기록 ${ids.length}개와 연결된 AI 피드백을 삭제합니다. "
+            "이 작업은 되돌릴 수 없습니다.",
+            self.html,
+        )
+
+    def test_empty_delete_targets_show_guidance_not_a_silent_no_op(self):
+        self.assertIn("alert('삭제할 설명 기록이 없습니다.')", self.html)
+
+    def test_memory_deletes_use_post_or_bodyless_delete_not_delete_with_body(self):
+        # DELETE-with-JSON-body isn't reliably delivered by every WebView
+        # (Tauri's WKWebView included), so the new UI avoids it entirely.
+        self.assertIn("await deleteJSON('/learning-memory/all')", self.html)
+        self.assertIn("await postJSON('/learning-memory/delete', { ids })", self.html)
+        self.assertNotIn("deleteJSON('/learning-memory', { delete_all:true })", self.html)
+        self.assertNotIn("deleteJSON('/learning-memory', { ids })", self.html)
+
+    def test_memory_delete_buttons_guard_against_duplicate_requests(self):
+        self.assertIn("let memoryDeleteInFlight = false;", self.html)
+        self.assertEqual(self.html.count("if(memoryDeleteInFlight) return;"), 2)
+        self.assertEqual(self.html.count("memoryDeleteInFlight = true;"), 2)
+        # released in a finally block (not just the try's success path), so a
+        # failed request re-enables the buttons too, not only a successful one.
+        self.assertEqual(
+            self.html.count("} finally {\n      memoryDeleteInFlight = false;\n      setMemoryDeleteButtonsBusy(false);"),
+            2,
+        )
+
+    def test_both_memory_delete_buttons_disable_while_either_is_running(self):
+        # Both buttons share one in-flight flag, so the *other* button must
+        # visibly disable too — otherwise it looks clickable but silently
+        # no-ops on the guard, which reads as "nothing happened".
+        self.assertIn("function setMemoryDeleteButtonsBusy(busy){", self.html)
+        self.assertIn("if(allBtn) allBtn.disabled = busy;", self.html)
+        self.assertIn("if(selBtn) selBtn.disabled = busy || selectedMemoryIds.size === 0;", self.html)
+        self.assertEqual(self.html.count("setMemoryDeleteButtonsBusy(true);"), 2)
+        self.assertEqual(self.html.count("setMemoryDeleteButtonsBusy(false);"), 2)
+
 
 if __name__ == "__main__":
     unittest.main()

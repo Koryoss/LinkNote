@@ -155,6 +155,7 @@
   let currentMemories = [];
   let selectedMemoryIds = new Set();
   let totalMemoryCount = 0;
+  let memoryDeleteInFlight = false;
   let currentQuestions = [];
   let totalQuestionCount = 0;
   function feedbackSection(item, index){
@@ -216,7 +217,7 @@
       </div>
       <div class="actions">
         <button id="deleteSelectedBtn" class="danger" onclick="deleteSelectedMemories()" disabled>선택 삭제</button>
-        <button class="danger" onclick="deleteAllMemories()">전체 삭제</button>
+        <button id="deleteAllMemoriesBtn" class="danger" onclick="deleteAllMemories()">내 설명 기록 전체 삭제</button>
       </div>
     </div>`;
   }
@@ -378,27 +379,56 @@
       alert('Learning Memory를 삭제하지 못했습니다: ' + e.message);
     }
   }
+  // Both delete-all and delete-selected share one in-flight flag, so while
+  // either is running BOTH buttons must show as busy — otherwise the other
+  // button looks clickable but silently no-ops on the memoryDeleteInFlight
+  // guard, which reads as "nothing happened" rather than "busy".
+  function setMemoryDeleteButtonsBusy(busy){
+    const allBtn = document.getElementById('deleteAllMemoriesBtn');
+    const selBtn = document.getElementById('deleteSelectedBtn');
+    if(allBtn) allBtn.disabled = busy;
+    if(selBtn) selBtn.disabled = busy || selectedMemoryIds.size === 0;
+  }
   async function deleteSelectedMemories(){
+    if(memoryDeleteInFlight) return;
     const ids = [...selectedMemoryIds];
-    if(!ids.length) return;
-    if(!confirm(`선택한 <내 설명> 기록 ${ids.length}개를 삭제할까요?\n연결된 AI 피드백 기록도 함께 삭제됩니다.`)) return;
+    if(!ids.length){ alert('삭제할 설명 기록이 없습니다.'); return; }
+    if(!confirm(`선택한 설명 기록 ${ids.length}개와 연결된 AI 피드백을 삭제합니다. 이 작업은 되돌릴 수 없습니다.`)) return;
+    memoryDeleteInFlight = true;
+    setMemoryDeleteButtonsBusy(true);
     try {
-      await deleteJSON('/learning-memory', { ids });
+      // POST (not DELETE+body) — some WebViews, including Tauri's WKWebView,
+      // don't reliably deliver a body on DELETE requests.
+      await postJSON('/learning-memory/delete', { ids });
       selectedMemoryIds.clear();
       await init();
     } catch(e) {
-      alert('선택한 Learning Memory를 삭제하지 못했습니다: ' + e.message);
+      alert('선택한 설명 기록을 삭제하지 못했습니다: ' + e.message);
+    } finally {
+      memoryDeleteInFlight = false;
+      setMemoryDeleteButtonsBusy(false);
     }
   }
   async function deleteAllMemories(){
-    if(!totalMemoryCount) return;
-    if(!confirm(`전체 <내 설명> 기록 ${totalMemoryCount}개를 모두 삭제할까요?\n연결된 AI 피드백 기록도 함께 삭제됩니다.`)) return;
+    if(memoryDeleteInFlight) return;
+    if(!totalMemoryCount){ alert('삭제할 설명 기록이 없습니다.'); return; }
+    if(!confirm(`내 설명 기록 ${totalMemoryCount}개와 연결된 AI 피드백을 모두 삭제합니다. 이 작업은 되돌릴 수 없습니다.`)) return;
+    memoryDeleteInFlight = true;
+    setMemoryDeleteButtonsBusy(true);
+    const btn = document.getElementById('deleteAllMemoriesBtn');
+    if(btn) btn.textContent = '삭제 중…';
     try {
-      await deleteJSON('/learning-memory', { delete_all:true });
+      // Body-less DELETE — see comment on deleteSelectedMemories().
+      await deleteJSON('/learning-memory/all');
       selectedMemoryIds.clear();
       await init();
     } catch(e) {
-      alert('전체 Learning Memory를 삭제하지 못했습니다: ' + e.message);
+      alert('내 설명 기록을 삭제하지 못했습니다: ' + e.message);
+    } finally {
+      memoryDeleteInFlight = false;
+      setMemoryDeleteButtonsBusy(false);
+      const stillThere = document.getElementById('deleteAllMemoriesBtn');
+      if(stillThere) stillThere.textContent = '내 설명 기록 전체 삭제';
     }
   }
   async function deleteQuestionHistory(historyId){
