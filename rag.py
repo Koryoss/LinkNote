@@ -599,7 +599,7 @@ def search_relevant_chunks(question: str, n_results: int = 5, search_filter=None
 
 def get_filter_label(search_filter=None):
     if not search_filter: return "전체 자료"
-    parts = [v for k in ["semester", "course", "filename"] if (v := search_filter.get(k))]
+    parts = [v for k in ["semester", "course", "unit", "filename"] if (v := search_filter.get(k))]
     return " / ".join(parts) if parts else "전체 자료"
 
 def get_library_overview(user_id: str):

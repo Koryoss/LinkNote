@@ -5524,7 +5524,10 @@ def _study_source(chunk: Dict[str, Any]) -> Dict[str, Any]:
     return {
         "doc_title": chunk.get("title") or chunk.get("filename") or "",
         "filename": chunk.get("filename") or "",
+        "stored_filename": chunk.get("stored_filename") or "",
+        "semester": chunk.get("semester") or "",
         "course": chunk.get("course") or "",
+        "unit": chunk.get("unit") or "",
         "page_num": chunk.get("page") or 0,
         "similarity": similarity,
         "excerpt": text[:130] + ("…" if len(text) > 130 else ""),
@@ -5631,7 +5634,7 @@ async def study_ask(req: StudyAskRequest, user: Dict[str, Any] = Depends(current
     if not question:
         raise HTTPException(status_code=400, detail="question이 필요합니다.")
 
-    search_filter = req.search_filter.dict() if req.search_filter else None
+    search_filter = _model_to_dict(req.search_filter) if req.search_filter else None
     chunks = search_relevant_chunks(question, n_results=6, search_filter=search_filter, user_id=_study_uid(user))
     scope_label = get_filter_label(search_filter)
     if not chunks:
@@ -5655,8 +5658,9 @@ async def study_claim(req: StudyClaimRequest, user: Dict[str, Any] = Depends(cur
     if not claim:
         raise HTTPException(status_code=400, detail="claim이 필요합니다.")
 
-    search_filter = req.search_filter.dict() if req.search_filter else None
+    search_filter = _model_to_dict(req.search_filter) if req.search_filter else None
     chunks = search_relevant_chunks(claim, n_results=5, search_filter=search_filter, user_id=_study_uid(user))
+    scope_label = get_filter_label(search_filter)
     if not chunks:
         draft = {"source_summary": "출처 미확인", "strength": "출처 미확인", "application_context": "", "safety_note": ""}
     else:
@@ -5666,7 +5670,12 @@ async def study_claim(req: StudyClaimRequest, user: Dict[str, Any] = Depends(cur
         )
         draft = _parse_study_claim_json(raw)
 
-    return {"claim": claim, "draft": draft, "sources": [_study_source(c) for c in chunks]}
+    return {
+        "claim": claim,
+        "draft": draft,
+        "sources": [_study_source(c) for c in chunks],
+        "scope_label": scope_label,
+    }
 
 
 @app.post("/study/claims")

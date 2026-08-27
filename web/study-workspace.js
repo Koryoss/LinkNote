@@ -25,6 +25,7 @@
     unit: params.get('unit') || '',
     filename: params.get('filename') || '',
   };
+  var requestedPage = Number(params.get('page')) || null;
 
   var state = {
     pages: [],
@@ -669,7 +670,16 @@
       state.sourceAvailable = !!result.source_available;
       state.segments = Logic.buildSegments(state.pages, state.concepts);
       state.activeSegmentIndex = 0;
-      state.activePage = state.segments[0] && state.segments[0].pages[0] ? state.segments[0].pages[0].page : null;
+      var requestedPageExists = requestedPage && state.pages.some(function (page) { return page.page === requestedPage; });
+      state.activePage = requestedPageExists
+        ? requestedPage
+        : (state.segments[0] && state.segments[0].pages[0] ? state.segments[0].pages[0].page : null);
+      if (requestedPageExists) {
+        var requestedSegment = state.segments.findIndex(function (segment) {
+          return requestedPage >= segment.startPage && requestedPage <= segment.endPage;
+        });
+        if (requestedSegment >= 0) state.activeSegmentIndex = requestedSegment;
+      }
       setStage('ready');
       bindSourceResizer();
       renderToc();

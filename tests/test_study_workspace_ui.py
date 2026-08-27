@@ -40,6 +40,11 @@ class StudyWorkspaceUiTests(unittest.TestCase):
         self.assertNotIn('id="openFullBtn"', self.html)
         self.assertNotIn("function openFull()", self.script)
 
+    def test_exact_source_page_from_study_evidence_is_selected(self):
+        self.assertIn("var requestedPage = Number(params.get('page')) || null;", self.script)
+        self.assertIn("var requestedPageExists = requestedPage && state.pages.some", self.script)
+        self.assertIn("state.activePage = requestedPageExists", self.script)
+
 
 if __name__ == "__main__":
     unittest.main()
