@@ -5284,6 +5284,11 @@ async def delete_learning_memories(
     )
 
 
+@app.delete("/learning-memory/all")
+async def delete_all_learning_memories(data_user_id: str = Depends(current_uid)) -> Dict[str, Any]:
+    return _delete_learning_memories_for_user(data_user_id=data_user_id, delete_all=True)
+
+
 @app.delete("/learning-memory/{memory_id}")
 async def delete_learning_memory(memory_id: str, data_user_id: str = Depends(current_uid)) -> Dict[str, Any]:
     return _delete_learning_memories_for_user(data_user_id=data_user_id, target_ids={memory_id})

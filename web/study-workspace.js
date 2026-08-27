@@ -506,11 +506,6 @@
     el('sourceFrame').src = fileUrl(true);
   }
 
-  function openFull() {
-    if (!state.sourceAvailable) return;
-    window.open(fileUrl(false), '_blank', 'noopener');
-  }
-
   // ---- 데스크톱 원문 너비 조절 ----
 
   function scheduleSourceRefit() {
@@ -647,7 +642,6 @@
     if (!hasFullScope()) { missingScopeStage(); return; }
     if (!noteDelegationBound) { bindNoteInputDelegation(); noteDelegationBound = true; }
     loadScopeNavigation();
-    el('openFullBtn').onclick = openFull;
     setStage('loading', '학습 작업대를 불러오는 중입니다…');
     Promise.all([
       getJSON('/study-workspace?' + scopeQuery()),
