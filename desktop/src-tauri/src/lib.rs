@@ -12,6 +12,7 @@ fn backend_running() -> bool {
 
 fn find_project_root() -> Option<PathBuf> {
     let fallback_roots = [
+        "/Users/jeong-yujin/Desktop/프로젝트/LINKNOTE/study-rag-api",
         "/Users/jeong-yujin/Desktop/LINKNOTE/study-rag-api",
         "/Users/jeong-yujin/Desktop/study-rag-api",
     ];
