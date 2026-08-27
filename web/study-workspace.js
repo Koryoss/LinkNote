@@ -40,6 +40,8 @@
   var lectureNoteTimers = {};
   var lectureNoteDrafts = {};
   var lastFocusedBeforeDrawer = null;
+  var sourceWidthStorageKey = 'ln_study_source_width';
+  var sourceResizeBound = false;
 
   function scopeQuery(extra) {
     return new URLSearchParams(Object.assign({}, scope, extra || {})).toString();
@@ -111,8 +113,11 @@
       var active = index === state.activeSegmentIndex;
       var pagesHTML = segment.pages.map(function (p) {
         var pageActive = p.page === state.activePage;
-        return '<button type="button" class="toc-page' + (pageActive ? ' active' : '') + '" onclick="StudyWorkspace.jumpToPage(' + p.page + ')">' +
-          '<span class="toc-page-num">p.' + p.page + '</span><span class="toc-page-title">' + esc(p.title) + '</span></button>';
+        var displayTitle = Logic.pageDisplayTitle(p, state.pages, scope.filename);
+        var accessibleLabel = 'p.' + p.page + (displayTitle ? ' ' + displayTitle : ' 페이지');
+        return '<button type="button" class="toc-page' + (pageActive ? ' active' : '') + '" aria-label="' + esc(accessibleLabel) + '" onclick="StudyWorkspace.jumpToPage(' + p.page + ')">' +
+          '<span class="toc-page-num">p.' + p.page + '</span>' +
+          (displayTitle ? '<span class="toc-page-title">' + esc(displayTitle) + '</span>' : '') + '</button>';
       }).join('');
       return '<div class="toc-segment' + (active ? ' active' : '') + '">' +
         '<button type="button" class="toc-segment-head" onclick="StudyWorkspace.selectSegment(' + index + ')">' + esc(segment.label) + '</button>' +
@@ -377,6 +382,75 @@
     window.open(fileUrl(false), '_blank', 'noopener');
   }
 
+  // ---- 데스크톱 원문 너비 조절 ----
+
+  function sourceWidthBounds() {
+    var workspace = el('workspace');
+    var toc = el('tocPanel');
+    var tocWidth = toc ? toc.getBoundingClientRect().width : 220;
+    var fixedSpace = tocWidth + 320 + 48 + 46;
+    return { min: 240, max: Math.max(240, window.innerWidth - fixedSpace) };
+  }
+
+  function setSourceWidth(width, persist) {
+    var workspace = el('workspace');
+    var handle = el('sourceResizer');
+    if (!workspace || !handle) return;
+    var bounds = sourceWidthBounds();
+    var next = Math.round(Math.min(bounds.max, Math.max(bounds.min, Number(width) || 360)));
+    workspace.style.setProperty('--source-width', next + 'px');
+    handle.setAttribute('aria-valuemin', String(bounds.min));
+    handle.setAttribute('aria-valuemax', String(bounds.max));
+    handle.setAttribute('aria-valuenow', String(next));
+    if (persist) localStorage.setItem(sourceWidthStorageKey, String(next));
+  }
+
+  function bindSourceResizer() {
+    if (sourceResizeBound) return;
+    var handle = el('sourceResizer');
+    var sourcePanel = el('sourcePanel');
+    if (!handle || !sourcePanel) return;
+    sourceResizeBound = true;
+    setSourceWidth(localStorage.getItem(sourceWidthStorageKey) || 360, false);
+
+    handle.addEventListener('pointerdown', function (event) {
+      if (window.innerWidth < 900) return;
+      var startX = event.clientX;
+      var startWidth = sourcePanel.getBoundingClientRect().width;
+      handle.setPointerCapture(event.pointerId);
+      document.body.classList.add('source-resizing');
+      var move = function (moveEvent) {
+        setSourceWidth(startWidth + startX - moveEvent.clientX, false);
+      };
+      var finish = function (finishEvent) {
+        handle.removeEventListener('pointermove', move);
+        handle.removeEventListener('pointerup', finish);
+        handle.removeEventListener('pointercancel', finish);
+        document.body.classList.remove('source-resizing');
+        if (handle.hasPointerCapture(finishEvent.pointerId)) handle.releasePointerCapture(finishEvent.pointerId);
+        setSourceWidth(sourcePanel.getBoundingClientRect().width, true);
+      };
+      handle.addEventListener('pointermove', move);
+      handle.addEventListener('pointerup', finish);
+      handle.addEventListener('pointercancel', finish);
+      event.preventDefault();
+    });
+    handle.addEventListener('keydown', function (event) {
+      var current = sourcePanel.getBoundingClientRect().width;
+      var bounds = sourceWidthBounds();
+      if (event.key === 'ArrowLeft') setSourceWidth(current + 24, true);
+      else if (event.key === 'ArrowRight') setSourceWidth(current - 24, true);
+      else if (event.key === 'Home') setSourceWidth(bounds.min, true);
+      else if (event.key === 'End') setSourceWidth(bounds.max, true);
+      else return;
+      event.preventDefault();
+    });
+    handle.addEventListener('dblclick', function () { setSourceWidth(360, true); });
+    window.addEventListener('resize', function () {
+      setSourceWidth(sourcePanel.getBoundingClientRect().width, false);
+    });
+  }
+
   // ---- 900px 드로어(목차/원문) ----
 
   function focusableIn(panel) {
@@ -449,6 +523,7 @@
       state.activeSegmentIndex = 0;
       state.activePage = state.segments[0] && state.segments[0].pages[0] ? state.segments[0].pages[0].page : null;
       setStage('ready');
+      bindSourceResizer();
       renderToc();
       renderLectureNote();
       renderConcepts();
