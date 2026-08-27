@@ -12,8 +12,18 @@ class StudyWorkspaceUiTests(unittest.TestCase):
     def test_scope_navigation_exposes_all_library_levels(self):
         self.assertIn('id="scopeNav"', self.html)
         self.assertIn('aria-label="학습 자료 경로"', self.html)
-        for level in ("semester", "course", "unit", "filename"):
+        self.assertIn('id="documentContext"', self.html)
+        self.assertIn('aria-label="현재 단원과 자료"', self.html)
+        for level in ("semester", "course"):
             self.assertIn("['%s', scope.%s" % (level, level), self.script)
+        top_navigation = self.script.split("function renderScopeNavigation()", 1)[1].split("function renderDocumentContext()", 1)[0]
+        self.assertIn("['semester', scope.semester", top_navigation)
+        self.assertIn("['course', scope.course", top_navigation)
+        self.assertNotIn("['unit', scope.unit", top_navigation)
+        self.assertNotIn("['filename', scope.filename", top_navigation)
+        self.assertIn("esc(scope.course || '과목') + ' · 단원</h1>'", self.script)
+        self.assertIn('data-scope-level="unit"', self.script)
+        self.assertIn('data-scope-level="filename"', self.script)
         self.assertIn("getJSON('/library')", self.script)
         self.assertIn("getJSON('/units?'", self.script)
         self.assertIn("workspaceUrl(nextScope)", self.script)
