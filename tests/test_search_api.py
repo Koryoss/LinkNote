@@ -17,6 +17,7 @@ class SearchApiTests(unittest.TestCase):
             "SEARCH_EVENTS_PATH": api_server.SEARCH_EVENTS_PATH,
             "SEARCH_PROFILES_PATH": api_server.SEARCH_PROFILES_PATH,
             "CONCEPT_NOTES_PATH": api_server.CONCEPT_NOTES_PATH,
+            "LECTURE_NOTES_PATH": api_server.LECTURE_NOTES_PATH,
             "CONCEPTS_PATH": api_server.CONCEPTS_PATH,
         }
         self.original_upload_dir = api_server.UPLOAD_DIR
@@ -147,6 +148,46 @@ class SearchApiTests(unittest.TestCase):
         payload["unit"] = ""
         with self.assertRaises(api_server.HTTPException) as context:
             api_server._upsert_concept_note("user-1", payload)
+        self.assertEqual(context.exception.status_code, 400)
+
+    def test_lecture_note_upsert_is_scoped_to_page_range(self):
+        payload = self._lecture_note_payload()
+        first = api_server._upsert_lecture_note("user-1", payload)
+        payload["note_text"] = "교수님 강조 내용\n시험에 출제"
+        second = api_server._upsert_lecture_note("user-1", payload)
+        other_range = api_server._upsert_lecture_note(
+            "user-1", self._lecture_note_payload(start_page=8, end_page=10)
+        )
+
+        notes = api_server._get_lecture_notes_for_user("user-1")
+        self.assertEqual(len(notes), 2)
+        self.assertEqual(first["id"], second["id"])
+        self.assertNotEqual(second["id"], other_range["id"])
+        self.assertEqual(second["note_text"], "교수님 강조 내용\n시험에 출제")
+
+    def test_lecture_notes_are_user_isolated_and_filterable(self):
+        note = api_server._upsert_lecture_note("user-1", self._lecture_note_payload())
+        api_server._upsert_lecture_note(
+            "user-1", self._lecture_note_payload(course="약리학", filename="약리.pdf")
+        )
+        self.assertEqual(api_server._get_lecture_notes_for_user("user-2"), [])
+        self.assertEqual(
+            len(api_server._get_lecture_notes_for_user("user-1", {"course": "병태생리학"})),
+            1,
+        )
+        self.assertFalse(api_server._delete_lecture_note_for_user("user-2", note["id"]))
+        self.assertTrue(api_server._delete_lecture_note_for_user("user-1", note["id"]))
+
+    def test_lecture_note_normalizes_tags_and_rejects_invalid_range(self):
+        note = api_server._upsert_lecture_note(
+            "user-1",
+            self._lecture_note_payload(tags=["question", "exam", "unknown", "EXAM"]),
+        )
+        self.assertEqual(note["tags"], ["exam", "question"])
+        with self.assertRaises(api_server.HTTPException) as context:
+            api_server._upsert_lecture_note(
+                "user-1", self._lecture_note_payload(start_page=5, end_page=4)
+            )
         self.assertEqual(context.exception.status_code, 400)
 
     def test_page_locations_merge_all_pages_and_ignore_invalid_pages(self):
@@ -294,6 +335,21 @@ class SearchApiTests(unittest.TestCase):
             "concept": "급성 염증",
             "note_text": "노트",
             "source_pages": [3],
+        }
+        payload.update(overrides)
+        return payload
+
+    @staticmethod
+    def _lecture_note_payload(**overrides):
+        payload = {
+            "semester": "2026-1",
+            "course": "병태생리학",
+            "unit": "염증과 치유",
+            "filename": "염증과 치유.pdf",
+            "start_page": 3,
+            "end_page": 7,
+            "note_text": "수업 필기",
+            "tags": ["important"],
         }
         payload.update(overrides)
         return payload
