@@ -934,7 +934,7 @@ class SearchApiTests(unittest.TestCase):
 
     def test_ingest_metadata_records_stored_filename_and_unit_filter(self):
         captured = {}
-        with patch.object(rag, "embed_text", return_value=[0.1, 0.2]), \
+        with patch.object(rag, "embed_texts", return_value=[[0.1, 0.2]]), \
                 patch.object(rag.collection, "upsert", side_effect=lambda **kwargs: captured.update(kwargs)):
             rag.add_pdf_pages_to_db(
                 pages=[{"page": 1, "text": "본문"}],
