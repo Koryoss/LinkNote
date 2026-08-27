@@ -523,6 +523,18 @@ class SearchApiTests(unittest.TestCase):
         self.assertEqual(api_server._question_history_for_user("user-1"), [])
         self.assertEqual(len(api_server._question_history_for_user("user-2")), 1)
 
+    def test_learning_memory_delete_all_route_preserves_other_users(self):
+        items = [
+            {"id": "mine", "user_id": "user-1", "concept": "내 개념"},
+            {"id": "other", "user_id": "user-2", "concept": "다른 개념"},
+        ]
+        with patch.object(api_server, "_load_recall_traces", return_value=items), \
+                patch.object(api_server, "_save_recall_traces") as save_traces:
+            result = asyncio.run(api_server.delete_all_learning_memories(data_user_id="user-1"))
+
+        self.assertEqual(result, {"ok": True, "deleted_count": 1})
+        save_traces.assert_called_once_with([items[1]])
+
     def test_question_history_response_is_never_cached(self):
         api_server._record_question_history("user-1", "내 검색", "quick_search")
         response = Response()

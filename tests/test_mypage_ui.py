@@ -25,6 +25,10 @@ class MyPageUiTests(unittest.TestCase):
         self.assertIn('id="deleteAllQuestionHistoryBtn"', self.html)
         self.assertIn("if(allButton) allButton.remove();", self.html)
 
+    def test_learning_memory_delete_all_uses_bodyless_desktop_safe_route(self):
+        self.assertIn("deleteJSON('/learning-memory/all')", self.html)
+        self.assertNotIn("deleteJSON('/learning-memory', { delete_all:true })", self.html)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -26,6 +26,10 @@ class StudyWorkspaceUiTests(unittest.TestCase):
         self.assertIn("scheduleSourceRefit();", self.script)
         self.assertIn(".source-page-indicator", self.html)
 
+    def test_source_panel_does_not_repeat_a_full_document_button(self):
+        self.assertNotIn('id="openFullBtn"', self.html)
+        self.assertNotIn("function openFull()", self.script)
+
 
 if __name__ == "__main__":
     unittest.main()
