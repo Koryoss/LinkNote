@@ -394,7 +394,7 @@
     if(!totalMemoryCount) return;
     if(!confirm(`전체 <내 설명> 기록 ${totalMemoryCount}개를 모두 삭제할까요?\n연결된 AI 피드백 기록도 함께 삭제됩니다.`)) return;
     try {
-      await deleteJSON('/learning-memory', { delete_all:true });
+      await deleteJSON('/learning-memory/all');
       selectedMemoryIds.clear();
       await init();
     } catch(e) {

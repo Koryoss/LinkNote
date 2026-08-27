@@ -45,6 +45,7 @@
   var lastScopeMenuAnchor = null;
   var sourceWidthStorageKey = 'ln_study_source_width';
   var sourceResizeBound = false;
+  var sourceRefitTimer = null;
 
   function scopeQuery(extra) {
     return new URLSearchParams(Object.assign({}, scope, extra || {})).toString();
@@ -490,7 +491,7 @@
   function fileUrl(withPage) {
     var q = scopeQuery({ token: token() });
     var url = API + '/file?' + q;
-    return withPage && state.activePage ? url + '#page=' + state.activePage : url;
+    return withPage ? url + Logic.sourceViewHash(state.activePage) : url;
   }
 
   function renderSource() {
@@ -499,16 +500,22 @@
       body.innerHTML = '<div class="muted-note">원문을 불러올 수 없습니다. 자료 전체에서 다시 열어보세요.</div>';
       return;
     }
-    body.innerHTML = '<iframe id="sourceFrame" class="source-frame" title="원문 PDF"></iframe>';
+    body.innerHTML = '<div class="source-page-indicator" id="sourcePageIndicator" aria-live="polite">' +
+      esc(Logic.sourcePageLabel(state.activePage, state.pages)) + '</div>' +
+      '<iframe id="sourceFrame" class="source-frame" title="원문 PDF"></iframe>';
     el('sourceFrame').src = fileUrl(true);
   }
 
-  function openFull() {
-    if (!state.sourceAvailable) return;
-    window.open(fileUrl(false), '_blank', 'noopener');
-  }
-
   // ---- 데스크톱 원문 너비 조절 ----
+
+  function scheduleSourceRefit() {
+    if (!el('sourceFrame')) return;
+    clearTimeout(sourceRefitTimer);
+    sourceRefitTimer = setTimeout(function () {
+      var frame = el('sourceFrame');
+      if (frame) frame.src = fileUrl(true);
+    }, 140);
+  }
 
   function sourceWidthBounds() {
     var workspace = el('workspace');
@@ -529,6 +536,7 @@
     handle.setAttribute('aria-valuemax', String(bounds.max));
     handle.setAttribute('aria-valuenow', String(next));
     if (persist) localStorage.setItem(sourceWidthStorageKey, String(next));
+    scheduleSourceRefit();
   }
 
   function bindSourceResizer() {
@@ -634,7 +642,6 @@
     if (!hasFullScope()) { missingScopeStage(); return; }
     if (!noteDelegationBound) { bindNoteInputDelegation(); noteDelegationBound = true; }
     loadScopeNavigation();
-    el('openFullBtn').onclick = openFull;
     setStage('loading', '학습 작업대를 불러오는 중입니다…');
     Promise.all([
       getJSON('/study-workspace?' + scopeQuery()),

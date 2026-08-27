@@ -81,7 +81,8 @@
   .note-status.failed { color: #b91c1c; }
   .muted-note { color: #94a3b8; font-size: .85rem; padding: 12px; }
 
-  .source-frame { width: 100%; height: calc(100vh - 160px); border: none; display: block; background: #f8fafc; }
+  .source-page-indicator { display: flex; align-items: center; justify-content: center; min-height: 36px; padding: 7px 12px; border-bottom: 1px solid #eef1f6; background: #f8fafc; color: #475569; font-size: .78rem; font-weight: 800; letter-spacing: .02em; }
+  .source-frame { width: 100%; height: calc(100vh - 196px); border: none; display: block; background: #f8fafc; }
 
   @media (max-width: 899px) {
     .mobile-only { display: inline-flex; }
@@ -133,7 +134,6 @@
       <div class="panel-head">
         <span>원문</span>
         <div style="display:flex; gap:8px; align-items:center;">
-          <button type="button" class="btn" id="openFullBtn">자료 전체 열기</button>
           <button type="button" class="icon-btn mobile-only" onclick="StudyWorkspace.toggleSource(false)" aria-label="원문 닫기">✕</button>
         </div>
       </div>

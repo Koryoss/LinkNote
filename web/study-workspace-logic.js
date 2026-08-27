@@ -127,12 +127,29 @@
     return (concepts || []).filter(function (c) { return namesInSegment.has(c && c.name); });
   }
 
+  function sourceViewHash(page) {
+    var normalized = Number(page);
+    var pagePart = Number.isFinite(normalized) && normalized > 0 ? 'page=' + Math.floor(normalized) + '&' : '';
+    return '#' + pagePart + 'view=FitH';
+  }
+
+  function sourcePageLabel(activePage, pages) {
+    var current = Number(activePage);
+    if (!Number.isFinite(current) || current <= 0) return '';
+    var lastPage = normalizePages(pages).reduce(function (max, page) {
+      return Math.max(max, page.page);
+    }, 0);
+    return 'p.' + Math.floor(current) + (lastPage ? ' / ' + lastPage : '');
+  }
+
   var api = {
     buildSegments: buildSegments,
     conceptsForSegment: conceptsForSegment,
     segmentLabel: segmentLabel,
     pageDisplayTitle: pageDisplayTitle,
     scopeNavigationOptions: scopeNavigationOptions,
+    sourceViewHash: sourceViewHash,
+    sourcePageLabel: sourcePageLabel,
   };
 
   if (typeof module !== 'undefined' && module.exports) {
