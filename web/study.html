@@ -21,13 +21,22 @@
   section { background:#fff; border:1px solid #e8ebf2; border-radius:14px; padding:18px; box-shadow:0 8px 24px rgba(15,23,42,.06); margin-bottom:16px; }
   h2 { font-size:.98rem; margin-bottom:6px; color:#1e293b; }
   .desc { font-size:.82rem; color:#64748b; margin-bottom:12px; line-height:1.5; }
-  textarea, input[type=text] { width:100%; border:1px solid #d8dee9; border-radius:10px; padding:10px 12px; font-size:.9rem; font-family:inherit; resize:vertical; background:#fff; color:#1f2937; }
-  textarea:focus, input:focus { outline:none; border-color:#86efac; }
+  textarea, input[type=text], select { width:100%; border:1px solid #d8dee9; border-radius:10px; padding:10px 12px; font-size:.9rem; font-family:inherit; resize:vertical; background:#fff; color:#1f2937; }
+  textarea:focus, input:focus, select:focus { outline:none; border-color:#86efac; box-shadow:0 0 0 2px rgba(134,239,172,.2); }
+  select:disabled { color:#94a3b8; background:#f8fafc; }
   .row { display:flex; gap:8px; align-items:flex-end; margin-top:8px; flex-wrap:wrap; }
+  .scope-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:8px; }
+  .scope-field label { display:block; margin-bottom:5px; color:#64748b; font-size:.74rem; font-weight:800; }
+  .scope-summary { margin-top:10px; color:#1e40af; font-size:.82rem; font-weight:700; }
+  .modebar { display:flex; gap:8px; margin-bottom:12px; }
+  .modebar button.active { background:#2563eb; border-color:#2563eb; color:#fff; }
+  .study-run { display:flex; justify-content:flex-end; margin-top:9px; }
   .answer { border:1px solid #eef1f6; border-radius:10px; padding:12px 14px; background:#f8fafc; font-size:.88rem; line-height:1.65; white-space:pre-wrap; margin-top:12px; }
   .srcs { display:flex; flex-direction:column; gap:4px; margin-top:10px; }
-  .src { font-size:.76rem; color:#475569; border:1px solid #eef1f6; border-radius:8px; padding:5px 9px; background:#fff; }
+  .src { font-size:.78rem; color:#475569; border:1px solid #dbe3ef; border-left:4px solid #2563eb; border-radius:10px; padding:10px 11px; background:#fff; line-height:1.5; }
   .src b { color:#0f172a; }
+  .src-actions { display:flex; margin-top:8px; }
+  .src-actions .btn { padding:6px 9px; font-size:.75rem; }
   .kv { display:grid; grid-template-columns:110px 1fr; gap:8px 12px; font-size:.86rem; margin-top:12px; }
   .k { color:#64748b; }
   .v { color:#1f2937; line-height:1.5; }
@@ -47,7 +56,7 @@
   .result-line.ok { background:#f0fdf4; color:#15803d; border:1px solid #bbf7d0; }
   .result-line.fail { background:#fff7f7; color:#b91c1c; border:1px solid #fecaca; }
   .muted { color:#94a3b8; font-size:.8rem; }
-  @media (max-width:760px){ .kv{grid-template-columns:1fr;} }
+  @media (max-width:760px){ .kv,.scope-grid{grid-template-columns:1fr;} }
 </style>
 </head>
 <body>
@@ -68,27 +77,33 @@
     <div id="gate" class="empty">확인 중...</div>
 
     <div id="app" style="display:none;">
-      <!-- 논문 질문 -->
+      <!-- 자료 범위 -->
       <section>
-        <h2>논문 질문</h2>
-        <p class="desc">업로드된 자료 청크만 근거로 답하며, 출처(자료 제목·페이지·유사도)를 함께 보여줍니다.</p>
-        <textarea id="askQ" rows="2" placeholder="자료에 대해 질문하세요"></textarea>
-        <div class="row">
-          <input id="askCourse" type="text" placeholder="과목으로 범위 제한 (선택)" style="flex:1; min-width:180px;">
-          <button class="primary" id="askBtn" onclick="doAsk()">질문</button>
+        <h2>공부할 자료 범위</h2>
+        <p class="desc">질문과 주장 확인에 사용할 내 자료의 범위를 선택하세요. 선택하지 않으면 내 자료 전체를 검색합니다.</p>
+        <div class="scope-grid">
+          <div class="scope-field"><label for="scopeSemester">학기</label><select id="scopeSemester" onchange="onScopeChange('semester')"><option value="">전체 학기</option></select></div>
+          <div class="scope-field"><label for="scopeCourse">과목</label><select id="scopeCourse" onchange="onScopeChange('course')" disabled><option value="">전체 과목</option></select></div>
+          <div class="scope-field"><label for="scopeUnit">단원</label><select id="scopeUnit" onchange="onScopeChange('unit')" disabled><option value="">전체 단원</option></select></div>
+          <div class="scope-field"><label for="scopeFilename">자료</label><select id="scopeFilename" onchange="onScopeChange('filename')" disabled><option value="">전체 자료</option></select></div>
         </div>
-        <div id="askOut"></div>
+        <div id="scopeSummary" class="scope-summary">검색 범위: 내 자료 전체</div>
       </section>
 
-      <!-- 주장 근거화 -->
+      <!-- 통합 질문·주장 확인 -->
       <section>
-        <h2>주장 근거화</h2>
-        <p class="desc">주장을 입력하면 자료와 비교해 출처 요약·근거강도·활용 맥락·안전 메모 초안을 만듭니다. 확인 후 저장하세요.</p>
-        <textarea id="claimQ" rows="2" placeholder="예: 수면의 질 저하는 어지럼 악화와 관련이 있다"></textarea>
-        <div class="row">
-          <button class="primary" id="claimBtn" onclick="doClaim()">근거 초안 만들기</button>
+        <div class="modebar" role="group" aria-label="학습 방식 선택">
+          <button type="button" id="askModeBtn" class="active" aria-pressed="true" onclick="setStudyMode('ask')">자료에 질문하기</button>
+          <button type="button" id="claimModeBtn" aria-pressed="false" onclick="setStudyMode('claim')">이 주장 확인하기</button>
         </div>
-        <div id="claimOut"></div>
+        <h2 id="studyTaskTitle">자료에 질문하기</h2>
+        <p class="desc" id="studyTaskDescription">선택한 자료 범위에서 답과 근거를 함께 찾습니다.</p>
+        <textarea id="studyInput" rows="3" placeholder="자료에 대해 질문하세요"></textarea>
+        <div class="study-run"><button class="primary" id="studyRunBtn" onclick="runStudy()">질문하기</button></div>
+        <div id="studyOut"></div>
+      </section>
+
+      <section>
         <h2 style="margin-top:20px;">저장된 주장</h2>
         <div id="claimList" class="list"><span class="muted">불러오는 중...</span></div>
       </section>
@@ -140,31 +155,155 @@
     return { '강': '강', '중': '중', '약': '약' }[s] || '미확인';
   }
 
+  function sourceWorkspaceUrl(source) {
+    if (!source || !source.semester || !source.course || !source.unit || !source.filename) return '';
+    const query = new URLSearchParams({
+      semester: source.semester,
+      course: source.course,
+      unit: source.unit,
+      filename: source.filename,
+    });
+    if (Number(source.page_num) > 0) query.set('page', String(source.page_num));
+    return '/study-workspace.html?' + query.toString();
+  }
+
   function renderSources(sources) {
     if (!sources || !sources.length) return '';
-    return '<div class="srcs">' + sources.map(s =>
-      `<div class="src"><b>${esc(s.doc_title)}</b> · p.${esc(s.page_num)}` +
-      (s.similarity != null ? ` · 유사도 ${esc(s.similarity)}%` : '') +
-      (s.excerpt ? `<br>${esc(s.excerpt)}` : '') + '</div>'
-    ).join('') + '</div>';
+    return '<div class="srcs" aria-label="근거 자료">' + sources.map(s => {
+      const url = sourceWorkspaceUrl(s);
+      return `<article class="src"><b>${esc(s.doc_title)}</b> · p.${esc(s.page_num)}` +
+        (s.similarity != null ? ` · 유사도 ${esc(s.similarity)}%` : '') +
+        (s.excerpt ? `<br>${esc(s.excerpt)}` : '') +
+        (url ? `<div class="src-actions"><a class="btn" href="${esc(url)}">원문 p.${esc(s.page_num)} 열기</a></div>` : '') + '</article>';
+    }).join('') + '</div>';
   }
 
-  function courseFilter(inputId) {
-    const course = document.getElementById(inputId).value.trim();
-    return course ? { course } : null;
+  let studyMode = 'ask';
+  let studyLibrary = null;
+  let studyUnits = [];
+
+  function selectedValue(id) {
+    const node = document.getElementById(id);
+    return node ? node.value.trim() : '';
   }
 
-  async function doAsk() {
-    const q = document.getElementById('askQ').value.trim();
-    const out = document.getElementById('askOut');
-    if (!q) return;
-    const btn = document.getElementById('askBtn');
+  function currentStudyScope() {
+    return {
+      semester: selectedValue('scopeSemester'),
+      course: selectedValue('scopeCourse'),
+      unit: selectedValue('scopeUnit'),
+      filename: selectedValue('scopeFilename'),
+    };
+  }
+
+  function studySearchFilter() {
+    const scope = currentStudyScope();
+    const filter = {};
+    for (const key of ['semester', 'course', 'unit', 'filename']) {
+      if (scope[key]) filter[key] = scope[key];
+    }
+    return Object.keys(filter).length ? filter : null;
+  }
+
+  function fillScopeSelect(id, placeholder, values, disabled) {
+    const select = document.getElementById(id);
+    select.innerHTML = `<option value="">${esc(placeholder)}</option>` +
+      values.map(value => `<option value="${esc(value)}">${esc(value)}</option>`).join('');
+    select.disabled = !!disabled;
+  }
+
+  function updateScopeSummary() {
+    const scope = currentStudyScope();
+    const parts = ['semester', 'course', 'unit', 'filename'].map(key => scope[key]).filter(Boolean);
+    document.getElementById('scopeSummary').textContent = '검색 범위: ' + (parts.length ? parts.join(' / ') : '내 자료 전체');
+  }
+
+  async function loadStudyScope() {
+    try {
+      studyLibrary = await api('/library', { headers: headers() });
+      const semesters = (studyLibrary.semesters || []).map(item => item.semester);
+      fillScopeSelect('scopeSemester', '전체 학기', semesters, false);
+      fillScopeSelect('scopeCourse', '전체 과목', [], true);
+      fillScopeSelect('scopeUnit', '전체 단원', [], true);
+      fillScopeSelect('scopeFilename', '전체 자료', [], true);
+      updateScopeSummary();
+    } catch (e) {
+      document.getElementById('scopeSummary').textContent = '자료 범위를 불러오지 못했습니다: ' + e.message;
+    }
+  }
+
+  async function onScopeChange(level) {
+    const scope = currentStudyScope();
+    if (level === 'semester') {
+      const semester = (studyLibrary && studyLibrary.semesters || []).find(item => item.semester === scope.semester);
+      fillScopeSelect('scopeCourse', '전체 과목', (semester && semester.courses || []).map(item => item.course), !scope.semester);
+      fillScopeSelect('scopeUnit', '전체 단원', [], true);
+      fillScopeSelect('scopeFilename', '전체 자료', [], true);
+      studyUnits = [];
+    }
+    if (level === 'course' || (level === 'semester' && selectedValue('scopeCourse'))) {
+      const next = currentStudyScope();
+      if (next.semester && next.course) {
+        document.getElementById('scopeSummary').textContent = '단원 목록을 불러오는 중…';
+        try {
+          const data = await api('/units?' + new URLSearchParams({ semester: next.semester, course: next.course }), { headers: headers() });
+          studyUnits = data.units || [];
+          fillScopeSelect('scopeUnit', '전체 단원', studyUnits.map(item => item.unit), false);
+        } catch (e) {
+          studyUnits = [];
+          fillScopeSelect('scopeUnit', '전체 단원', [], true);
+          fillScopeSelect('scopeFilename', '전체 자료', [], true);
+          document.getElementById('scopeSummary').textContent = '단원 목록을 불러오지 못했습니다: ' + e.message;
+          return;
+        }
+      } else {
+        studyUnits = [];
+        fillScopeSelect('scopeUnit', '전체 단원', [], true);
+      }
+      fillScopeSelect('scopeFilename', '전체 자료', [], true);
+    }
+    if (level === 'unit') {
+      const unit = studyUnits.find(item => item.unit === selectedValue('scopeUnit'));
+      fillScopeSelect('scopeFilename', '전체 자료', unit && Array.isArray(unit.files) ? unit.files : [], !unit);
+    }
+    updateScopeSummary();
+  }
+
+  function setStudyMode(mode) {
+    studyMode = mode === 'claim' ? 'claim' : 'ask';
+    const isClaim = studyMode === 'claim';
+    document.getElementById('askModeBtn').classList.toggle('active', !isClaim);
+    document.getElementById('askModeBtn').setAttribute('aria-pressed', String(!isClaim));
+    document.getElementById('claimModeBtn').classList.toggle('active', isClaim);
+    document.getElementById('claimModeBtn').setAttribute('aria-pressed', String(isClaim));
+    document.getElementById('studyTaskTitle').textContent = isClaim ? '이 주장 확인하기' : '자료에 질문하기';
+    document.getElementById('studyTaskDescription').textContent = isClaim
+      ? '선택한 자료와 주장을 비교해 근거강도와 주의점을 확인합니다.'
+      : '선택한 자료 범위에서 답과 근거를 함께 찾습니다.';
+    document.getElementById('studyInput').placeholder = isClaim
+      ? '예: 수면의 질 저하는 어지럼 악화와 관련이 있다'
+      : '자료에 대해 질문하세요';
+    document.getElementById('studyRunBtn').textContent = isClaim ? '주장 확인하기' : '질문하기';
+    document.getElementById('studyOut').innerHTML = '';
+    lastDraft = null;
+  }
+
+  async function runStudy() {
+    const input = document.getElementById('studyInput').value.trim();
+    if (!input) return;
+    if (studyMode === 'claim') await doClaim(input);
+    else await doAsk(input);
+  }
+
+  async function doAsk(question) {
+    const out = document.getElementById('studyOut');
+    const btn = document.getElementById('studyRunBtn');
     btn.disabled = true;
     out.innerHTML = '<div class="answer">자료 검색 중…</div>';
     try {
       const data = await api('/study/ask', {
         method: 'POST', headers: headers(true),
-        body: JSON.stringify({ question: q, search_filter: courseFilter('askCourse') }),
+        body: JSON.stringify({ question, search_filter: studySearchFilter() }),
       });
       out.innerHTML = `<div class="answer">${esc(data.answer)}</div>` +
         `<div class="muted" style="margin-top:6px;">검색 범위: ${esc(data.scope_label)}</div>` +
@@ -176,17 +315,15 @@
   }
 
   let lastDraft = null;
-  async function doClaim() {
-    const claim = document.getElementById('claimQ').value.trim();
-    const out = document.getElementById('claimOut');
-    if (!claim) return;
-    const btn = document.getElementById('claimBtn');
+  async function doClaim(claim) {
+    const out = document.getElementById('studyOut');
+    const btn = document.getElementById('studyRunBtn');
     btn.disabled = true;
     out.innerHTML = '<div class="answer">근거 비교 중…</div>';
     try {
       const data = await api('/study/claim', {
         method: 'POST', headers: headers(true),
-        body: JSON.stringify({ claim }),
+        body: JSON.stringify({ claim, search_filter: studySearchFilter() }),
       });
       lastDraft = { claim: data.claim, ...data.draft };
       const d = data.draft;
@@ -197,6 +334,7 @@
         `<span class="k">활용 맥락</span><span class="v">${esc(d.application_context) || '—'}</span>` +
         `<span class="k">안전 메모</span><span class="v">${esc(d.safety_note) || '—'}</span>` +
         `</div><div class="row"><button class="primary" onclick="saveClaim()">이 초안 저장</button></div></div>` +
+        `<div class="muted" style="margin-top:6px;">검색 범위: ${esc(data.scope_label)}</div>` +
         renderSources(data.sources);
     } catch (e) {
       out.innerHTML = `<div class="error">${esc(e.message)}</div>`;
@@ -209,10 +347,10 @@
     try {
       await api('/study/claims', { method: 'POST', headers: headers(true), body: JSON.stringify(lastDraft) });
       lastDraft = null;
-      document.getElementById('claimOut').innerHTML = '<div class="result-line ok">저장했습니다.</div>';
+      document.getElementById('studyOut').innerHTML = '<div class="result-line ok">저장했습니다.</div>';
       loadClaims();
     } catch (e) {
-      document.getElementById('claimOut').insertAdjacentHTML('beforeend', `<div class="error">${esc(e.message)}</div>`);
+      document.getElementById('studyOut').insertAdjacentHTML('beforeend', `<div class="error">${esc(e.message)}</div>`);
     }
   }
 
@@ -275,6 +413,7 @@
       document.getElementById('userLabel').textContent = me.user.display_name || me.user.email;
       gate.style.display = 'none';
       document.getElementById('app').style.display = 'block';
+      loadStudyScope();
       loadClaims();
     } catch (e) {
       if (e.status === 401) {
