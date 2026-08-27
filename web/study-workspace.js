@@ -123,15 +123,22 @@
     renderDocumentContext();
   }
 
+  // 현재 학습 범위: 실제 단원명과 실제 자료명만 표시한다. 과목 전체 이름은 상단
+  // breadcrumb(.scope-nav)의 과목 pill에서 이미 보이므로 여기서 다시 반복하지
+  // 않고, "· 단원"처럼 정보 없는 고정 문구도 남기지 않는다. 단원 변경/자료 변경
+  // 버튼은 각자의 현재 정보와 같은 줄에 두어 시각적으로 연결한다.
   function renderDocumentContext() {
     var context = el('documentContext');
     if (!context) return;
-    context.innerHTML = '<div class="document-context-main">' +
-      '<h1>' + esc(scope.course || '과목') + ' · 단원</h1>' +
-      '<p class="document-context-file">' + esc(scope.unit || '단원') + (scope.filename ? ' · ' + esc(scope.filename) : '') + '</p></div>' +
-      '<div class="document-context-actions">' +
-      '<button type="button" class="context-picker" data-scope-level="unit" aria-label="단원 선택" aria-haspopup="listbox" aria-expanded="false" title="' + esc(scope.unit) + '">단원 변경</button>' +
-      '<button type="button" class="context-picker" data-scope-level="filename" aria-label="자료 선택" aria-haspopup="listbox" aria-expanded="false" title="' + esc(scope.filename) + '">자료 변경</button></div>';
+    context.innerHTML =
+      '<div class="scope-row scope-row--unit">' +
+        '<h1 class="scope-row-title">' + esc(scope.unit || '단원 미지정') + '</h1>' +
+        '<button type="button" class="context-picker" data-scope-level="unit" aria-label="단원 선택" aria-haspopup="listbox" aria-expanded="false" title="' + esc(scope.unit) + '">단원 변경</button>' +
+      '</div>' +
+      '<div class="scope-row scope-row--material">' +
+        '<p class="scope-row-file">' + esc(scope.filename || '자료 미지정') + '</p>' +
+        '<button type="button" class="context-picker" data-scope-level="filename" aria-label="자료 선택" aria-haspopup="listbox" aria-expanded="false" title="' + esc(scope.filename) + '">자료 변경</button>' +
+      '</div>';
     context.querySelectorAll('[data-scope-level]').forEach(function (button) {
       button.addEventListener('click', function (event) {
         openScopeMenu(button.dataset.scopeLevel, button, event);
