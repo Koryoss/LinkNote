@@ -62,6 +62,10 @@
   .card .ctag { font-size: 0.7rem; font-weight: 700; color: #2563eb; letter-spacing: .03em; }
   .card .ctitle { font-size: 1.08rem; font-weight: 700; margin-top: 8px; color: #1e293b; word-break: keep-all; }
   .card .cmeta { font-size: 0.76rem; color: #9ca3af; margin-top: 14px; }
+  .card-primary-row { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+  .card-primary-row .cmeta { margin-top:0; }
+  .unit-map-entry { border:1px solid #d8dee9; background:#fff; color:#475569; border-radius:7px; padding:5px 9px; font-size:0.72rem; font-weight:700; cursor:pointer; white-space:nowrap; }
+  .unit-map-entry:hover { border-color:#2563eb; color:#2563eb; background:#f8faff; }
   .empty { margin: 10px 24px 30px; padding: 26px; border: 1px dashed #d8dee9; border-radius: 14px; color: #6b7280; font-size: 0.86rem; background:#fff; }
 
   #canvas { position: relative; height: 470px; border: 1px solid #eef1f6; border-radius: 0 0 16px 16px; background:#fff; overflow: hidden; }
@@ -158,11 +162,6 @@
   .graph-panel { margin:12px 0; border-radius:16px; background:#fff; }
   .graph-head { display:flex; align-items:center; justify-content:space-between; gap:10px; padding:9px 12px; border:1px solid #eef1f6; border-bottom:0; border-radius:16px 16px 0 0; background:#f8fafc; }
   .graph-title { font-size:0.85rem; font-weight:700; color:#1f2937; }
-  .graph-head-actions { display:flex; align-items:center; gap:8px; }
-  .graph-head-actions .mini-btn { margin-left:0; }
-  .workspace-entry { border-color:#2563eb; background:#2563eb; color:#fff; }
-  .workspace-entry:hover { border-color:#1d4ed8; background:#1d4ed8; color:#fff; }
-  .workspace-entry:disabled { border-color:#cbd5e1; background:#e2e8f0; color:#94a3b8; cursor:not-allowed; }
   .graph-tools { position:absolute; top:12px; right:12px; z-index:10; display:flex; flex-direction:column; gap:7px; align-items:stretch; }
   .graph-tools .mini-btn { margin-left:0; background:rgba(255,255,255,0.94); box-shadow:0 6px 16px rgba(15,23,42,0.08); }
   .graph-panel.graph-collapsed #canvas { display:none; }
@@ -1140,10 +1139,10 @@
         <button class="addmini" onclick="openAddForCourse()">＋ 자료 추가</button>
       </div></div>
       <div class="grid" id="unitGrid">${sorted.map((u,i)=>`
-        <div class="card" draggable="true" data-unit="${esc(u.unit)}" onclick='openUnit(${JSON.stringify(u.unit)})'
+        <div class="card" draggable="true" data-unit="${esc(u.unit)}" data-filename="${esc((u.files||[])[0]||'')}" onclick="openStudyWorkspaceForUnit(event.currentTarget)"
              ondragstart="unitDragStart(event)" ondragend="unitDragEnd(event)" ondragover="unitDragOver(event)" ondrop="unitDrop(event)">
-          <div><div class="ctag">⠿ 단원</div><div class="ctitle">${esc(u.unit)}</div></div>
-          <div class="cmeta">파일 ${u.file_count||0} · 페이지 ${u.page_count||0}</div>
+          <div><div class="ctag">⠿ 학습 작업대</div><div class="ctitle">${esc(u.unit)}</div></div>
+          <div class="card-primary-row"><div class="cmeta">파일 ${u.file_count||0} · 페이지 ${u.page_count||0}</div><button type="button" class="unit-map-entry" data-unit="${esc(u.unit)}" onclick="openConceptMap(event)">개념 지도</button></div>
           <div class="unit-files">${(u.files||[]).map(filename=>`
             <div class="unit-file-row" onclick="event.stopPropagation()">
               <span class="unit-file-name" title="${esc(filename)}">📄 ${esc(filename)}</span>
@@ -1169,6 +1168,18 @@
     updateBackButton();
     renderConfirmPanel();
   }
+  function openStudyWorkspaceForUnit(card){
+    const unit = card ? (card.dataset.unit||'').trim() : '';
+    const filename = card ? (card.dataset.filename||'').trim() : '';
+    if(!filename){ alert('학습 작업대로 열 자료가 없습니다. 개념 지도를 엽니다.'); openUnit(unit); return; }
+    const q = new URLSearchParams({ semester:state.semester||'', course:state.course||'', unit:unit||'', filename });
+    location.href = `/study-workspace.html?${q.toString()}`;
+  }
+  function openConceptMap(event){
+    if(event){ event.preventDefault(); event.stopPropagation(); }
+    const unit = event && event.currentTarget ? (event.currentTarget.dataset.unit||'').trim() : '';
+    openUnit(unit);
+  }
   function renderConcepts(unit, nodes, demo, notReady){
     setCrumbs([['홈','loadHome()'], [state.semester, 'openSemesterMenu(event)', 'menu'], [state.course, 'openCourseMenu(event)', 'menu'], [unit, 'openUnitMenu(event)', 'menu']]);
     const view = document.getElementById('view');
@@ -1178,8 +1189,8 @@
       <div class="unit-cols" id="unitCols">
         <div class="doc-panel"><div class="doc-head">${clinicalEnabled()
             ? `<button class="doc-tab on" id="docTabDoc" onclick="docTab('doc')">📄 원문</button><button class="doc-tab" id="docTabClin" onclick="docTab('clinical')">🩺 임상 검증</button>`
-            : `<span class="doc-title">📄 파일 원문</span>`}<select id="doc_sel" onchange="docShow()"></select><button class="mini-btn" onclick="openMoveFileModal(event)">자료 이동</button><button class="mini-btn danger" onclick="deleteCurrentFile(event)">자료 삭제</button><button class="mini-btn" onclick="toggleDocPanel()" id="docToggleBtn">PDF 닫기</button><div id="concept_page_nav" class="concept-page-nav" hidden></div></div><iframe id="doc_frame" class="doc-frame" title="원문 PDF"></iframe>${clinicalEnabled() ? clinicalPanelHTML() : ''}</div>
-        <div class="unit-main">${inlineQuestionHTML(state.course)}<div class="drill-bar"><button class="mini-btn" onclick="startRecallForActive()">설명해보기</button><span class="muted" style="font-size:.72rem">개념 클릭 = 연관 펼치기</span></div>${recallPanelHTML()}<div class="graph-panel" id="graphPanel"><div class="graph-head"><span class="graph-title">개념 지도</span><div class="graph-head-actions"><button class="mini-btn workspace-entry" onclick="openStudyWorkspace()" id="studyWorkspaceBtn" disabled>학습 작업대 열기</button><button class="mini-btn" onclick="toggleGraphPanel()" id="graphToggleBtn">지도 닫기</button></div></div><div id="canvas"><div class="graph-tools"><button class="mini-btn" onclick="drillReset()">핵심만</button><button class="mini-btn" onclick="drillAll()">전체 보기</button></div><svg id="lines"></svg></div></div></div>
+            : `<span class="doc-title">📄 파일 원문</span>`}<select id="doc_sel" onchange="docShow()"></select><button class="mini-btn" onclick="openMoveFileModal(event)">자료 이동</button><button class="mini-btn danger" onclick="deleteCurrentFile(event)">자료 삭제</button><button class="mini-btn" onclick="openStudyWorkspace()" id="studyWorkspaceBtn">학습 작업대</button><button class="mini-btn" onclick="toggleDocPanel()" id="docToggleBtn">PDF 닫기</button><div id="concept_page_nav" class="concept-page-nav" hidden></div></div><iframe id="doc_frame" class="doc-frame" title="원문 PDF"></iframe>${clinicalEnabled() ? clinicalPanelHTML() : ''}</div>
+        <div class="unit-main">${inlineQuestionHTML(state.course)}<div class="drill-bar"><button class="mini-btn" onclick="startRecallForActive()">설명해보기</button><span class="muted" style="font-size:.72rem">개념 클릭 = 연관 펼치기</span></div>${recallPanelHTML()}<div class="graph-panel" id="graphPanel"><div class="graph-head"><span class="graph-title">개념 지도</span><button class="mini-btn" onclick="toggleGraphPanel()" id="graphToggleBtn">지도 닫기</button></div><div id="canvas"><div class="graph-tools"><button class="mini-btn" onclick="drillReset()">핵심만</button><button class="mini-btn" onclick="drillAll()">전체 보기</button></div><svg id="lines"></svg></div></div></div>
       </div>`;
     drillVisible = null;
     layoutNodes(nodes);
@@ -1963,17 +1974,16 @@
     w.style.display=(m.value==='single')?'':'none';
   }
   async function loadUnitDoc(sem, course, unit){
-    const sel=document.getElementById('doc_sel'), fr=document.getElementById('doc_frame'), workspaceBtn=document.getElementById('studyWorkspaceBtn');
+    const sel=document.getElementById('doc_sel'), fr=document.getElementById('doc_frame');
     if(!sel||!fr) return;
     try{
       const r=await fetch(API+`/chunks?course=${encodeURIComponent(course)}&limit=3000`,{headers:authHeaders()});
       const d=await r.json();
       const files=[...new Set((d.items||[]).filter(x=>(x.unit||'')===unit).map(x=>x.filename).filter(Boolean))];
-      if(!files.length){ sel.innerHTML=''; fr.removeAttribute('src'); if(workspaceBtn) workspaceBtn.disabled=true; return; }
+      if(!files.length){ sel.innerHTML=''; fr.removeAttribute('src'); return; }
       sel.innerHTML=files.map(f=>`<option value="${esc(f)}">${esc(f)}</option>`).join('');
       docShow(files[0], 1);
-      if(workspaceBtn) workspaceBtn.disabled=false;
-    }catch(e){ if(workspaceBtn) workspaceBtn.disabled=true; }
+    }catch(e){}
   }
   function docShow(filename, page){
     const sel=document.getElementById('doc_sel'), fr=document.getElementById('doc_frame');

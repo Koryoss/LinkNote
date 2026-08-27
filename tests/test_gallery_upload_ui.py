@@ -49,6 +49,14 @@ class GalleryUploadUiTests(unittest.TestCase):
         self.assertIn("API+'/library/file'", self.html)
         self.assertIn("target_semester:targetSemester", self.html)
 
+    def test_unit_cards_open_workspace_first_and_keep_concept_map_as_button(self):
+        self.assertIn('onclick="openStudyWorkspaceForUnit(event.currentTarget)"', self.html)
+        self.assertIn("function openStudyWorkspaceForUnit(card)", self.html)
+        self.assertIn("/study-workspace.html?${q.toString()}", self.html)
+        self.assertIn('class="unit-map-entry"', self.html)
+        self.assertIn('onclick="openConceptMap(event)"', self.html)
+        self.assertIn("function openConceptMap(event)", self.html)
+
     def test_pdf_preview_request_includes_library_scope(self):
         self.assertIn("params.set('semester',state.semester)", self.html)
         self.assertIn("params.set('course',state.course)", self.html)
