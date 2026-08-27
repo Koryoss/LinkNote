@@ -21,18 +21,20 @@
   .scope-menu-item { display: block; width: 100%; border: 0; border-radius: 8px; padding: 9px 11px; background: transparent; color: #1e293b; text-align: left; font-size: .84rem; font-weight: 650; }
   .scope-menu-item:hover, .scope-menu-item:focus-visible { background: #eff6ff; color: #1d4ed8; outline: none; }
   .scope-menu-item[aria-selected="true"] { background: #dbeafe; color: #1d4ed8; }
-  .document-context { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; padding: 22px 24px 2px; }
-  .document-context-main { min-width: 0; }
-  .document-context h1 { color: #1e293b; font-size: 1.25rem; line-height: 1.35; overflow-wrap: anywhere; }
-  .document-context-file { margin-top: 4px; color: #64748b; font-size: .84rem; overflow-wrap: anywhere; }
-  .document-context-actions { display: flex; flex: 0 0 auto; gap: 8px; }
-  .context-picker { max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  /* 현재 학습 범위(단원·자료) 영역. 상단 breadcrumb(.topbar/.scope-nav)과는 항상
+     별도 줄이며, 단원·자료 선택기는 각자의 현재 정보 옆에 붙어 시각적으로 연결된다. */
+  .document-context { display: flex; flex-direction: column; gap: 4px; padding: 12px 24px 6px; }
+  .scope-row { display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px 10px; min-width: 0; }
+  .scope-row-title { min-width: 0; color: #1e293b; font-size: 1.2rem; font-weight: 800; line-height: 1.35; overflow-wrap: anywhere; }
+  .scope-row-file { min-width: 0; color: #64748b; font-size: .84rem; overflow-wrap: anywhere; }
+  .context-picker { flex: 0 0 auto; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .context-picker::after { content: "▾"; margin-left: 7px; color: #94a3b8; font-size: .7rem; }
   .spacer { flex: 1; }
   .btn, button { border: 1px solid #d8dee9; background: #fff; color: #2563eb; border-radius: 8px; padding: 8px 12px; font-size: .84rem; font-weight: 700; text-decoration: none; cursor: pointer; }
   .btn.primary { background: #2563eb; border-color: #2563eb; color: #fff; }
   .icon-btn { border: none; background: transparent; color: #64748b; font-size: 1rem; padding: 4px 8px; cursor: pointer; }
   .mobile-only { display: none; }
+  .mobile-only[hidden] { display: none !important; }
 
   #app { width: min(720px, calc(100vw - 32px)); margin: 60px auto; text-align: center; color: #64748b; font-size: .95rem; line-height: 1.7; }
   #app.error-state, #app.empty-state { border: 1px dashed #d8dee9; border-radius: 14px; padding: 28px; background: #fff; }
@@ -95,9 +97,9 @@
     .topbar { flex-wrap: wrap; padding: 10px 12px; }
     .scope-nav { order: 3; flex-basis: 100%; }
     .scope-pill { max-width: 200px; min-height: 34px; padding: 6px 10px; }
-    .document-context { align-items: flex-start; flex-direction: column; padding: 18px 12px 2px; }
-    .document-context-actions { width: 100%; }
-    .context-picker { min-width: 0; max-width: none; flex: 1 1 0; }
+    .document-context { padding: 10px 12px 6px; gap: 6px; }
+    .scope-row-title { font-size: 1.05rem; }
+    .context-picker { max-width: none; }
     .workspace { grid-template-columns: 1fr; padding: 12px 12px 24px; }
     .source-resizer { display: none; }
     .toc-panel, .source-panel {
