@@ -54,6 +54,21 @@
     return repeated ? '' : title;
   }
 
+  function scopeNavigationOptions(level, scope, library, units) {
+    var semesters = library && Array.isArray(library.semesters) ? library.semesters : [];
+    var semester = semesters.find(function (item) { return item.semester === scope.semester; });
+    var course = semester && Array.isArray(semester.courses)
+      ? semester.courses.find(function (item) { return item.course === scope.course; })
+      : null;
+    var unitItems = Array.isArray(units) ? units : [];
+    var unit = unitItems.find(function (item) { return item.unit === scope.unit; });
+    if (level === 'semester') return semesters.map(function (item) { return item.semester; });
+    if (level === 'course') return (semester && semester.courses || []).map(function (item) { return item.course; });
+    if (level === 'unit') return unitItems.map(function (item) { return item.unit; });
+    if (level === 'filename') return unit && Array.isArray(unit.files) ? unit.files.slice() : (course ? (course.files || []).map(function (item) { return item.filename; }) : []);
+    return [];
+  }
+
   // Builds ordered page-range segments ("구간") from concept first-appearance
   // boundaries. Pages before the first concept's first_page join the first
   // segment rather than forming their own unlabeled group. When no concept
@@ -117,6 +132,7 @@
     conceptsForSegment: conceptsForSegment,
     segmentLabel: segmentLabel,
     pageDisplayTitle: pageDisplayTitle,
+    scopeNavigationOptions: scopeNavigationOptions,
   };
 
   if (typeof module !== 'undefined' && module.exports) {

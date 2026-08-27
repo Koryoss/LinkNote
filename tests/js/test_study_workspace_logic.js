@@ -2,7 +2,7 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { buildSegments, conceptsForSegment, pageDisplayTitle } = require('../../web/study-workspace-logic.js');
+const { buildSegments, conceptsForSegment, pageDisplayTitle, scopeNavigationOptions } = require('../../web/study-workspace-logic.js');
 
 function page(n, concepts) {
   return { page: n, title: 'file.pdf', text_preview: 'p' + n, concepts: concepts || [] };
@@ -95,4 +95,20 @@ test('pageDisplayTitle suppresses a repeated week or file title', () => {
 test('pageDisplayTitle prefers concise page concepts over the document title', () => {
   const pages = [{ page: 1, title: 'week.pdf', concepts: ['성격유형론', '자기이해', '세 번째'] }];
   assert.equal(pageDisplayTitle(pages[0], pages, 'week.pdf'), '성격유형론 · 자기이해');
+});
+
+test('scopeNavigationOptions exposes semester, course, unit, and file choices', () => {
+  const scope = { semester: '2026-2', course: '간호학', unit: '1주', filename: 'a.pdf' };
+  const library = { semesters: [
+    { semester: '2026-2', courses: [{ course: '간호학', files: [{ filename: 'a.pdf' }] }, { course: '약리학', files: [] }] },
+    { semester: '2026-1', courses: [] },
+  ] };
+  const units = [
+    { unit: '1주', files: ['a.pdf', 'b.pdf'] },
+    { unit: '2주', files: ['c.pdf'] },
+  ];
+  assert.deepEqual(scopeNavigationOptions('semester', scope, library, units), ['2026-2', '2026-1']);
+  assert.deepEqual(scopeNavigationOptions('course', scope, library, units), ['간호학', '약리학']);
+  assert.deepEqual(scopeNavigationOptions('unit', scope, library, units), ['1주', '2주']);
+  assert.deepEqual(scopeNavigationOptions('filename', scope, library, units), ['a.pdf', 'b.pdf']);
 });
