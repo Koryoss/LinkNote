@@ -73,6 +73,7 @@ SEARCH_CACHE_PATH = os.path.join(DATA_DIR, "search_cache.json")
 SEARCH_EVENTS_PATH = os.path.join(DATA_DIR, "search_events.json")
 SEARCH_PROFILES_PATH = os.path.join(DATA_DIR, "search_profiles.json")
 CONCEPT_NOTES_PATH = os.path.join(DATA_DIR, "concept_notes.json")
+LECTURE_NOTES_PATH = os.path.join(DATA_DIR, "lecture_notes.json")
 CONCEPT_INDEX_PATH = os.path.join(DATA_DIR, "concept_index.json")
 CONCEPT_LINKS_PATH = os.path.join(DATA_DIR, "concept_links.json")
 MAINTAINER_EMAIL = "kory124@snu.ac.kr"
@@ -160,6 +161,17 @@ class ConceptNoteUpsertRequest(BaseModel):
     concept: str
     note_text: str = ""
     source_pages: List[Any] = Field(default_factory=list)
+
+
+class LectureNoteUpsertRequest(BaseModel):
+    semester: str
+    course: str
+    unit: str
+    filename: str
+    start_page: int
+    end_page: int
+    note_text: str = ""
+    tags: List[str] = Field(default_factory=list)
 
 
 class SearchEventCreate(BaseModel):
@@ -263,6 +275,7 @@ def _save_json_file(path: str, data: Any) -> None:
 
 
 _concept_notes_lock = threading.RLock()
+_lecture_notes_lock = threading.RLock()
 
 
 def _load_concept_notes() -> List[Dict[str, Any]]:
@@ -406,6 +419,142 @@ def _delete_concept_note_for_user(user_id: str, note_id: str) -> bool:
             kept.append(note)
         if deleted:
             _save_concept_notes(kept)
+        return deleted
+
+
+def _load_lecture_notes() -> List[Dict[str, Any]]:
+    data = _load_json_file(LECTURE_NOTES_PATH)
+    return data if isinstance(data, list) else []
+
+
+def _save_lecture_notes(items: List[Dict[str, Any]]) -> None:
+    with _lecture_notes_lock:
+        parent_dir = os.path.dirname(LECTURE_NOTES_PATH)
+        os.makedirs(parent_dir, exist_ok=True)
+        temp_path = f"{LECTURE_NOTES_PATH}.{uuid.uuid4().hex}.tmp"
+        try:
+            with open(temp_path, "w", encoding="utf-8") as file:
+                json.dump(items, file, ensure_ascii=False, indent=2)
+                file.flush()
+                os.fsync(file.fileno())
+            os.replace(temp_path, LECTURE_NOTES_PATH)
+        except OSError as exc:
+            try:
+                if os.path.exists(temp_path):
+                    os.remove(temp_path)
+            except OSError:
+                pass
+            raise HTTPException(
+                status_code=500,
+                detail="수업 필기를 저장하지 못했습니다.",
+            ) from exc
+
+
+def _normalize_lecture_note_tags(tags: Any) -> List[str]:
+    allowed = ("important", "exam", "question")
+    if not isinstance(tags, (list, tuple)):
+        return []
+    requested = {str(tag or "").strip().lower() for tag in tags}
+    return [tag for tag in allowed if tag in requested]
+
+
+def _get_lecture_notes_for_user(
+    user_id: str,
+    filters: Optional[Dict[str, Any]] = None,
+) -> List[Dict[str, Any]]:
+    filters = filters or {}
+    items = []
+    with _lecture_notes_lock:
+        for note in _load_lecture_notes():
+            if not isinstance(note, dict) or note.get("user_id") != user_id:
+                continue
+            if all(
+                not filters.get(key)
+                or str(note.get(key) or "").strip() == str(filters[key]).strip()
+                for key in ("semester", "course", "unit", "filename")
+            ):
+                items.append(dict(note))
+
+    def page_range(item: Dict[str, Any]) -> tuple[int, int]:
+        try:
+            return int(item.get("start_page") or 0), int(item.get("end_page") or 0)
+        except (TypeError, ValueError):
+            return 0, 0
+
+    return sorted(items, key=page_range)
+
+
+def _upsert_lecture_note(user_id: str, payload: Dict[str, Any]) -> Dict[str, Any]:
+    identity = {
+        key: str(payload.get(key) or "").strip()
+        for key in ("semester", "course", "unit", "filename")
+    }
+    if not all(identity.values()):
+        raise HTTPException(
+            status_code=400,
+            detail="semester, course, unit, filename은 모두 필요합니다.",
+        )
+    try:
+        start_page = int(payload.get("start_page"))
+        end_page = int(payload.get("end_page"))
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail="페이지 구간이 올바르지 않습니다.") from exc
+    if start_page < 1 or end_page < start_page:
+        raise HTTPException(status_code=400, detail="페이지 구간이 올바르지 않습니다.")
+
+    now = datetime.now(timezone.utc).isoformat()
+    with _lecture_notes_lock:
+        notes = _load_lecture_notes()
+        matched_index = next((
+            index for index, note in enumerate(notes)
+            if isinstance(note, dict)
+            and note.get("user_id") == user_id
+            and all(
+                str(note.get(key) or "").strip() == value
+                for key, value in identity.items()
+            )
+            and note.get("start_page") == start_page
+            and note.get("end_page") == end_page
+        ), None)
+        note_text = _clean_note_text(payload.get("note_text"))
+        tags = _normalize_lecture_note_tags(payload.get("tags"))
+        if matched_index is not None:
+            note = dict(notes[matched_index])
+            note.update(note_text=note_text, tags=tags, updated_at=now)
+            notes[matched_index] = note
+        else:
+            note = {
+                "id": uuid.uuid4().hex,
+                "user_id": user_id,
+                **identity,
+                "start_page": start_page,
+                "end_page": end_page,
+                "note_text": note_text,
+                "tags": tags,
+                "created_at": now,
+                "updated_at": now,
+            }
+            notes.append(note)
+        _save_lecture_notes(notes)
+    return note
+
+
+def _delete_lecture_note_for_user(user_id: str, note_id: str) -> bool:
+    with _lecture_notes_lock:
+        notes = _load_lecture_notes()
+        kept = []
+        deleted = False
+        for note in notes:
+            if (
+                isinstance(note, dict)
+                and note.get("user_id") == user_id
+                and str(note.get("id") or "") == str(note_id or "")
+            ):
+                deleted = True
+                continue
+            kept.append(note)
+        if deleted:
+            _save_lecture_notes(kept)
         return deleted
 
 
@@ -3586,6 +3735,46 @@ async def concept_notes_delete(
 ) -> Dict[str, Any]:
     if not _delete_concept_note_for_user(data_user_id, note_id):
         raise HTTPException(status_code=404, detail="노트를 찾을 수 없습니다.")
+    return {"ok": True}
+
+
+@app.get("/lecture-notes")
+async def lecture_notes_get(
+    semester: Optional[str] = None,
+    course: Optional[str] = None,
+    unit: Optional[str] = None,
+    filename: Optional[str] = None,
+    data_user_id: str = Depends(current_uid),
+) -> Dict[str, Any]:
+    filters = {
+        key: value.strip()
+        for key, value in {
+            "semester": semester,
+            "course": course,
+            "unit": unit,
+            "filename": filename,
+        }.items()
+        if value and value.strip()
+    }
+    return {"items": _get_lecture_notes_for_user(data_user_id, filters)}
+
+
+@app.put("/lecture-notes")
+async def lecture_notes_put(
+    payload: LectureNoteUpsertRequest,
+    data_user_id: str = Depends(current_uid),
+) -> Dict[str, Any]:
+    note = _upsert_lecture_note(data_user_id, payload.dict())
+    return {"ok": True, "note": note}
+
+
+@app.delete("/lecture-notes/{note_id}")
+async def lecture_notes_delete(
+    note_id: str,
+    data_user_id: str = Depends(current_uid),
+) -> Dict[str, Any]:
+    if not _delete_lecture_note_for_user(data_user_id, note_id):
+        raise HTTPException(status_code=404, detail="수업 필기를 찾을 수 없습니다.")
     return {"ok": True}
 
 

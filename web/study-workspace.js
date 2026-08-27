@@ -1,5 +1,5 @@
 // 3열 학습 작업대: 목차(구간) · 개념+노트 · 원문(PDF).
-// GET /study-workspace 응답만 사용한다 (백엔드/다른 화면 무변경).
+// 학습 작업대와 수업 필기 API를 함께 사용한다.
 (function () {
   'use strict';
 
@@ -29,6 +29,7 @@
   var state = {
     pages: [],
     concepts: [],
+    lectureNotes: [],
     segments: [],
     activeSegmentIndex: 0,
     activePage: null,
@@ -36,6 +37,8 @@
   };
 
   var noteTimers = {};
+  var lectureNoteTimers = {};
+  var lectureNoteDrafts = {};
   var lastFocusedBeforeDrawer = null;
 
   function scopeQuery(extra) {
@@ -134,11 +137,138 @@
   function setActivePage(pageNumber) {
     state.activePage = pageNumber;
     renderToc();
+    renderLectureNote();
     renderConcepts();
     renderSource();
   }
 
-  // ---- 개념 + 노트 ----
+  // ---- 구간 수업 필기 ----
+
+  function segmentKey(segment) {
+    return segment ? segment.startPage + '-' + segment.endPage : '';
+  }
+
+  function storedLectureNote(segment) {
+    if (!segment) return null;
+    return state.lectureNotes.find(function (note) {
+      return Number(note.start_page) === segment.startPage && Number(note.end_page) === segment.endPage;
+    }) || null;
+  }
+
+  function lectureNoteDraft(segment) {
+    var key = segmentKey(segment);
+    if (lectureNoteDrafts[key]) return lectureNoteDrafts[key];
+    var stored = storedLectureNote(segment);
+    return {
+      note_text: stored && stored.note_text ? stored.note_text : '',
+      tags: stored && Array.isArray(stored.tags) ? stored.tags.slice() : [],
+    };
+  }
+
+  function renderLectureNote() {
+    var panel = el('lectureNotePanel');
+    var segment = state.segments[state.activeSegmentIndex];
+    if (!segment) {
+      panel.innerHTML = '';
+      return;
+    }
+    var draft = lectureNoteDraft(segment);
+    var tagLabels = { important: '중요', exam: '시험', question: '질문' };
+    var tagsHTML = Object.keys(tagLabels).map(function (tag) {
+      var pressed = draft.tags.indexOf(tag) >= 0;
+      return '<button type="button" class="note-tag" aria-pressed="' + pressed + '" onclick="StudyWorkspace.toggleLectureTag(\'' + tag + '\')">' + tagLabels[tag] + '</button>';
+    }).join('');
+    panel.innerHTML = '<div class="lecture-note-card">' +
+      '<div class="lecture-note-head"><h2 class="lecture-note-title">이 구간 수업 필기</h2>' +
+      '<span class="lecture-note-range">p.' + segment.startPage + (segment.endPage === segment.startPage ? '' : '–' + segment.endPage) + '</span></div>' +
+      '<p class="lecture-note-hint">교수님 설명, 강조점, 이해되지 않은 부분을 자유롭게 적어두세요.</p>' +
+      '<textarea id="lectureNoteInput" class="lecture-note-input" placeholder="예: 이 부분은 시험에 자주 나온다고 강조하심">' + esc(draft.note_text) + '</textarea>' +
+      '<div class="lecture-note-footer">' + tagsHTML + '<div class="note-status" id="lecture-note-status" role="status" aria-live="polite"></div></div>' +
+      '</div>';
+  }
+
+  function setLectureNoteStatus(kind, text) {
+    var status = el('lecture-note-status');
+    if (!status) return;
+    status.className = 'note-status ' + kind;
+    status.textContent = text;
+  }
+
+  function scheduleLectureNoteSave(segment, draft) {
+    var key = segmentKey(segment);
+    lectureNoteDrafts[key] = { note_text: draft.note_text, tags: draft.tags.slice() };
+    if (lectureNoteTimers[key]) clearTimeout(lectureNoteTimers[key]);
+    setLectureNoteStatus('pending', '저장 대기 중…');
+    lectureNoteTimers[key] = setTimeout(function () {
+      saveLectureNote(segment, lectureNoteDrafts[key]);
+    }, 600);
+  }
+
+  function onLectureNoteInput(value) {
+    var segment = state.segments[state.activeSegmentIndex];
+    if (!segment) return;
+    var draft = lectureNoteDraft(segment);
+    scheduleLectureNoteSave(segment, { note_text: value, tags: draft.tags });
+  }
+
+  function toggleLectureTag(tag) {
+    var segment = state.segments[state.activeSegmentIndex];
+    if (!segment) return;
+    var draft = lectureNoteDraft(segment);
+    var tags = draft.tags.slice();
+    var index = tags.indexOf(tag);
+    if (index >= 0) tags.splice(index, 1);
+    else tags.push(tag);
+    var input = el('lectureNoteInput');
+    scheduleLectureNoteSave(segment, {
+      note_text: input ? input.value : draft.note_text,
+      tags: tags,
+    });
+    renderLectureNote();
+    setLectureNoteStatus('pending', '저장 대기 중…');
+  }
+
+  function saveLectureNote(segment, draft) {
+    var key = segmentKey(segment);
+    var draftIsCurrent = function () {
+      var current = lectureNoteDrafts[key];
+      return current && current.note_text === draft.note_text && current.tags.join(',') === draft.tags.join(',');
+    };
+    if (state.segments[state.activeSegmentIndex] === segment) setLectureNoteStatus('saving', '저장 중…');
+    fetch(API + '/lecture-notes', {
+      method: 'PUT',
+      headers: headers({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({
+        semester: scope.semester,
+        course: scope.course,
+        unit: scope.unit,
+        filename: scope.filename,
+        start_page: segment.startPage,
+        end_page: segment.endPage,
+        note_text: draft.note_text,
+        tags: draft.tags,
+      }),
+    }).then(function (r) {
+      return r.json().catch(function () { return {}; }).then(function (d) {
+        if (!r.ok) throw new Error(d.detail || '저장 실패');
+        var previous = storedLectureNote(segment);
+        if (previous) state.lectureNotes[state.lectureNotes.indexOf(previous)] = d.note;
+        else state.lectureNotes.push(d.note);
+        if (draftIsCurrent()) {
+          delete lectureNoteDrafts[key];
+        }
+        if (state.segments[state.activeSegmentIndex] === segment) {
+          setLectureNoteStatus(lectureNoteDrafts[key] ? 'pending' : 'saved', lectureNoteDrafts[key] ? '저장 대기 중…' : '저장됨');
+        }
+      });
+    }).catch(function () {
+      if (state.segments[state.activeSegmentIndex] === segment && draftIsCurrent()) {
+        setLectureNoteStatus('failed', '저장 실패 · 다시 입력해 주세요');
+      }
+    });
+  }
+
+  // ---- 개념 + 개념 노트 ----
 
   function renderConcepts() {
     var container = el('conceptList');
@@ -172,6 +302,9 @@
   // 개념 이름에 따옴표 등 HTML 특수문자가 있을 수 있어 inline onXXX 속성 대신
   // 위임 리스너(#conceptList)에서 data-concept로 대상을 찾는다.
   function bindNoteInputDelegation() {
+    el('lectureNotePanel').addEventListener('input', function (e) {
+      if (e.target.id === 'lectureNoteInput') onLectureNoteInput(e.target.value);
+    });
     el('conceptList').addEventListener('input', function (e) {
       if (!e.target.classList.contains('note-input')) return;
       var card = e.target.closest('.concept-card');
@@ -303,15 +436,21 @@
     el('scopeCrumb').textContent = scopeCrumbHTML();
     el('openFullBtn').onclick = openFull;
     setStage('loading', '학습 작업대를 불러오는 중입니다…');
-    getJSON('/study-workspace?' + scopeQuery()).then(function (result) {
+    Promise.all([
+      getJSON('/study-workspace?' + scopeQuery()),
+      getJSON('/lecture-notes?' + scopeQuery()),
+    ]).then(function (results) {
+      var result = results[0];
       state.pages = result.pages || [];
       state.concepts = result.concepts || [];
+      state.lectureNotes = results[1].items || [];
       state.sourceAvailable = !!result.source_available;
       state.segments = Logic.buildSegments(state.pages, state.concepts);
       state.activeSegmentIndex = 0;
       state.activePage = state.segments[0] && state.segments[0].pages[0] ? state.segments[0].pages[0].page : null;
       setStage('ready');
       renderToc();
+      renderLectureNote();
       renderConcepts();
       renderSource();
     }).catch(function (err) {
@@ -325,6 +464,7 @@
     selectSegment: selectSegment,
     jumpToPage: jumpToPage,
     onNoteInput: onNoteInput,
+    toggleLectureTag: toggleLectureTag,
     toggleToc: toggleToc,
     toggleSource: toggleSource,
   };

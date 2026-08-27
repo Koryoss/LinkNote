@@ -41,6 +41,17 @@
   .toc-page-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
   .concept-card { border: 1px solid #eef1f6; border-radius: 12px; padding: 14px; margin-bottom: 12px; }
+  .lecture-note-card { border: 1px solid #bfdbfe; background: linear-gradient(145deg, #eff6ff, #fff); border-radius: 14px; padding: 16px; margin-bottom: 16px; }
+  .lecture-note-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+  .lecture-note-title { color: #0f172a; font-size: 1rem; font-weight: 800; }
+  .lecture-note-range { color: #64748b; font-size: .76rem; white-space: nowrap; }
+  .lecture-note-hint { color: #64748b; font-size: .78rem; line-height: 1.45; margin-top: 5px; }
+  .lecture-note-input { width: 100%; min-height: 132px; margin-top: 12px; border: 1px solid #bfdbfe; background: rgba(255,255,255,.92); border-radius: 10px; padding: 10px 12px; font-size: .9rem; line-height: 1.55; font-family: inherit; resize: vertical; }
+  .lecture-note-input:focus { outline: 3px solid rgba(59,130,246,.16); border-color: #60a5fa; }
+  .lecture-note-footer { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; margin-top: 9px; }
+  .note-tag { border-color: #cbd5e1; color: #475569; background: #fff; border-radius: 999px; padding: 5px 10px; font-size: .75rem; }
+  .note-tag[aria-pressed="true"] { border-color: #2563eb; color: #1d4ed8; background: #dbeafe; }
+  .lecture-note-footer .note-status { margin: 0 0 0 auto; }
   .concept-name { font-weight: 800; color: #0f172a; font-size: 1rem; }
   .concept-def { color: #475569; font-size: .86rem; margin-top: 6px; line-height: 1.5; }
   .occurrence-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
@@ -90,6 +101,7 @@
     <div class="toc-scrim mobile-only" id="tocScrim" onclick="StudyWorkspace.toggleToc(false)" hidden></div>
 
     <main class="concept-panel" id="conceptPanel" aria-label="개념과 노트">
+      <section id="lectureNotePanel" aria-label="수업 필기"></section>
       <div id="conceptList"></div>
     </main>
 
