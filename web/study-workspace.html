@@ -7,9 +7,20 @@
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif; background: #fbfcfe; color: #1f2937; }
-  .topbar { position: sticky; top: 0; z-index: 70; display: flex; align-items: center; gap: 14px; padding: 12px 24px; background: rgba(255,255,255,.94); backdrop-filter: blur(6px); border-bottom: 1px solid #eef1f6; }
+  .topbar { position: sticky; top: 0; z-index: 70; display: flex; align-items: center; gap: 12px; padding: 12px 24px; background: rgba(255,255,255,.94); backdrop-filter: blur(6px); border-bottom: 1px solid #eef1f6; }
   .brand { font-size: 1.18rem; font-weight: 800; color: #1e293b; text-decoration: none; white-space: nowrap; }
-  .scope-crumb { color: #64748b; font-size: .82rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .scope-nav { min-width: 0; display: flex; align-items: center; gap: 8px; overflow-x: auto; scrollbar-width: none; padding: 2px; }
+  .scope-nav::-webkit-scrollbar { display: none; }
+  .scope-pill { flex: 0 0 auto; display: inline-flex; align-items: center; max-width: 240px; min-height: 38px; border: 1px solid #d8dee9; border-radius: 10px; padding: 8px 13px; background: #fff; color: #1e293b; font-size: .84rem; font-weight: 750; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .scope-pill.home { border-color: #2563eb; background: #2563eb; color: #fff; }
+  .scope-pill.menu::after { content: "▾"; flex: 0 0 auto; margin-left: 7px; color: #94a3b8; font-size: .7rem; }
+  .scope-pill:hover { border-color: #93c5fd; }
+  .scope-pill.home:hover { background: #1d4ed8; border-color: #1d4ed8; }
+  .scope-sep { flex: 0 0 auto; color: #cbd5e1; font-weight: 800; }
+  .scope-menu { position: fixed; z-index: 90; min-width: 180px; max-width: min(360px, calc(100vw - 24px)); max-height: 320px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 12px; padding: 6px; background: #fff; box-shadow: 0 14px 34px rgba(15,23,42,.16); }
+  .scope-menu-item { display: block; width: 100%; border: 0; border-radius: 8px; padding: 9px 11px; background: transparent; color: #1e293b; text-align: left; font-size: .84rem; font-weight: 650; }
+  .scope-menu-item:hover, .scope-menu-item:focus-visible { background: #eff6ff; color: #1d4ed8; outline: none; }
+  .scope-menu-item[aria-selected="true"] { background: #dbeafe; color: #1d4ed8; }
   .spacer { flex: 1; }
   .btn, button { border: 1px solid #d8dee9; background: #fff; color: #2563eb; border-radius: 8px; padding: 8px 12px; font-size: .84rem; font-weight: 700; text-decoration: none; cursor: pointer; }
   .btn.primary { background: #2563eb; border-color: #2563eb; color: #fff; }
@@ -74,6 +85,9 @@
 
   @media (max-width: 899px) {
     .mobile-only { display: inline-flex; }
+    .topbar { flex-wrap: wrap; padding: 10px 12px; }
+    .scope-nav { order: 3; flex-basis: 100%; }
+    .scope-pill { max-width: 200px; min-height: 34px; padding: 6px 10px; }
     .workspace { grid-template-columns: 1fr; padding: 12px 12px 24px; }
     .source-resizer { display: none; }
     .toc-panel, .source-panel {
@@ -92,7 +106,7 @@
 <body>
   <div class="topbar">
     <a class="brand" href="/">LinkNote</a>
-    <div class="scope-crumb" id="scopeCrumb"></div>
+    <nav class="scope-nav" id="scopeNav" aria-label="학습 자료 경로"></nav>
     <span class="spacer"></span>
     <button type="button" id="tocToggleBtn" class="btn mobile-only" onclick="StudyWorkspace.toggleToc()">목차</button>
     <button type="button" id="sourceToggleBtn" class="btn mobile-only" onclick="StudyWorkspace.toggleSource()">원문</button>

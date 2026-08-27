@@ -8,12 +8,13 @@
 | 영역 | 상태 | 근거 | 다음 책임자 |
 | --- | --- | --- | --- |
 | `concept_notes` 저장 구조와 API | GitHub 통합 완료 | PR #13, merge `00af84e` | Codex 회귀 검수 |
-| `/study-workspace`와 안전한 `/file` 연결 | 실제 앱 검증, 보완 병합 대기 | PR #14, merge `2bd349e`. 최신 업로드는 `stored_filename`으로 격리하고, 옛 업로드는 인증 사용자·학기·과목·단원·파일명이 모두 일치하는 업로드 이력과 내용상 모호하지 않은 파일만 연결. PR #21에서 실제 누락 자료 `1-7강.pdf`, `15-18강.pdf` HTTP 200 확인 | 감독자 PR #21 검토·병합 승인 |
+| `/study-workspace`와 안전한 `/file` 연결 | 실제 앱 검증·GitHub 통합 완료 | PR #14 merge `2bd349e`, 보완 PR #21 merge `7ba8aed`. 최신 업로드는 `stored_filename`으로 격리하고, 옛 업로드는 인증 사용자·학기·과목·단원·파일명이 모두 일치하는 업로드 이력과 내용상 모호하지 않은 파일만 연결. 실제 누락 자료 `1-7강.pdf`, `15-18강.pdf` HTTP 200 확인 | Codex 회귀 검수 |
 | `이 구간 수업 필기` MVP | 실제 앱 검증 | PR #19, merge `3ad52e1`. 페이지 구간별 자유 필기, 600ms 자동 저장·복원, 중요·시험·질문 표시, 사용자·학기·과목·단원·자료·페이지 구간 격리 저장. Python 25개·JavaScript 8개 및 백업 런타임 전체 175개 테스트 통과, 데스크탑 0.1.1 단독 실행 확인 | 감독자가 AI 반영 범위를 별도 승인하면 다음 단계 설계 |
-| 3열 학습 작업대 UI | GitHub 통합 완료, 가변 원문 폭 보완 검증 | PR #17 merge `087cc51`, 학습 작업대 우선 진입 PR #20 merge `3bc607c`. PR #21에서 반복 주차명을 페이지 개념 중심으로 축약하고 원문 영역 드래그·키보드 너비 조절과 너비 기억을 추가 | 감독자 PR #21 검토·병합 승인 |
+| 3열 학습 작업대 UI | 실제 앱 검증·GitHub 통합 완료 | PR #17 merge `087cc51`, 학습 작업대 우선 진입 PR #20 merge `3bc607c`, 원문 폭·목차 보완 PR #21 merge `7ba8aed`. 반복 주차명 축약, 원문 영역 드래그·키보드 너비 조절과 너비 기억 적용 | Codex 회귀 검수 |
 | 기존 로컬 저장소(`study-rag-api`) dirty 상태 | 보존·원격 동기화 완료 | `backup/local-work-20260822`에 사용자 백업 디렉터리를 미추적 상태로 보존한 채 `origin/backup/local-work-20260822`를 병합하고 commit `7c98b36`까지 push. 실제 자료 삭제·이동·재색인 없음 | — |
 | PR #17 (`backup/local-work-20260822` → `main`) | 병합 완료 | merge `087cc51`. 이후 PR #19와 #20까지 main에 통합되고 백업 런타임에도 동일 변경 반영 | — |
-| PR #21 기존 PDF 복구·원문 크기 조절 | 실제 앱 검증, 병합 대기 | Python 178개·JavaScript 10개 통과. 설치 데스크탑 앱 재시작, 최신 정적 화면 제공, 기존 누락 PDF 2개 HTTP 200 확인 | 감독자 최종 확인 → merge |
+| PR #21 기존 PDF 복구·원문 크기 조절 | 병합·실제 앱 검증 완료 | merge `7ba8aed`. Python 178개·JavaScript 10개 통과. 설치 데스크탑 앱 재시작, 최신 정적 화면 제공, 기존 누락 PDF 2개 HTTP 200 확인 | — |
+| 학습 작업대 상단 자유 탐색 | 구현·검증 중 | 홈·학기·과목·단원·자료를 현재 작업대에서 직접 선택하는 계층형 드롭다운. 선택 범위의 첫 자료로 이동하며 사용자 소유 `/library`·`/units` 조회만 사용 | Codex 데스크탑 검증 → 감독자 확인 |
 | Manus UX 프로토타입 | 참고안·조건부 승인 | `Koryoss/linknote-concept-ux` | 학습 작업대 UI에 부분 반영 완료 |
 | CareFlow `<스터디>` 연계 | 부분 구현 | `/study/import`, `/study/ask`, `/study/claim`, claims CRUD 존재 | 계약 검수 후 양쪽 제품별 구현 |
 | `/study/audit` | 미구현·계획 경계 | `AGENTS.md`에 접점만 존재하고 실제 route 없음 | 감독자 우선순위 승인 후 설계 |
