@@ -1,5 +1,6 @@
 // LinkNote 데스크톱 — 앱 시작 시 백엔드(FastAPI)를 자동 실행한다.
 use std::env;
+use std::fs;
 use std::net::{SocketAddr, TcpStream};
 use std::path::PathBuf;
 use std::process::Command;
@@ -12,7 +13,6 @@ fn backend_running() -> bool {
 
 fn find_project_root() -> Option<PathBuf> {
     let fallback_roots = [
-        "/Users/jeong-yujin/Desktop/프로젝트/LINKNOTE/study-rag-api",
         "/Users/jeong-yujin/Desktop/LINKNOTE/study-rag-api",
         "/Users/jeong-yujin/Desktop/study-rag-api",
     ];
@@ -21,6 +21,28 @@ fn find_project_root() -> Option<PathBuf> {
         let path = PathBuf::from(root);
         if path.join("api_server.py").exists() {
             return Some(path);
+        }
+    }
+
+    if let Some(home) = env::var_os("HOME") {
+        let mut level = vec![PathBuf::from(home).join("Desktop")];
+        for _ in 0..=2 {
+            let mut next_level = Vec::new();
+            for directory in level {
+                let candidate = directory.join("study-rag-api");
+                if candidate.join("api_server.py").exists() {
+                    return Some(candidate);
+                }
+                if let Ok(entries) = fs::read_dir(directory) {
+                    next_level.extend(
+                        entries
+                            .filter_map(Result::ok)
+                            .map(|entry| entry.path())
+                            .filter(|path| path.is_dir()),
+                    );
+                }
+            }
+            level = next_level;
         }
     }
 
@@ -77,7 +99,15 @@ fn start_backend() {
 
     let python = find_python_interpreter(&project_root);
     let _ = Command::new(&python)
-        .args(["-m", "uvicorn", "api_server:app", "--host", "127.0.0.1", "--port", "8000"])
+        .args([
+            "-m",
+            "uvicorn",
+            "api_server:app",
+            "--host",
+            "127.0.0.1",
+            "--port",
+            "8000",
+        ])
         .current_dir(&project_root)
         .env("DATA_DIR", project_root.join("data"))
         .env("CHROMA_PATH", project_root.join("chroma_db"))
