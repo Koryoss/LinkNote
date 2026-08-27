@@ -5522,6 +5522,7 @@ def _study_source(chunk: Dict[str, Any]) -> Dict[str, Any]:
     similarity = max(0, round((1 - distance) * 100)) if isinstance(distance, (int, float)) else None
     text = chunk.get("text") or ""
     return {
+        "source_id": chunk.get("id") or "",
         "doc_title": chunk.get("title") or chunk.get("filename") or "",
         "filename": chunk.get("filename") or "",
         "stored_filename": chunk.get("stored_filename") or "",
@@ -5589,12 +5590,82 @@ class StudyClaimRequest(BaseModel):
     search_filter: Optional[SearchFilter] = None
 
 
+class StudyClaimSourcePayload(BaseModel):
+    source_id: str
+    doc_title: Optional[str] = ""
+    filename: str
+    stored_filename: Optional[str] = ""
+    semester: str
+    course: str
+    unit: str
+    page_num: int
+    similarity: Optional[int] = None
+    excerpt: Optional[str] = ""
+
+
 class StudyClaimSavePayload(BaseModel):
     claim: str
     source_summary: Optional[str] = ""
     strength: Optional[str] = "출처 미확인"
     application_context: Optional[str] = ""
     safety_note: Optional[str] = ""
+    search_filter: Optional[SearchFilter] = None
+    sources: List[StudyClaimSourcePayload] = Field(default_factory=list)
+
+
+def _validate_study_claim_sources(
+    user_id: str,
+    sources: List[StudyClaimSourcePayload],
+    search_filter: Optional[Dict[str, Any]] = None,
+) -> List[Dict[str, Any]]:
+    if len(sources) > 5:
+        raise HTTPException(status_code=400, detail="출처는 최대 5개까지 선택할 수 있습니다.")
+
+    verified: List[Dict[str, Any]] = []
+    scope_cache: Dict[tuple, List[Dict[str, Any]]] = {}
+    seen_source_ids: Set[str] = set()
+    for source in sources:
+        source_id = source.source_id.strip()
+        if source_id in seen_source_ids:
+            continue
+        exact_scope: Dict[str, str] = {
+            "semester": source.semester.strip(),
+            "course": source.course.strip(),
+            "filename": _normalize_filename(source.filename),
+        }
+        if source.unit.strip():
+            exact_scope["unit"] = source.unit.strip()
+        if not source_id or not all(exact_scope.get(key) for key in ("semester", "course", "filename")) or source.page_num < 1:
+            raise HTTPException(status_code=400, detail="선택한 출처의 위치 정보가 올바르지 않습니다.")
+        for key, value in (search_filter or {}).items():
+            source_value = source.unit.strip() if key == "unit" else exact_scope.get(key)
+            if value and source_value != value:
+                raise HTTPException(status_code=400, detail="선택한 출처가 현재 자료 범위를 벗어났습니다.")
+
+        cache_key = tuple(exact_scope.get(key, "") for key in ("semester", "course", "unit", "filename"))
+        if cache_key not in scope_cache:
+            scope_cache[cache_key] = get_chunks(
+                user_id=user_id,
+                limit=100000,
+                search_filter=exact_scope,
+                full=False,
+            ).get("items", [])
+        owned = next(
+            (
+                item for item in scope_cache[cache_key]
+                if str(item.get("id") or "") == source_id
+                and int(item.get("page") or 0) == source.page_num
+            ),
+            None,
+        )
+        if not owned:
+            raise HTTPException(status_code=400, detail="선택한 출처를 내 자료에서 확인할 수 없습니다.")
+        safe_source = _study_source(owned)
+        if source.similarity is not None:
+            safe_source["similarity"] = max(0, min(100, int(source.similarity)))
+        verified.append(safe_source)
+        seen_source_ids.add(source_id)
+    return verified
 
 
 @app.post("/study/import")
@@ -5675,6 +5746,7 @@ async def study_claim(req: StudyClaimRequest, user: Dict[str, Any] = Depends(cur
         "draft": draft,
         "sources": [_study_source(c) for c in chunks],
         "scope_label": scope_label,
+        "search_filter": search_filter,
     }
 
 
@@ -5683,13 +5755,20 @@ async def study_claim_save(payload: StudyClaimSavePayload, user: Dict[str, Any] 
     claim = (payload.claim or "").strip()
     if not claim:
         raise HTTPException(status_code=400, detail="claim이 필요합니다.")
+    search_filter = _model_to_dict(payload.search_filter) if payload.search_filter else None
+    sources = _validate_study_claim_sources(_study_uid(user), payload.sources, search_filter)
+    strength = payload.strength if payload.strength in STUDY_STRENGTHS else "출처 미확인"
+    if not sources:
+        strength = "출처 미확인"
     entry = {
         "id": uuid.uuid4().hex,
         "claim": claim,
         "source_summary": (payload.source_summary or "").strip(),
-        "strength": payload.strength if payload.strength in STUDY_STRENGTHS else "출처 미확인",
+        "strength": strength,
         "application_context": (payload.application_context or "").strip(),
         "safety_note": (payload.safety_note or "").strip(),
+        "scope_label": get_filter_label(search_filter),
+        "sources": sources,
         "created": int(time.time()),
     }
     data = _load_json_file(STUDY_CLAIMS_PATH)
