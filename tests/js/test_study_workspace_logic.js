@@ -2,7 +2,7 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { buildSegments, conceptsForSegment } = require('../../web/study-workspace-logic.js');
+const { buildSegments, conceptsForSegment, pageDisplayTitle } = require('../../web/study-workspace-logic.js');
 
 function page(n, concepts) {
   return { page: n, title: 'file.pdf', text_preview: 'p' + n, concepts: concepts || [] };
@@ -80,4 +80,19 @@ test('conceptsForSegment returns an empty array when the segment has no concept 
   const concepts = [{ name: 'A', first_page: 2 }];
   const segment = { pages: [page(1, [])] };
   assert.deepEqual(conceptsForSegment(segment, concepts), []);
+});
+
+test('pageDisplayTitle suppresses a repeated week or file title', () => {
+  const pages = [page(1), page(2), page(3)];
+  assert.equal(pageDisplayTitle(pages[0], pages, 'file.pdf'), '');
+  const weekPages = [
+    { page: 1, title: '02주_심리학적유형과_자기이해', concepts: [] },
+    { page: 2, title: '02주_심리학적유형과_자기이해', concepts: [] },
+  ];
+  assert.equal(pageDisplayTitle(weekPages[0], weekPages, 'different.pdf'), '');
+});
+
+test('pageDisplayTitle prefers concise page concepts over the document title', () => {
+  const pages = [{ page: 1, title: 'week.pdf', concepts: ['성격유형론', '자기이해', '세 번째'] }];
+  assert.equal(pageDisplayTitle(pages[0], pages, 'week.pdf'), '성격유형론 · 자기이해');
 });
