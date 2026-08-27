@@ -2,7 +2,7 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { buildSegments, conceptsForSegment, pageDisplayTitle, scopeNavigationOptions } = require('../../web/study-workspace-logic.js');
+const { buildSegments, conceptsForSegment, pageDisplayTitle, scopeNavigationOptions, sourceViewHash, sourcePageLabel } = require('../../web/study-workspace-logic.js');
 
 function page(n, concepts) {
   return { page: n, title: 'file.pdf', text_preview: 'p' + n, concepts: concepts || [] };
@@ -111,4 +111,14 @@ test('scopeNavigationOptions exposes semester, course, unit, and file choices', 
   assert.deepEqual(scopeNavigationOptions('course', scope, library, units), ['간호학', '약리학']);
   assert.deepEqual(scopeNavigationOptions('unit', scope, library, units), ['1주', '2주']);
   assert.deepEqual(scopeNavigationOptions('filename', scope, library, units), ['a.pdf', 'b.pdf']);
+});
+
+test('source preview fits the current PDF page to the panel width', () => {
+  assert.equal(sourceViewHash(45), '#page=45&view=FitH');
+  assert.equal(sourceViewHash(null), '#view=FitH');
+});
+
+test('source page label shows the current and last page above the preview', () => {
+  assert.equal(sourcePageLabel(45, [page(1), page(45), page(53)]), 'p.45 / 53');
+  assert.equal(sourcePageLabel(null, [page(1)]), '');
 });
