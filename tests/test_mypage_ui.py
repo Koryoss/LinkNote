@@ -59,10 +59,24 @@ class MyPageUiTests(unittest.TestCase):
 
     def test_memory_delete_buttons_guard_against_duplicate_requests(self):
         self.assertIn("let memoryDeleteInFlight = false;", self.html)
-        self.assertIn("if(memoryDeleteInFlight) return;", self.html)
-        self.assertIn("memoryDeleteInFlight = true;", self.html)
-        self.assertIn("memoryDeleteInFlight = false;", self.html)
-        self.assertIn("btn.disabled = true;", self.html)
+        self.assertEqual(self.html.count("if(memoryDeleteInFlight) return;"), 2)
+        self.assertEqual(self.html.count("memoryDeleteInFlight = true;"), 2)
+        # released in a finally block (not just the try's success path), so a
+        # failed request re-enables the buttons too, not only a successful one.
+        self.assertEqual(
+            self.html.count("} finally {\n      memoryDeleteInFlight = false;\n      setMemoryDeleteButtonsBusy(false);"),
+            2,
+        )
+
+    def test_both_memory_delete_buttons_disable_while_either_is_running(self):
+        # Both buttons share one in-flight flag, so the *other* button must
+        # visibly disable too — otherwise it looks clickable but silently
+        # no-ops on the guard, which reads as "nothing happened".
+        self.assertIn("function setMemoryDeleteButtonsBusy(busy){", self.html)
+        self.assertIn("if(allBtn) allBtn.disabled = busy;", self.html)
+        self.assertIn("if(selBtn) selBtn.disabled = busy || selectedMemoryIds.size === 0;", self.html)
+        self.assertEqual(self.html.count("setMemoryDeleteButtonsBusy(true);"), 2)
+        self.assertEqual(self.html.count("setMemoryDeleteButtonsBusy(false);"), 2)
 
 
 if __name__ == "__main__":
