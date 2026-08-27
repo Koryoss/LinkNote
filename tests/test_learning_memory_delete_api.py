@@ -63,6 +63,21 @@ class LearningMemoryDeleteApiTests(unittest.TestCase):
         self.assertEqual(result, {"ok": True, "deleted_count": 0})
         self.assertEqual(len(api_server._load_recall_traces()), 1)
 
+    def test_delete_all_never_cascades_into_another_users_feedback(self):
+        # Contrived id collision: user-2 has a feedback row whose
+        # source_trace_id happens to equal user-1's trace id. The cascade
+        # must stay within data_user_id's own items, not follow the id
+        # across the user boundary.
+        self._seed([
+            self._explanation("t1", "user-1"),
+            self._feedback("f1", "user-1", "t1"),
+            self._feedback("f-other", "user-2", "t1"),
+        ])
+        result = asyncio.run(api_server.delete_all_learning_memories(data_user_id="user-1"))
+        self.assertEqual(result["deleted_count"], 2)  # t1 + f1 only, not f-other
+        remaining = {item["id"] for item in api_server._load_recall_traces()}
+        self.assertEqual(remaining, {"f-other"})
+
     # ---- POST /learning-memory/delete ----
 
     def test_selected_delete_removes_only_requested_owned_ids(self):
