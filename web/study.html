@@ -37,6 +37,15 @@
   .src b { color:#0f172a; }
   .src-actions { display:flex; margin-top:8px; }
   .src-actions .btn { padding:6px 9px; font-size:.75rem; }
+  .src.selectable { display:grid; grid-template-columns:auto 1fr; gap:10px; align-items:start; }
+  .src.selectable input { margin-top:3px; width:17px; height:17px; accent-color:#2563eb; }
+  .draft-editor { border:1px solid #dbe3ef; border-radius:12px; padding:14px; margin-top:12px; background:#f8fafc; }
+  .draft-grid { display:grid; grid-template-columns:1fr 160px; gap:10px; }
+  .draft-field { margin-top:10px; }
+  .draft-field label { display:block; margin-bottom:5px; color:#475569; font-size:.77rem; font-weight:800; }
+  .draft-field textarea { background:#fff; }
+  .draft-actions { display:flex; justify-content:space-between; align-items:center; gap:10px; margin-top:12px; flex-wrap:wrap; }
+  .source-count { color:#1e40af; font-size:.8rem; font-weight:700; }
   .kv { display:grid; grid-template-columns:110px 1fr; gap:8px 12px; font-size:.86rem; margin-top:12px; }
   .k { color:#64748b; }
   .v { color:#1f2937; line-height:1.5; }
@@ -56,7 +65,7 @@
   .result-line.ok { background:#f0fdf4; color:#15803d; border:1px solid #bbf7d0; }
   .result-line.fail { background:#fff7f7; color:#b91c1c; border:1px solid #fecaca; }
   .muted { color:#94a3b8; font-size:.8rem; }
-  @media (max-width:760px){ .kv,.scope-grid{grid-template-columns:1fr;} }
+  @media (max-width:760px){ .kv,.scope-grid,.draft-grid{grid-template-columns:1fr;} }
 </style>
 </head>
 <body>
@@ -167,14 +176,17 @@
     return '/study-workspace.html?' + query.toString();
   }
 
-  function renderSources(sources) {
+  function renderSources(sources, selectable = false) {
     if (!sources || !sources.length) return '';
-    return '<div class="srcs" aria-label="근거 자료">' + sources.map(s => {
+    return '<div class="srcs" aria-label="근거 자료">' + sources.map((s, index) => {
       const url = sourceWorkspaceUrl(s);
-      return `<article class="src"><b>${esc(s.doc_title)}</b> · p.${esc(s.page_num)}` +
+      const picker = selectable
+        ? `<input type="checkbox" class="claim-source-picker" data-source-index="${index}" aria-label="${esc(s.doc_title)} p.${esc(s.page_num)} 출처 선택" checked onchange="updateClaimSourceCount()">`
+        : '';
+      return `<article class="src${selectable ? ' selectable' : ''}">${picker}<div><b>${esc(s.doc_title)}</b> · p.${esc(s.page_num)}` +
         (s.similarity != null ? ` · 유사도 ${esc(s.similarity)}%` : '') +
         (s.excerpt ? `<br>${esc(s.excerpt)}` : '') +
-        (url ? `<div class="src-actions"><a class="btn" href="${esc(url)}">원문 p.${esc(s.page_num)} 열기</a></div>` : '') + '</article>';
+        (url ? `<div class="src-actions"><a class="btn" href="${esc(url)}">원문 p.${esc(s.page_num)} 열기</a></div>` : '') + '</div></article>';
     }).join('') + '</div>';
   }
 
@@ -325,32 +337,77 @@
         method: 'POST', headers: headers(true),
         body: JSON.stringify({ claim, search_filter: studySearchFilter() }),
       });
-      lastDraft = { claim: data.claim, ...data.draft };
+      lastDraft = {
+        claim: data.claim,
+        ...data.draft,
+        sources: data.sources || [],
+        search_filter: data.search_filter || studySearchFilter(),
+      };
       const d = data.draft;
       out.innerHTML =
-        `<div class="answer"><div class="kv">` +
-        `<span class="k">출처 요약</span><span class="v">${esc(d.source_summary)}</span>` +
-        `<span class="k">근거강도</span><span class="v"><span class="strength ${strengthClass(d.strength)}">${esc(d.strength)}</span></span>` +
-        `<span class="k">활용 맥락</span><span class="v">${esc(d.application_context) || '—'}</span>` +
-        `<span class="k">안전 메모</span><span class="v">${esc(d.safety_note) || '—'}</span>` +
-        `</div><div class="row"><button class="primary" onclick="saveClaim()">이 초안 저장</button></div></div>` +
+        `<div class="draft-editor" aria-label="주장 초안 편집">` +
+        `<h2>저장 전 초안 편집</h2><p class="desc">표현을 다듬고 저장할 근거만 선택하세요.</p>` +
+        `<div class="draft-field"><label for="claimDraftText">주장</label><textarea id="claimDraftText" rows="2">${esc(data.claim)}</textarea></div>` +
+        `<div class="draft-grid">` +
+        `<div class="draft-field"><label for="claimDraftSourceSummary">출처 요약</label><textarea id="claimDraftSourceSummary" rows="2">${esc(d.source_summary)}</textarea></div>` +
+        `<div class="draft-field"><label for="claimDraftStrength">근거강도</label><select id="claimDraftStrength">${['강','중','약','출처 미확인'].map(value => `<option value="${value}"${value === d.strength ? ' selected' : ''}>${value}</option>`).join('')}</select></div>` +
+        `</div>` +
+        `<div class="draft-field"><label for="claimDraftApplication">활용 맥락</label><textarea id="claimDraftApplication" rows="2">${esc(d.application_context)}</textarea></div>` +
+        `<div class="draft-field"><label for="claimDraftSafety">안전 메모</label><textarea id="claimDraftSafety" rows="2">${esc(d.safety_note)}</textarea></div>` +
+        `<div class="draft-field"><label>저장할 출처</label>${renderSources(data.sources, true) || '<span class="muted">선택할 수 있는 출처가 없습니다.</span>'}</div>` +
+        `<div class="draft-actions"><span id="claimSourceCount" class="source-count"></span><button class="primary" id="claimSaveBtn" onclick="saveClaim()">선택한 출처와 저장</button></div>` +
+        `</div>` +
         `<div class="muted" style="margin-top:6px;">검색 범위: ${esc(data.scope_label)}</div>` +
-        renderSources(data.sources);
+        '';
+      updateClaimSourceCount();
     } catch (e) {
       out.innerHTML = `<div class="error">${esc(e.message)}</div>`;
     }
     btn.disabled = false;
   }
 
+  function selectedClaimSources() {
+    if (!lastDraft) return [];
+    return Array.from(document.querySelectorAll('.claim-source-picker:checked'))
+      .map(node => lastDraft.sources[Number(node.dataset.sourceIndex)])
+      .filter(Boolean);
+  }
+
+  function updateClaimSourceCount() {
+    const count = selectedClaimSources().length;
+    const node = document.getElementById('claimSourceCount');
+    if (!node) return;
+    node.textContent = count
+      ? `${count}개 출처를 함께 저장합니다.`
+      : '출처를 선택하지 않으면 근거강도는 출처 미확인으로 저장됩니다.';
+  }
+
   async function saveClaim() {
     if (!lastDraft) return;
+    const selectedSources = selectedClaimSources();
+    const payload = {
+      claim: document.getElementById('claimDraftText').value.trim(),
+      source_summary: document.getElementById('claimDraftSourceSummary').value.trim(),
+      strength: selectedSources.length ? document.getElementById('claimDraftStrength').value : '출처 미확인',
+      application_context: document.getElementById('claimDraftApplication').value.trim(),
+      safety_note: document.getElementById('claimDraftSafety').value.trim(),
+      search_filter: lastDraft.search_filter,
+      sources: selectedSources,
+    };
+    if (!payload.claim) {
+      document.getElementById('claimSourceCount').textContent = '저장할 주장을 입력하세요.';
+      return;
+    }
+    const saveBtn = document.getElementById('claimSaveBtn');
+    saveBtn.disabled = true;
     try {
-      await api('/study/claims', { method: 'POST', headers: headers(true), body: JSON.stringify(lastDraft) });
+      await api('/study/claims', { method: 'POST', headers: headers(true), body: JSON.stringify(payload) });
       lastDraft = null;
       document.getElementById('studyOut').innerHTML = '<div class="result-line ok">저장했습니다.</div>';
       loadClaims();
     } catch (e) {
       document.getElementById('studyOut').insertAdjacentHTML('beforeend', `<div class="error">${esc(e.message)}</div>`);
+      saveBtn.disabled = false;
     }
   }
 
@@ -364,6 +421,8 @@
         `<button class="del" title="삭제" onclick="delClaim('${esc(c.id)}')">×</button>` +
         `<small><span class="strength ${strengthClass(c.strength)}">${esc(c.strength)}</span> · ${esc(c.source_summary)}</small>` +
         (c.safety_note ? `<small>${esc(c.safety_note)}</small>` : '') +
+        (c.scope_label ? `<small>검색 범위: ${esc(c.scope_label)}</small>` : '') +
+        renderSources(c.sources) +
         `</div>`
       ).join('');
     } catch (e) {
