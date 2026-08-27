@@ -29,6 +29,31 @@
     return conceptName ? (range + ' · 대표 개념: ' + conceptName) : range;
   }
 
+  function comparableTitle(value) {
+    return String(value || '')
+      .replace(/\.pdf$/i, '')
+      .replace(/[_\-]+/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .toLocaleLowerCase();
+  }
+
+  // Upload-time page titles are commonly the same week/file name on every
+  // page. Prefer the page's concepts and suppress repeated document titles.
+  function pageDisplayTitle(page, pages, filename) {
+    var concepts = Array.from(new Set((page && page.concepts || []).filter(Boolean)));
+    if (concepts.length) return concepts.slice(0, 2).join(' · ');
+
+    var title = String(page && page.title || '').trim();
+    if (!title) return '';
+    var normalized = comparableTitle(title);
+    if (!normalized || normalized === comparableTitle(filename)) return '';
+    var repeated = (pages || []).filter(function (candidate) {
+      return comparableTitle(candidate && candidate.title) === normalized;
+    }).length > 1;
+    return repeated ? '' : title;
+  }
+
   // Builds ordered page-range segments ("구간") from concept first-appearance
   // boundaries. Pages before the first concept's first_page join the first
   // segment rather than forming their own unlabeled group. When no concept
@@ -91,6 +116,7 @@
     buildSegments: buildSegments,
     conceptsForSegment: conceptsForSegment,
     segmentLabel: segmentLabel,
+    pageDisplayTitle: pageDisplayTitle,
   };
 
   if (typeof module !== 'undefined' && module.exports) {

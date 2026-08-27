@@ -932,6 +932,31 @@ class SearchApiTests(unittest.TestCase):
         self.assertIsNone(missing_owned)
         self.assertIsNone(legacy)
 
+    def test_resolve_owned_upload_path_uses_exact_scope_legacy_upload_event(self):
+        legacy_path = os.path.join(self.temp_dir, "legacy_g.pdf")
+        with open(legacy_path, "wb") as source_file:
+            source_file.write(b"owned legacy source")
+        api_server._record_upload_event(
+            "user-1", "g.pdf", "s", "c", "u", "complete", pages=3
+        )
+        legacy_chunks = {"items": [{}], "total": 1}
+        with patch.object(api_server, "get_chunks", return_value=legacy_chunks):
+            resolved = api_server._resolve_owned_upload_path("user-1", "g.pdf", "s", "c", "u")
+            wrong_user = api_server._resolve_owned_upload_path("user-2", "g.pdf", "s", "c", "u")
+            wrong_scope = api_server._resolve_owned_upload_path("user-1", "g.pdf", "wrong", "c", "u")
+        self.assertEqual(os.path.realpath(resolved), os.path.realpath(legacy_path))
+        self.assertIsNone(wrong_user)
+        self.assertIsNone(wrong_scope)
+
+    def test_resolve_owned_legacy_upload_keeps_different_files_ambiguous(self):
+        for stored_name, content in (("first_g.pdf", b"one"), ("second_g.pdf", b"two")):
+            with open(os.path.join(self.temp_dir, stored_name), "wb") as source_file:
+                source_file.write(content)
+        api_server._record_upload_event("user-1", "g.pdf", "s", "c", "u", "received")
+        with patch.object(api_server, "get_chunks", return_value={"items": [{}], "total": 1}):
+            resolved = api_server._resolve_owned_upload_path("user-1", "g.pdf", "s", "c", "u")
+        self.assertIsNone(resolved)
+
     def test_ingest_metadata_records_stored_filename_and_unit_filter(self):
         captured = {}
         with patch.object(rag, "embed_texts", return_value=[[0.1, 0.2]]), \

@@ -4206,74 +4206,6 @@ def _filenames_owned_by_user(data_user_id: str) -> set[str]:
     return owned
 
 
-def _resolve_owned_upload_path(
-    data_user_id: str,
-    requested_filename: str,
-    semester: str = "",
-    course: str = "",
-    unit: str = "",
-) -> Optional[str]:
-    """Return a single unambiguous upload path for the given user and exact scope.
-
-    Use get_chunks to ensure ownership in the provided semester/course/unit/filename
-    scope, prefer stored_filename values found in owned chunks, and fall back to
-    matching stored uploads only when necessary.
-    """
-    try:
-        safe_filename = _normalize_filename(requested_filename)
-    except HTTPException:
-        return None
-
-    # Build a search filter that includes the full exact scope
-    search_filter: Dict[str, Any] = {"filename": safe_filename}
-    if semester.strip():
-        search_filter["semester"] = semester.strip()
-    if course.strip():
-        search_filter["course"] = course.strip()
-    if unit.strip():
-        search_filter["unit"] = unit.strip()
-
-    # Query chunks owned by this user in the exact scope
-    chunks = get_chunks(user_id=data_user_id, limit=10000, search_filter=search_filter, full=False)
-    if not chunks.get("total"):
-        return None
-
-    stored_paths: List[str] = []
-    owned_stored_filenames_present = False
-    for item in chunks.get("items", []):
-        stored = str(item.get("stored_filename") or "").strip()
-        if stored:
-            owned_stored_filenames_present = True
-            # only include if the referenced stored file actually exists on disk
-            if path := _safe_upload_path(stored):
-                stored_paths.append(path)
-
-    # If owned chunks reference stored filenames and we found at least one existing stored path,
-    # prefer an unambiguous stored_filename coming from owned chunks.
-    if stored_path := _pick_unambiguous_upload_path(stored_paths):
-        return stored_path
-
-    # If owned chunks did reference stored_filename but none of those files exist (or ambiguous), do NOT fallback.
-    if owned_stored_filenames_present:
-        logger.warning(
-            "Owned stored_filename(s) referenced but no unambiguous existing stored file found for user=%s filename=%s",
-            data_user_id,
-            safe_filename,
-        )
-        return None
-
-    # Legacy fallback: no owned chunks referenced a stored_filename (legacy). Do NOT return global matches
-    # unless ownership can be confirmed. We cannot confirm ownership here, so be conservative.
-    matches = _matching_upload_paths(safe_filename)
-    if matches:
-        logger.warning(
-            "Legacy filename matches found for filename=%s but ownership cannot be confirmed for user=%s",
-            safe_filename,
-            data_user_id,
-        )
-    return None
-
-
 def _matching_upload_paths(filename: str) -> List[str]:
     matches = []
     want = unicodedata.normalize("NFC", filename)
@@ -4304,6 +4236,45 @@ def _pick_unambiguous_upload_path(paths: List[str]) -> Optional[str]:
         if len(signatures) == 1:
             return unique_paths[0]
     return None
+
+
+def _legacy_upload_event_owns_scope(
+    data_user_id: str,
+    filename: str,
+    semester: str,
+    course: str,
+    unit: str,
+) -> bool:
+    """Confirm a pre-stored_filename upload from its authenticated exact-scope event."""
+    required = {
+        "user_id": str(data_user_id or ""),
+        "filename": str(filename or ""),
+        "semester": str(semester or "").strip(),
+        "course": str(course or "").strip(),
+        "unit": str(unit or "").strip(),
+    }
+    if not all(required.values()):
+        return False
+    events = _load_json_file(UPLOAD_EVENTS_PATH)
+    if not isinstance(events, list):
+        return False
+    for event in events:
+        if not isinstance(event, dict):
+            continue
+        try:
+            event_filename = _normalize_filename(str(event.get("filename") or ""))
+        except HTTPException:
+            continue
+        if (
+            str(event.get("user_id") or "") == required["user_id"]
+            and event_filename == required["filename"]
+            and str(event.get("semester") or "").strip() == required["semester"]
+            and str(event.get("course") or "").strip() == required["course"]
+            and str(event.get("unit") or "").strip() == required["unit"]
+            and str(event.get("status") or "") in {"received", "indexed", "complete"}
+        ):
+            return True
+    return False
 
 
 def _resolve_owned_upload_path(
@@ -4348,7 +4319,25 @@ def _resolve_owned_upload_path(
         )
         return None
 
-    if _matching_upload_paths(safe_filename):
+    matches = _matching_upload_paths(safe_filename)
+    if _legacy_upload_event_owns_scope(
+        data_user_id,
+        safe_filename,
+        semester,
+        course,
+        unit,
+    ):
+        if path := _pick_unambiguous_upload_path(matches):
+            return path
+        if matches:
+            logger.warning(
+                "Legacy owned filename matches are ambiguous for user=%s filename=%s",
+                data_user_id,
+                safe_filename,
+            )
+        return None
+
+    if matches:
         logger.warning(
             "Legacy filename matches are not returned without attributable ownership for user=%s filename=%s",
             data_user_id,
