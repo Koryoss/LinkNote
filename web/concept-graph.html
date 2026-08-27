@@ -8,7 +8,7 @@
   * { box-sizing:border-box; margin:0; padding:0; }
   body { font-family:-apple-system,"Apple SD Gothic Neo","Malgun Gothic",sans-serif; background:#fbfcfe; color:#1f2937; }
   .topbar { position:sticky; top:0; z-index:20; display:flex; align-items:center; gap:10px; padding:12px 24px; background:rgba(255,255,255,.94); backdrop-filter:blur(6px); border-bottom:1px solid #eef1f6; }
-  .brand { font-size:1.18rem; font-weight:800; color:#1e293b; text-decoration:none; }
+  .brand { flex:0 0 auto; font-size:20px; line-height:24px; font-weight:800; letter-spacing:-.02em; color:#1e293b; text-decoration:none; white-space:nowrap; }
   .spacer { flex:1; }
   .btn, button { border:1px solid #d8dee9; background:#fff; color:#2563eb; border-radius:8px; padding:8px 12px; font-size:.84rem; font-weight:700; text-decoration:none; cursor:pointer; }
   .btn.primary { background:#2563eb; border-color:#2563eb; color:#fff; }
@@ -16,7 +16,7 @@
   h1 { font-size:1.55rem; color:#0f172a; }
   h2 { font-size:1rem; margin-bottom:12px; color:#1e293b; }
   .sub { margin-top:6px; color:#64748b; font-size:.9rem; line-height:1.55; }
-  .grid { display:grid; grid-template-columns:220px minmax(0, 1fr) 340px; gap:14px; margin-top:18px; align-items:start; }
+  .grid { display:grid; grid-template-columns:240px minmax(0, 1fr); gap:14px; margin-top:18px; align-items:start; }
   section { background:#fff; border:1px solid #e8ebf2; border-radius:14px; padding:18px; box-shadow:0 8px 24px rgba(15,23,42,.06); }
   section.wide { grid-column:1/-1; }
   .stats { display:grid; grid-template-columns:repeat(4, minmax(0, 1fr)); gap:10px; }
@@ -69,6 +69,27 @@
   .concept-item strong { display:block; color:#0f172a; font-size:.82rem; overflow-wrap:anywhere; }
   .concept-item span { display:block; color:#94a3b8; font-size:.7rem; margin-top:2px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .concept-item.active { background:#eff6ff; border-color:#2563eb; }
+  .relationship-panel { min-width:0; }
+  .selected-concept { border:1px solid #bfdbfe; border-radius:14px; padding:16px; background:linear-gradient(145deg,#eff6ff,#fff); }
+  .selected-concept-head { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; }
+  .selected-concept h2 { margin-bottom:4px; font-size:1.25rem; overflow-wrap:anywhere; }
+  .selected-concept-meta { color:#64748b; font-size:.8rem; }
+  .selected-concept-summary { margin-top:10px; color:#334155; font-size:.88rem; line-height:1.55; }
+  .primary-actions { display:flex; flex-wrap:wrap; gap:8px; margin-top:14px; }
+  .primary-actions .primary { background:#2563eb; border-color:#2563eb; color:#fff; }
+  .relationship-heading { display:flex; align-items:flex-end; justify-content:space-between; gap:12px; margin:22px 0 10px; }
+  .relationship-heading h2 { margin-bottom:0; }
+  .relationship-list { display:grid; gap:10px; }
+  .relationship-item { border:1px solid #dbe3ef; border-left:4px solid #2563eb; border-radius:12px; padding:13px 14px; background:#fff; }
+  .relationship-item-head { display:flex; align-items:flex-start; justify-content:space-between; gap:10px; }
+  .relationship-item strong { color:#0f172a; font-size:.98rem; overflow-wrap:anywhere; }
+  .relationship-kind { flex:0 0 auto; border-radius:999px; padding:3px 8px; background:#eff6ff; color:#1d4ed8; font-size:.7rem; font-weight:800; }
+  .relationship-meta { display:block; margin-top:3px; color:#64748b; font-size:.74rem; }
+  .relationship-reason { margin-top:9px; color:#334155; font-size:.84rem; line-height:1.5; }
+  .relationship-actions { display:flex; flex-wrap:wrap; gap:7px; margin-top:10px; }
+  .relationship-actions .btn, .relationship-actions button { padding:6px 9px; font-size:.76rem; }
+  .evidence-panel { border-top:1px solid #eef1f6; margin-top:18px; padding-top:14px; }
+  .detail-panel { grid-column:2; }
   .filters { display:grid; grid-template-columns:repeat(4, minmax(0, 1fr)); gap:8px; align-items:end; margin-top:14px; }
   .filters label { color:#64748b; font-size:.74rem; font-weight:700; }
   .filters input, .filters select { width:100%; border:1px solid #d8dee9; border-radius:8px; padding:8px 10px; font-size:.85rem; margin-top:4px; background:#fff; }
@@ -77,8 +98,8 @@
   .warning { border:1px solid #fde68a; background:#fffbeb; color:#92400e; border-radius:12px; padding:10px 12px; font-size:.84rem; line-height:1.5; margin-top:12px; }
   .graph-wrap { position:relative; height:580px; border:1px solid #eef1f6; border-radius:12px; overflow:hidden; background:radial-gradient(circle at 50% 50%, #fff, #f8fafc); }
   svg { width:100%; height:100%; display:block; }
-  .edge { stroke:#cbd5e1; stroke-width:1.5; opacity:.72; }
-  .edge.connected { stroke:#2563eb; opacity:.95; }
+  .edge { stroke:#94a3b8; stroke-width:2.25; opacity:.9; }
+  .edge.connected { stroke:#2563eb; stroke-width:3; opacity:1; }
   .edge.selected { stroke:#1d4ed8; stroke-width:3; opacity:1; }
   .edge.dimmed { opacity:.2; }
   .edge-hit { stroke:transparent; stroke-width:16; cursor:pointer; pointer-events:stroke; }
@@ -116,8 +137,8 @@
   .relation-card { border:1px solid #bfdbfe; background:#eff6ff; border-radius:12px; padding:11px 12px; margin-bottom:12px; }
   .relation-card strong { color:#1e3a8a; display:block; }
   .relation-card p { color:#334155; font-size:.82rem; line-height:1.5; margin-top:4px; }
-  @media (max-width:1040px){ .grid{grid-template-columns:200px minmax(0,1fr);} .detail-panel{grid-column:1/-1;} .concept-rail{position:static;max-height:none;} }
-  @media (max-width:760px){ .grid{grid-template-columns:1fr;} .stats,.filters,.map-cards{grid-template-columns:1fr 1fr;} .modebar button.secondary{margin-left:0;} .graph-wrap{height:500px;} .concept-rail{display:none;} }
+  @media (max-width:1040px){ .grid{grid-template-columns:220px minmax(0,1fr);} .concept-rail{position:static;max-height:none;} }
+  @media (max-width:760px){ .grid{grid-template-columns:1fr;} .detail-panel{grid-column:1;} .stats,.filters,.map-cards{grid-template-columns:1fr 1fr;} .modebar button.secondary{margin-left:0;} .graph-wrap{height:500px;} .concept-rail{display:block;max-height:320px;} .selected-concept-head,.relationship-item-head{flex-direction:column;} }
   @media (max-width:560px){ .stats,.filters,.map-cards{grid-template-columns:1fr;} }
 </style>
 </head>
@@ -162,7 +183,7 @@
   let currentGraphData = null;
   let currentVisibleGraph = {nodes:[], edges:[]};
   let currentMode = 'understand';
-  let currentView = 'map';
+  let currentView = 'relationships';
   let selectedConcept = '';
   let selectedNodeId = '';
   let selectedEdgeKey = '';
@@ -262,15 +283,15 @@
     currentMode = MODE_LABELS[mode] ? mode : 'understand';
     if(concept !== undefined) selectedConcept = concept || '';
     selectedEdgeKey = '';
-    currentView = 'map';
+    currentView = currentMode === 'full' ? 'map' : 'relationships';
     renderGraph(currentGraphData || {nodes:[], edges:[], stats:{}});
   }
   function setView(view){
-    currentView = view === 'map' ? 'map' : 'queue';
+    currentView = ['relationships','map','queue'].includes(view) ? view : 'relationships';
     renderGraph(currentGraphData || {nodes:[], edges:[], stats:{}});
   }
   function openFromQueue(id){
-    currentView = 'map';
+    currentView = 'relationships';
     centerNodeById(id);
   }
   function buildQueue(nodes){
@@ -481,6 +502,76 @@
     });
     return pos;
   }
+  function conceptActionUrls(node){
+    const concept = encodeURIComponent(nodeLabel(node));
+    const course = encodeURIComponent(node.course || '');
+    const unit = encodeURIComponent(node.unit || '');
+    return {
+      recall:`/?course=${course}&unit=${unit}&concept=${concept}&action=recall`,
+    };
+  }
+  async function openSourceForNode(id){
+    const node = findNodeById(id);
+    if(!node || !node.semester || !node.course || !node.unit){
+      alert('이 개념의 원문 범위를 확인할 수 없습니다.');
+      return;
+    }
+    try{
+      const query = new URLSearchParams({semester:node.semester, course:node.course});
+      const data = await getJSON('/units?' + query.toString());
+      const matched = (data.units || []).find(item => String(item.unit || '') === String(node.unit || ''));
+      const filename = matched && Array.isArray(matched.files) ? matched.files[0] : '';
+      if(!filename){
+        alert('이 개념과 연결된 원문 자료를 찾지 못했습니다.');
+        return;
+      }
+      const workspaceQuery = new URLSearchParams({semester:node.semester, course:node.course, unit:node.unit, filename});
+      location.href = '/study-workspace.html?' + workspaceQuery.toString();
+    }catch(error){
+      alert('원문을 열지 못했습니다: ' + (error.message || error));
+    }
+  }
+  function selectedConceptHTML(node){
+    if(!node) return '<div class="empty">먼저 왼쪽에서 개념을 선택해 주세요.</div>';
+    const urls = conceptActionUrls(node);
+    return `<div class="selected-concept">
+      <div class="selected-concept-head">
+        <div><span class="relationship-kind">선택한 개념</span><h2>${esc(nodeLabel(node) || '개념')}</h2><span class="selected-concept-meta">${esc(node.course || '-')} · ${esc(node.unit || '-')}</span></div>
+        <span class="qbadge s-${esc(learningState(node).toLowerCase())}">${esc(STATE_KO[learningState(node)] || learningState(node))}</span>
+      </div>
+      <p class="selected-concept-summary">${esc(node.recommended_action || '연결 이유를 확인한 뒤 원문을 보거나 내 말로 설명해보세요.')}</p>
+      <div class="primary-actions"><button data-source-id="${esc(node.id)}" onclick="openSourceForNode(this.dataset.sourceId)">원문 보기</button><a class="btn primary" href="${urls.recall}">설명해보기</a></div>
+    </div>`;
+  }
+  function relationshipCardsHTML(node){
+    if(!node) return '';
+    const nodes = currentVisibleGraph.nodes || [];
+    const edges = currentVisibleGraph.edges || [];
+    const byId = Object.fromEntries(nodes.map(item => [item.id, item]));
+    const cards = edges
+      .filter(edge => edge.source === node.id || edge.target === node.id)
+      .sort((a,b)=>Number(b.normalized_weight || b.weight || 0)-Number(a.normalized_weight || a.weight || 0))
+      .map(edge => {
+        const other = byId[edge.source === node.id ? edge.target : edge.source];
+        if(!other) return '';
+        const urls = conceptActionUrls(other);
+        const strength = Number(edge.normalized_weight ?? edge.weight ?? 0);
+        return `<article class="relationship-item" style="border-left-color:${esc(courseColor(other.course))}">
+          <div class="relationship-item-head"><div><strong>${esc(nodeLabel(other) || '연결 개념')}</strong><span class="relationship-meta">${esc(other.course || '-')} · ${esc(other.unit || '-')}</span></div><span class="relationship-kind">${esc(edgeTypeLabel(edge))}${strength ? ` · ${esc(Math.round(strength))}` : ''}</span></div>
+          <p class="relationship-reason"><b>연결 이유</b><br>${esc(edge.reason || '같은 학습 자료와 개념 구조에서 직접 연결된 개념입니다.')}</p>
+          <div class="relationship-actions"><button data-focus-id="${esc(other.id)}" onclick="centerNodeById(this.dataset.focusId)">이 개념 선택</button><button data-source-id="${esc(other.id)}" onclick="openSourceForNode(this.dataset.sourceId)">원문 보기</button><a class="btn" href="${urls.recall}">설명해보기</a></div>
+        </article>`;
+      }).filter(Boolean).join('');
+    return cards || '<div class="empty">현재 선택한 개념에 표시할 직접 연결이 없습니다. 다른 개념을 선택하거나 지도 보기에서 전체 구조를 확인해 주세요.</div>';
+  }
+  function relationshipWorkspaceHTML(node){
+    return `<section class="relationship-panel" aria-label="선택한 개념과 관계">
+      ${selectedConceptHTML(node)}
+      <div class="relationship-heading"><div><h2>직접 연결된 개념</h2><p class="sub">연결 이유를 읽고 다음 학습 행동을 선택하세요.</p></div><button onclick="setView('map')">지도 보기</button></div>
+      <div class="relationship-list">${relationshipCardsHTML(node)}</div>
+      <div class="evidence-panel"><h2>관련 근거 자료</h2><p class="sub">선택한 개념과 직접 관련된 원문 근거를 자동으로 찾습니다. GPT 답변 생성 없음.</p><div id="quickSearchResults"></div></div>
+    </section>`;
+  }
   function renderGraph(data){
     currentGraphData = data || {nodes:[], edges:[], stats:{}};
     const nodes = Array.isArray(data.nodes) ? data.nodes : [];
@@ -494,7 +585,8 @@
       : '';
     const app = document.getElementById('app');
     const viewToggle = `<div class="viewbar">
-      <button class="${currentView==='map'?'active':''}" onclick="setView('map')">개념 탐색기</button>
+      <button class="${currentView==='relationships'?'active':''}" onclick="setView('relationships')">관계 카드</button>
+      <button class="${currentView==='map'?'active':''}" onclick="setView('map')">지도 보기</button>
       <button class="${currentView==='queue'?'active':''}" onclick="setView('queue')">오늘의 학습 큐</button>
     </div>`;
 
@@ -504,7 +596,7 @@
       app.innerHTML = `
         <section class="wide">${viewToggle}
           <h2>오늘의 학습 큐</h2>
-          <p class="sub">지금 복습하면 좋은 개념을 우선순위 순으로 보여줍니다. 카드를 누르면 지도에서 연결을 보고, ‘설명해보기’로 바로 학습할 수 있습니다.</p>
+          <p class="sub">지금 복습하면 좋은 개념을 우선순위 순으로 보여줍니다. 카드를 누르면 연결 이유를 보고, ‘설명해보기’로 바로 학습할 수 있습니다.</p>
           <div class="queue-list">${queue.length
             ? queue.map((node, i)=>queueCardHTML(node, i+1)).join('')
             : '<div class="empty">아직 표시할 개념이 없습니다. 자료를 업로드하고 개념 추출을 먼저 진행해 주세요.</div>'}</div>
@@ -512,17 +604,27 @@
       return;
     }
 
-    app.className = 'grid';
-    app.innerHTML = `
+    const selected = visible.nodes.find(node=>String(node.id||'')===String(selectedNodeId||'')) || findNodeFromUrl(nodes) || visible.nodes[0];
+    const explorerHeader = `
       <section class="wide">${viewToggle}
         <h2>${esc(MODE_LABELS[currentMode])}</h2>
         <p class="sub">${esc(modeDescription)} · 개념 ${visible.nodes.length}/${nodes.length} · 연결 ${visible.edges.length}/${edges.length}</p>
         ${modeButtonsHTML()}
         ${fullWarning}
         ${courseLegendHTML(visible.nodes)}
-        ${filtersHTML()}</section>
-      <section class="concept-rail"><h2>개념 찾기</h2><p class="sub">검색하거나 개념을 선택하세요.</p>${conceptRailHTML(nodes)}</section>
-      <section><h2>${esc(nodeLabel(visible.nodes.find(node=>String(node.id||'')===String(selectedNodeId||''))) || MODE_LABELS[currentMode])} 중심</h2><p class="sub">개념을 누르면 그 개념으로 중심이 이동합니다. 연결선을 누르면 관계 근거를 볼 수 있습니다.</p><div id="graphWrap" class="graph-wrap">${visible.nodes.length ? '<svg id="graphSvg"></svg>' : '<div class="empty">아직 표시할 개념 연결이 없습니다.</div>'}</div></section>
+        ${filtersHTML()}</section>`;
+    const conceptRail = `<section class="concept-rail"><h2>개념 찾기</h2><p class="sub">검색하거나 개념을 선택하세요.</p>${conceptRailHTML(nodes)}</section>`;
+
+    app.className = 'grid';
+    if(currentView === 'relationships'){
+      app.innerHTML = explorerHeader + conceptRail + relationshipWorkspaceHTML(selected);
+      restoreFilters();
+      if(selected) quickSearchNode(selected.id);
+      return;
+    }
+
+    app.innerHTML = explorerHeader + conceptRail + `
+      <section><h2>${esc(nodeLabel(selected) || MODE_LABELS[currentMode])} 지도</h2><p class="sub">개념을 누르면 중심이 이동합니다. 관계 설명은 아래 개념·근거 영역에서 확인할 수 있습니다.</p><div id="graphWrap" class="graph-wrap">${visible.nodes.length ? '<svg id="graphSvg"></svg>' : '<div class="empty">아직 표시할 개념 연결이 없습니다.</div>'}</div></section>
       <section class="detail-panel"><h2>개념·근거</h2><div id="details" class="detail">개념을 선택하면 관계와 출처가 표시됩니다.</div></section>`;
     restoreFilters();
     if(visible.nodes.length) {
@@ -532,8 +634,8 @@
         selectedConcept = nodeLabel(urlNode);
       }
       draw(visible.nodes, visible.edges);
-      const selected = visible.nodes.find(node=>String(node.id||'')===String(selectedNodeId||'')) || urlNode || visible.nodes[0];
-      if(selected) showDetails(selected, '선택한 개념을 중심으로 주변 연결을 보여줍니다.');
+      const mapSelected = visible.nodes.find(node=>String(node.id||'')===String(selectedNodeId||'')) || urlNode || selected;
+      if(mapSelected) showDetails(mapSelected, '선택한 개념을 중심으로 주변 연결을 보여줍니다.');
     }
   }
   function restoreFilters(){
@@ -642,7 +744,7 @@
     centerNode(node);
   }
   function relationshipDetailsHTML(edge){
-    if(!edge) return '<div class="relation-card"><strong>연결선을 눌러보세요</strong><p>두 개념이 왜 연결되었는지와 연결 강도를 확인할 수 있습니다.</p></div>';
+    if(!edge) return '<div class="relation-card"><strong>관계 카드를 먼저 확인해 보세요</strong><p>지도에서는 연결선을 선택하면 두 개념의 관계 근거를 다시 확인할 수 있습니다.</p></div>';
     const source = findNodeById(edge.source) || {};
     const target = findNodeById(edge.target) || {};
     return `<div class="relation-card"><strong>${esc(nodeLabel(source)||'개념')} ↔ ${esc(nodeLabel(target)||'개념')}</strong><p><b>${esc(edgeTypeLabel(edge))}</b> · 연결 강도 ${esc(edge.normalized_weight ?? '-')}<br>${esc(edge.reason || '저장된 개념 그래프에서 발견된 연결입니다.')}</p><div class="detail-actions"><button data-focus-id="${esc(source.id||'')}" onclick="centerNodeById(this.dataset.focusId)">${esc(nodeLabel(source)||'왼쪽 개념')} 중심</button><button data-focus-id="${esc(target.id||'')}" onclick="centerNodeById(this.dataset.focusId)">${esc(nodeLabel(target)||'오른쪽 개념')} 중심</button></div></div>`;
