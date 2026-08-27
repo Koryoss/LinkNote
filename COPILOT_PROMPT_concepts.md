@@ -1,5 +1,7 @@
 # Copilot 작업 프롬프트 — 개념(concept) 추출 + /concepts 실데이터화
 
+> 역사적 설계 기록: 현재 동작과 앞으로의 품질 개선 기준은 `docs/concept-extraction-quality.md`를 따른다.
+
 대상: `study-rag-api`. 목표: 단원별 핵심 개념을 추출해 `data/concepts.json` 에 저장하고,
 `/concepts` 엔드포인트가 그 데이터를 반환하도록 만든다.
 프론트(`web/gallery.html`)가 이미 이 형식을 기다리고 있으니 **응답 스키마를 정확히** 맞춘다.

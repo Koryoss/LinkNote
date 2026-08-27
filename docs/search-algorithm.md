@@ -1,6 +1,6 @@
 # LinkNote Search Algorithm: Current Version
 
-작성 기준: 2026-07-15, `main` 브랜치의 `hybrid_personalized_v1` 구현.
+작성 기준: 2026-08-22, `main` 브랜치의 `hybrid_personalized_v4` 구현.
 
 이 문서는 LinkNote가 질문을 처리할 때 사용하는 검색 흐름을 정리한 현재 버전 스냅샷이다. 검색은 사용 목적에 따라 빠른 검색, AI 답변, 연결 검색의 세 경로로 나뉜다.
 
@@ -38,6 +38,8 @@
 | preference | 6% | 사용자가 자주 연 학습 과목·개념 |
 
 개인화 요소인 learning과 preference는 합계 20%를 넘지 않는다. 의미·키워드·개념 관련성이 없는 결과를 개인화만으로 노출하지 않는다.
+
+`hybrid_personalized_v2`부터(현재 `v4`) chunk의 concept 점수는 질문 토큰 또는 확장 alias와 직접 일치한 개념에만 부여한다. 문서에 질문과 무관한 추출 개념이 있다는 이유만으로 concept·learning 보너스를 주지 않는다. 문서 결과는 직접 키워드/개념 일치 또는 강한 의미 유사도 근거가 있을 때만 노출하며, 사용자 화면에는 보정되지 않은 숫자 점수 대신 `직접 일치` 또는 `관련성 높음` 등급을 표시한다.
 
 ## 2. AI 답변 검색
 
