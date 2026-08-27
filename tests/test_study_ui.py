@@ -31,6 +31,21 @@ class StudyUiTests(unittest.TestCase):
         self.assertIn("query.set('page', String(source.page_num))", self.html)
         self.assertIn("원문 p.${esc(s.page_num)} 열기", self.html)
 
+    def test_claim_draft_can_be_edited_and_sources_selected_before_save(self):
+        for element_id in (
+            "claimDraftText", "claimDraftSourceSummary", "claimDraftStrength",
+            "claimDraftApplication", "claimDraftSafety", "claimSaveBtn",
+        ):
+            self.assertIn(element_id, self.html)
+        self.assertIn("claim-source-picker", self.html)
+        self.assertIn("function selectedClaimSources()", self.html)
+        self.assertIn("sources: selectedSources", self.html)
+        self.assertIn("search_filter: lastDraft.search_filter", self.html)
+
+    def test_saved_claim_renders_selected_source_links(self):
+        self.assertIn("renderSources(c.sources)", self.html)
+        self.assertIn("검색 범위: ${esc(c.scope_label)}", self.html)
+
 
 if __name__ == "__main__":
     unittest.main()
