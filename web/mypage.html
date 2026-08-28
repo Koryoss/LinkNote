@@ -75,6 +75,17 @@
   .empty, .error { border:1px dashed #d8dee9; border-radius:12px; padding:18px; color:#64748b; background:#fff; }
   .error { border-color:#fecaca; color:#b91c1c; background:#fff7f7; }
   .actions { display:flex; flex-wrap:wrap; gap:8px; }
+  .delete-status { min-height:1.3em; margin-top:8px; color:#64748b; font-size:.8rem; font-weight:700; }
+  .delete-status.busy { color:#2563eb; }
+  .delete-status.success { color:#047857; }
+  .delete-status.error { color:#b91c1c; }
+  .delete-confirm-backdrop { position:fixed; inset:0; z-index:100; display:flex; align-items:center; justify-content:center; padding:20px; background:rgba(15,23,42,.48); }
+  .delete-confirm-backdrop[hidden] { display:none !important; }
+  .delete-confirm-dialog { width:min(480px, 100%); border:1px solid #fecaca; border-radius:16px; padding:20px; background:#fff; box-shadow:0 24px 70px rgba(15,23,42,.28); }
+  .delete-confirm-dialog h2 { color:#991b1b; font-size:1.08rem; }
+  .delete-confirm-message { color:#475569; font-size:.9rem; line-height:1.6; }
+  .delete-confirm-actions { display:flex; justify-content:flex-end; gap:8px; margin-top:18px; }
+  .delete-confirm-actions button:disabled { opacity:.5; cursor:not-allowed; }
   @media (max-width:760px){ .grid,.memory-two-col{grid-template-columns:1fr;} .kv{grid-template-columns:1fr;} .stats{grid-template-columns:1fr 1fr;} .hero{flex-direction:column;} .snapshot{max-width:100%;} }
 </style>
 </head>
@@ -94,6 +105,17 @@
     </div>
     <div id="app" class="empty">불러오는 중...</div>
   </main>
+  <div id="deleteConfirmBackdrop" class="delete-confirm-backdrop" hidden>
+    <div class="delete-confirm-dialog" role="alertdialog" aria-modal="true" aria-labelledby="deleteConfirmTitle" aria-describedby="deleteConfirmMessage">
+      <h2 id="deleteConfirmTitle">전체 삭제 확인</h2>
+      <p id="deleteConfirmMessage" class="delete-confirm-message"></p>
+      <p id="deleteConfirmStatus" class="delete-status" aria-live="polite"></p>
+      <div class="delete-confirm-actions">
+        <button type="button" id="deleteConfirmCancelBtn" onclick="closeDeleteConfirmation()">취소</button>
+        <button type="button" id="deleteConfirmRunBtn" class="danger" onclick="runConfirmedDelete()">삭제 실행</button>
+      </div>
+    </div>
+  </div>
 <script>
   const configuredApi = window.LINKNOTE_API_BASE || localStorage.getItem('ln_api_base') || '';
   const API = (configuredApi || (location.protocol.startsWith('http') ? '' : 'http://127.0.0.1:8000')).replace(/\/$/, '');
@@ -158,6 +180,82 @@
   let memoryDeleteInFlight = false;
   let currentQuestions = [];
   let totalQuestionCount = 0;
+  let questionDeleteInFlight = false;
+  let pendingDeleteConfirmation = null;
+  let deleteConfirmLastFocus = null;
+  const deleteStatuses = {
+    memory: { state:'', message:'' },
+    question: { state:'', message:'' },
+  };
+  function deleteStatusHTML(kind){
+    const status = deleteStatuses[kind] || { state:'', message:'' };
+    return `<p id="${kind}DeleteStatus" class="delete-status ${esc(status.state)}" aria-live="polite">${esc(status.message)}</p>`;
+  }
+  function setDeleteStatus(kind, state, message){
+    deleteStatuses[kind] = { state:state || '', message:message || '' };
+    const status = document.getElementById(`${kind}DeleteStatus`);
+    if(status){
+      status.className = `delete-status ${state || ''}`;
+      status.textContent = message || '';
+    }
+  }
+  function setDeleteConfirmStatus(state, message){
+    const status = document.getElementById('deleteConfirmStatus');
+    if(!status) return;
+    status.className = `delete-status ${state || ''}`;
+    status.textContent = message || '';
+  }
+  function openDeleteConfirmation(config, trigger){
+    if(!config || typeof config.run !== 'function') return;
+    pendingDeleteConfirmation = config;
+    deleteConfirmLastFocus = trigger || document.activeElement;
+    document.getElementById('deleteConfirmTitle').textContent = config.title;
+    document.getElementById('deleteConfirmMessage').textContent = config.message;
+    const runBtn = document.getElementById('deleteConfirmRunBtn');
+    const cancelBtn = document.getElementById('deleteConfirmCancelBtn');
+    runBtn.textContent = config.confirmLabel || '삭제 실행';
+    runBtn.hidden = false;
+    runBtn.disabled = false;
+    cancelBtn.textContent = '취소';
+    cancelBtn.disabled = false;
+    setDeleteConfirmStatus('', '');
+    document.getElementById('deleteConfirmBackdrop').hidden = false;
+    cancelBtn.focus();
+  }
+  function closeDeleteConfirmation(){
+    if(pendingDeleteConfirmation?.running) return;
+    document.getElementById('deleteConfirmBackdrop').hidden = true;
+    pendingDeleteConfirmation = null;
+    if(deleteConfirmLastFocus && document.body.contains(deleteConfirmLastFocus)) deleteConfirmLastFocus.focus();
+    deleteConfirmLastFocus = null;
+  }
+  async function runConfirmedDelete(){
+    const pending = pendingDeleteConfirmation;
+    if(!pending || pending.running) return;
+    pending.running = true;
+    const runBtn = document.getElementById('deleteConfirmRunBtn');
+    const cancelBtn = document.getElementById('deleteConfirmCancelBtn');
+    runBtn.disabled = true;
+    cancelBtn.disabled = true;
+    setDeleteConfirmStatus('busy', '삭제 중…');
+    try {
+      const successMessage = await pending.run();
+      setDeleteConfirmStatus('success', successMessage || '삭제 완료');
+      runBtn.hidden = true;
+      cancelBtn.disabled = false;
+      cancelBtn.textContent = '닫기';
+      pendingDeleteConfirmation = null;
+      cancelBtn.focus();
+    } catch(e) {
+      pending.running = false;
+      runBtn.disabled = false;
+      cancelBtn.disabled = false;
+      setDeleteConfirmStatus('error', `삭제 실패: ${e.message || e}`);
+    }
+  }
+  document.addEventListener('keydown', event => {
+    if(event.key === 'Escape' && !document.getElementById('deleteConfirmBackdrop').hidden) closeDeleteConfirmation();
+  });
   function feedbackSection(item, index){
     const missing = Array.isArray(item.missing_links) ? item.missing_links : [];
     const good = Array.isArray(item.good_points) ? item.good_points : [];
@@ -210,14 +308,16 @@
     if(!currentMemories.length) return '';
     const visibleIds = currentMemories.map(item => item.id).filter(Boolean);
     const allVisibleSelected = visibleIds.length > 0 && visibleIds.every(id => selectedMemoryIds.has(id));
-    return `<div class="memory-bulk actions" style="margin-top:12px">
+    return `<div class="memory-bulk" style="margin-top:12px">
+      <div class="actions" style="align-items:center; justify-content:space-between">
       <div class="bulk-left">
         <label><input id="memorySelectAll" type="checkbox" onchange="toggleAllVisibleMemories(this.checked)"${allVisibleSelected ? ' checked' : ''}>현재 목록 전체 선택</label>
         <span class="sub" id="memorySelectionCount">선택 0개</span>
       </div>
       <div class="actions">
         <button id="deleteSelectedBtn" class="danger" onclick="deleteSelectedMemories()" disabled>선택 삭제</button>
-        <button id="deleteAllMemoriesBtn" class="danger" onclick="deleteAllMemories()">내 설명 기록 전체 삭제</button>
+        <button id="deleteAllMemoriesBtn" class="danger" onclick="deleteAllMemories(this)">내 설명 기록 전체 삭제</button>
+      </div>
       </div>
     </div>`;
   }
@@ -322,6 +422,7 @@
       </section>
       <section class="wide"><h2>Learning Memory <span class="sub">현재 ${currentMemories.length}개 표시 · 전체 ${totalMemoryCount}개</span></h2>
         ${memoryBulkControlsHTML()}
+        ${deleteStatusHTML('memory')}
         <div class="list">${currentMemories.length ? currentMemories.map(memoryCard).join("") : '<div class="item">아직 저장된 Learning Memory가 없습니다. 설명해보기를 사용하면 여기에 쌓입니다.</div>'}</div>
         <div class="actions" style="margin-top:12px">
           <a class="btn" href="/learning-memory.html">Learning History</a>
@@ -330,8 +431,9 @@
       <section class="wide">
         <div class="section-heading">
           <h2>최근 검색·질문 <span id="questionHistoryTotal" class="sub">전체 ${totalQuestionCount}개</span></h2>
-          ${totalQuestionCount ? '<button id="deleteAllQuestionHistoryBtn" class="danger" onclick="deleteAllQuestionHistory()">전체 기록 삭제</button>' : ''}
+          ${totalQuestionCount ? '<button id="deleteAllQuestionHistoryBtn" class="danger" onclick="deleteAllQuestionHistory(this)">전체 기록 삭제</button>' : ''}
         </div>
+        ${deleteStatusHTML('question')}
         <div id="questionHistoryList" class="list">${questionItems.length ? questionItems.map(questionItem).join('') : '<div class="item">아직 저장된 질문이 없습니다. My Library 또는 API에서 질문하면 여기에 쌓입니다.</div>'}</div>
       </section>
       <section class="wide nursing-card ${isNursing ? 'on' : ''}"><h2>Nursing Practice Mode: Clinical Reflection</h2>
@@ -409,26 +511,35 @@
       setMemoryDeleteButtonsBusy(false);
     }
   }
-  async function deleteAllMemories(){
+  function deleteAllMemories(trigger){
     if(memoryDeleteInFlight) return;
-    if(!totalMemoryCount){ alert('삭제할 설명 기록이 없습니다.'); return; }
-    if(!confirm(`내 설명 기록 ${totalMemoryCount}개와 연결된 AI 피드백을 모두 삭제합니다. 이 작업은 되돌릴 수 없습니다.`)) return;
+    if(!totalMemoryCount){ setDeleteStatus('memory', 'error', '삭제할 설명 기록이 없습니다.'); return; }
+    const count = totalMemoryCount;
+    openDeleteConfirmation({
+      title:'내 설명 기록 전체 삭제',
+      message:`내 설명 기록 ${count}개와 연결된 AI 피드백을 모두 삭제합니다. 이 작업은 되돌릴 수 없습니다.`,
+      confirmLabel:'내 설명 기록 전체 삭제',
+      run:()=>performDeleteAllMemories(count),
+    }, trigger);
+  }
+  async function performDeleteAllMemories(count){
+    if(memoryDeleteInFlight) throw new Error('다른 설명 기록 삭제가 진행 중입니다.');
     memoryDeleteInFlight = true;
     setMemoryDeleteButtonsBusy(true);
-    const btn = document.getElementById('deleteAllMemoriesBtn');
-    if(btn) btn.textContent = '삭제 중…';
+    setDeleteStatus('memory', 'busy', '삭제 중…');
     try {
-      // Body-less DELETE — see comment on deleteSelectedMemories().
-      await deleteJSON('/learning-memory/all');
+      const result = await postJSON('/learning-memory/delete-all');
       selectedMemoryIds.clear();
+      const deleted = Number(result.deleted_count ?? count);
+      deleteStatuses.memory = { state:'success', message:`삭제 완료 · ${deleted}개 기록을 삭제했습니다.` };
       await init();
+      return deleteStatuses.memory.message;
     } catch(e) {
-      alert('내 설명 기록을 삭제하지 못했습니다: ' + e.message);
+      setDeleteStatus('memory', 'error', `삭제 실패 · ${e.message || e}`);
+      throw e;
     } finally {
       memoryDeleteInFlight = false;
       setMemoryDeleteButtonsBusy(false);
-      const stillThere = document.getElementById('deleteAllMemoriesBtn');
-      if(stillThere) stillThere.textContent = '내 설명 기록 전체 삭제';
     }
   }
   async function deleteQuestionHistory(historyId){
@@ -460,21 +571,42 @@
     const allButton = document.getElementById('deleteAllQuestionHistoryBtn');
     if(allButton && !totalQuestionCount) allButton.remove();
   }
-  async function deleteAllQuestionHistory(){
-    if(!totalQuestionCount) return;
-    if(!confirm(`최근 검색·질문 기록 ${totalQuestionCount}개를 모두 삭제할까요?`)) return;
+  function deleteAllQuestionHistory(trigger){
+    if(questionDeleteInFlight) return;
+    if(!totalQuestionCount){ setDeleteStatus('question', 'error', '삭제할 검색·질문 기록이 없습니다.'); return; }
+    const count = totalQuestionCount;
+    openDeleteConfirmation({
+      title:'최근 검색·질문 전체 기록 삭제',
+      message:`최근 검색·질문 기록 ${count}개와 저장된 응답을 모두 삭제합니다. 이 작업은 되돌릴 수 없습니다.`,
+      confirmLabel:'검색·질문 기록 전체 삭제',
+      run:()=>performDeleteAllQuestionHistory(count),
+    }, trigger);
+  }
+  async function performDeleteAllQuestionHistory(count){
+    if(questionDeleteInFlight) throw new Error('검색·질문 기록 삭제가 진행 중입니다.');
+    questionDeleteInFlight = true;
+    const allButton = document.getElementById('deleteAllQuestionHistoryBtn');
+    if(allButton) allButton.disabled = true;
+    setDeleteStatus('question', 'busy', '삭제 중…');
     try {
-      await deleteJSON('/question-history');
+      const result = await postJSON('/question-history/delete-all');
       currentQuestions = [];
       totalQuestionCount = 0;
       const total = document.getElementById('questionHistoryTotal');
       if(total) total.textContent = '전체 0개';
       const list = document.getElementById('questionHistoryList');
       if(list) list.innerHTML = '<div class="item">아직 저장된 질문이 없습니다. My Library 또는 API에서 질문하면 여기에 쌓입니다.</div>';
-      const allButton = document.getElementById('deleteAllQuestionHistoryBtn');
       if(allButton) allButton.remove();
+      const deleted = Number(result.deleted ?? count);
+      setDeleteStatus('question', 'success', `삭제 완료 · ${deleted}개 기록을 삭제했습니다.`);
+      return deleteStatuses.question.message;
     } catch(e) {
-      alert('전체 검색·질문 기록을 삭제하지 못했습니다: ' + e.message);
+      setDeleteStatus('question', 'error', `삭제 실패 · ${e.message || e}`);
+      throw e;
+    } finally {
+      questionDeleteInFlight = false;
+      const stillThere = document.getElementById('deleteAllQuestionHistoryBtn');
+      if(stillThere) stillThere.disabled = false;
     }
   }
   async function init(){

@@ -8,7 +8,7 @@ import api_server
 
 
 class LearningMemoryDeleteApiTests(unittest.TestCase):
-    """DELETE /learning-memory/all and POST /learning-memory/delete.
+    """Legacy delete routes and the current POST-only bulk routes.
 
     Added because DELETE-with-JSON-body (the original /learning-memory route)
     doesn't reliably deliver its body in every WebView — Tauri's WKWebView
@@ -80,6 +80,16 @@ class LearningMemoryDeleteApiTests(unittest.TestCase):
 
     # ---- POST /learning-memory/delete ----
 
+    def test_post_delete_all_removes_owned_traces_and_linked_feedback(self):
+        self._seed([
+            self._explanation("t1", "user-1"),
+            self._feedback("f1", "user-1", "t1"),
+            self._explanation("t2", "user-2"),
+        ])
+        result = asyncio.run(api_server.post_delete_all_learning_memories(data_user_id="user-1"))
+        self.assertEqual(result, {"ok": True, "deleted_count": 2})
+        self.assertEqual([item["id"] for item in api_server._load_recall_traces()], ["t2"])
+
     def test_selected_delete_removes_only_requested_owned_ids(self):
         self._seed([
             self._explanation("t1", "user-1"),
@@ -150,6 +160,13 @@ class LearningMemoryDeleteApiTests(unittest.TestCase):
             "/learning-memory/all must be registered before /learning-memory/{memory_id} "
             "or FastAPI will match 'all' as a memory_id.",
         )
+
+    def test_post_delete_all_route_is_registered(self):
+        post_paths = [
+            route.path for route in api_server.app.routes
+            if "POST" in getattr(route, "methods", set())
+        ]
+        self.assertIn("/learning-memory/delete-all", post_paths)
 
 
 if __name__ == "__main__":

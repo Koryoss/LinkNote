@@ -3172,6 +3172,18 @@ async def delete_all_question_history(
     return {"ok": True, "deleted": deleted}
 
 
+@app.post("/question-history/delete-all")
+async def post_delete_all_question_history(
+    data_user_id: str = Depends(current_uid),
+) -> Dict[str, Any]:
+    """WebView-safe full delete used by the current My Page UI.
+
+    The DELETE route above remains available for older clients.
+    """
+    deleted = _delete_question_history_for_user(data_user_id)
+    return {"ok": True, "deleted": deleted}
+
+
 @app.post("/ingest", response_model=IngestResponse)
 async def ingest(
     semester: str = Form(...),
@@ -5290,9 +5302,8 @@ async def delete_learning_memories(
 ) -> Dict[str, Any]:
     """Deprecated: kept for older desktop app builds. Some WebViews (Tauri's
     WKWebView included) don't reliably deliver a body on DELETE requests, so
-    the current mypage.html uses `DELETE /learning-memory/all` and
-    `POST /learning-memory/delete` instead. Do not remove without confirming
-    no installed build still calls this."""
+    the current mypage.html uses POST-only bulk routes instead. Do not remove
+    without confirming no installed build still calls this."""
     return _delete_learning_memories_for_user(
         data_user_id=data_user_id,
         target_ids=set(payload.ids or []),
@@ -5308,6 +5319,15 @@ async def delete_learning_memories(
 @app.delete("/learning-memory/all")
 async def delete_all_learning_memories(data_user_id: str = Depends(current_uid)) -> Dict[str, Any]:
     """Body-less full delete, safe for WebViews that drop DELETE request bodies."""
+    return _delete_learning_memories_for_user(data_user_id=data_user_id, delete_all=True)
+
+
+@app.post("/learning-memory/delete-all")
+async def post_delete_all_learning_memories(data_user_id: str = Depends(current_uid)) -> Dict[str, Any]:
+    """POST full delete used by the current My Page UI.
+
+    Existing DELETE routes stay registered for installed older clients.
+    """
     return _delete_learning_memories_for_user(data_user_id=data_user_id, delete_all=True)
 
 

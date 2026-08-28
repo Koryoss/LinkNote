@@ -523,6 +523,17 @@ class SearchApiTests(unittest.TestCase):
         self.assertEqual(api_server._question_history_for_user("user-1"), [])
         self.assertEqual(len(api_server._question_history_for_user("user-2")), 1)
 
+    def test_post_delete_all_question_history_preserves_other_users(self):
+        api_server._record_question_history("user-1", "내 검색", "quick_search")
+        api_server._record_question_history("user-1", "내 질문", "ai_answer")
+        api_server._record_question_history("user-2", "다른 사용자 질문", "ai_answer")
+
+        result = asyncio.run(api_server.post_delete_all_question_history(data_user_id="user-1"))
+
+        self.assertEqual(result, {"ok": True, "deleted": 2})
+        self.assertEqual(api_server._question_history_for_user("user-1"), [])
+        self.assertEqual(len(api_server._question_history_for_user("user-2")), 1)
+
     def test_question_history_response_is_never_cached(self):
         api_server._record_question_history("user-1", "내 검색", "quick_search")
         response = Response()

@@ -32,7 +32,7 @@ class MyPageUiTests(unittest.TestCase):
         self.assertIn(">내 설명 기록 전체 삭제<", self.html)
         self.assertNotIn('>전체 삭제<', self.html)
         self.assertIn(
-            "내 설명 기록 ${totalMemoryCount}개와 연결된 AI 피드백을 모두 삭제합니다. "
+            "내 설명 기록 ${count}개와 연결된 AI 피드백을 모두 삭제합니다. "
             "이 작업은 되돌릴 수 없습니다.",
             self.html,
         )
@@ -45,13 +45,50 @@ class MyPageUiTests(unittest.TestCase):
     def test_empty_delete_targets_show_guidance_not_a_silent_no_op(self):
         self.assertIn("alert('삭제할 설명 기록이 없습니다.')", self.html)
 
-    def test_memory_deletes_use_post_or_bodyless_delete_not_delete_with_body(self):
-        # DELETE-with-JSON-body isn't reliably delivered by every WebView
-        # (Tauri's WKWebView included), so the new UI avoids it entirely.
-        self.assertIn("await deleteJSON('/learning-memory/all')", self.html)
+    def test_bulk_deletes_use_post_only_routes(self):
+        self.assertIn("await postJSON('/learning-memory/delete-all')", self.html)
         self.assertIn("await postJSON('/learning-memory/delete', { ids })", self.html)
+        self.assertIn("await postJSON('/question-history/delete-all')", self.html)
+        self.assertNotIn("deleteJSON('/learning-memory/all')", self.html)
+        self.assertNotIn("deleteJSON('/question-history')", self.html)
         self.assertNotIn("deleteJSON('/learning-memory', { delete_all:true })", self.html)
         self.assertNotIn("deleteJSON('/learning-memory', { ids })", self.html)
+
+    def test_full_delete_uses_an_in_page_confirmation_dialog(self):
+        self.assertIn('id="deleteConfirmBackdrop"', self.html)
+        self.assertIn('role="alertdialog"', self.html)
+        self.assertIn('aria-modal="true"', self.html)
+        self.assertIn("function openDeleteConfirmation(config, trigger)", self.html)
+        self.assertIn("function runConfirmedDelete()", self.html)
+        memory_prompt = self.html.split("function deleteAllMemories(trigger)", 1)[1].split(
+            "async function performDeleteAllMemories", 1
+        )[0]
+        question_prompt = self.html.split("function deleteAllQuestionHistory(trigger)", 1)[1].split(
+            "async function performDeleteAllQuestionHistory", 1
+        )[0]
+        self.assertNotIn("confirm(", memory_prompt)
+        self.assertNotIn("confirm(", question_prompt)
+        self.assertIn("openDeleteConfirmation({", memory_prompt)
+        self.assertIn("openDeleteConfirmation({", question_prompt)
+
+    def test_both_full_delete_flows_show_busy_success_and_failure_status(self):
+        self.assertIn('aria-live="polite"', self.html)
+        # The memory status is rendered outside the controls so completion
+        # remains visible after the final memory (and the controls) disappear.
+        self.assertIn("${memoryBulkControlsHTML()}\n        ${deleteStatusHTML('memory')}", self.html)
+        self.assertIn("setDeleteStatus('memory', 'busy', '삭제 중…')", self.html)
+        self.assertIn("state:'success', message:`삭제 완료 · ${deleted}개 기록을 삭제했습니다.`", self.html)
+        self.assertIn("setDeleteStatus('memory', 'error', `삭제 실패 · ${e.message || e}`)", self.html)
+        self.assertIn("setDeleteStatus('question', 'busy', '삭제 중…')", self.html)
+        self.assertIn("setDeleteStatus('question', 'success', `삭제 완료 · ${deleted}개 기록을 삭제했습니다.`)", self.html)
+        self.assertIn("setDeleteStatus('question', 'error', `삭제 실패 · ${e.message || e}`)", self.html)
+
+    def test_question_delete_all_guards_duplicate_requests(self):
+        self.assertIn("let questionDeleteInFlight = false;", self.html)
+        self.assertIn("if(questionDeleteInFlight) return;", self.html)
+        self.assertIn("if(questionDeleteInFlight) throw new Error", self.html)
+        self.assertIn("questionDeleteInFlight = true;", self.html)
+        self.assertIn("questionDeleteInFlight = false;", self.html)
 
     def test_memory_delete_buttons_guard_against_duplicate_requests(self):
         self.assertIn("let memoryDeleteInFlight = false;", self.html)
