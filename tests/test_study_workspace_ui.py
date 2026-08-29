@@ -89,6 +89,31 @@ class StudyWorkspaceUiTests(unittest.TestCase):
         self.assertIn('id="tocScrim"', self.html)
         self.assertIn('id="sourceScrim"', self.html)
 
+    def test_desktop_columns_follow_source_toc_notes_reading_order(self):
+        workspace = self.html.split('<div class="workspace" id="workspace" hidden>', 1)[1].split('</div>\n\n<script', 1)[0]
+        source_index = workspace.index('id="sourcePanel"')
+        source_resizer_index = workspace.index('id="sourceResizer"')
+        toc_index = workspace.index('id="tocPanel"')
+        toc_resizer_index = workspace.index('id="tocResizer"')
+        notes_index = workspace.index('id="conceptPanel"')
+        self.assertLess(source_index, source_resizer_index)
+        self.assertLess(source_resizer_index, toc_index)
+        self.assertLess(toc_index, toc_resizer_index)
+        self.assertLess(toc_resizer_index, notes_index)
+
+    def test_both_desktop_column_boundaries_are_resizable_and_persisted(self):
+        self.assertIn('grid-template-columns: minmax(280px, var(--source-width)) 10px minmax(180px, var(--toc-width)) 10px minmax(320px, 1fr)', self.html)
+        self.assertIn('aria-label="원문 영역 너비 조절"', self.html)
+        self.assertIn('aria-label="목차 영역 너비 조절"', self.html)
+        self.assertIn("bindPanelResizer('source'", self.script)
+        self.assertIn("bindPanelResizer('toc'", self.script)
+        self.assertIn('ln_study_workspace_source_width_v2', self.script)
+        self.assertIn('ln_study_workspace_toc_width_v2', self.script)
+
+    def test_mobile_controls_follow_source_then_toc_order(self):
+        topbar = self.html.split('<div class="topbar">', 1)[1].split('</div>', 1)[0]
+        self.assertLess(topbar.index('id="sourceToggleBtn"'), topbar.index('id="tocToggleBtn"'))
+
     def test_exact_source_page_from_study_evidence_is_selected(self):
         self.assertIn("var requestedPage = Number(params.get('page')) || null;", self.script)
         self.assertIn("var requestedPageExists = requestedPage && state.pages.some", self.script)

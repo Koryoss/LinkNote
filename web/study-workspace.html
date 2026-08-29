@@ -40,8 +40,7 @@
   #app.error-state, #app.empty-state { border: 1px dashed #d8dee9; border-radius: 14px; padding: 28px; background: #fff; }
   #app.error-state { border-color: #fecaca; color: #b91c1c; background: #fff7f7; }
 
-  .workspace { --source-width: 360px; display: grid; grid-template-columns: 240px minmax(320px, 1fr) 10px minmax(240px, var(--source-width)); gap: 12px; padding: 16px 24px 32px; align-items: start; }
-  @media (max-width: 1300px) { .workspace { grid-template-columns: 220px minmax(320px, 1fr) 10px minmax(240px, var(--source-width)); } }
+  .workspace { --source-width: 620px; --toc-width: 220px; display: grid; grid-template-columns: minmax(280px, var(--source-width)) 10px minmax(180px, var(--toc-width)) 10px minmax(320px, 1fr); gap: 12px; padding: 16px 24px 32px; align-items: start; }
 
   .toc-panel, .concept-panel, .source-panel { background: #fff; border: 1px solid #e8ebf2; border-radius: 14px; box-shadow: 0 8px 24px rgba(15,23,42,.06); }
   .toc-panel, .source-panel { max-height: calc(100vh - 90px); overflow-y: auto; position: sticky; top: 76px; }
@@ -60,12 +59,12 @@
   .toc-page.active .toc-page-num { color: #2563eb; }
   .toc-page-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-  .source-resizer { position: sticky; top: 76px; height: calc(100vh - 92px); min-height: 240px; border: 0; border-radius: 999px; padding: 0; background: transparent; cursor: col-resize; touch-action: none; }
-  .source-resizer::before { content: ""; position: absolute; inset: 0 3px; border-radius: 999px; background: #dbe3ef; transition: background .15s, box-shadow .15s; }
-  .source-resizer:hover::before, .source-resizer:focus-visible::before, body.source-resizing .source-resizer::before { background: #60a5fa; box-shadow: 0 0 0 4px rgba(59,130,246,.13); }
-  .source-resizer:focus-visible { outline: none; }
-  body.source-resizing { cursor: col-resize; user-select: none; }
-  body.source-resizing iframe { pointer-events: none; }
+  .column-resizer { position: sticky; top: 76px; height: calc(100vh - 92px); min-height: 240px; border: 0; border-radius: 999px; padding: 0; background: transparent; cursor: col-resize; touch-action: none; }
+  .column-resizer::before { content: ""; position: absolute; inset: 0 3px; border-radius: 999px; background: #dbe3ef; transition: background .15s, box-shadow .15s; }
+  .column-resizer:hover::before, .column-resizer:focus-visible::before, body.layout-resizing .column-resizer::before { background: #60a5fa; box-shadow: 0 0 0 4px rgba(59,130,246,.13); }
+  .column-resizer:focus-visible { outline: none; }
+  body.layout-resizing { cursor: col-resize; user-select: none; }
+  body.layout-resizing iframe { pointer-events: none; }
 
   .concept-card { border: 1px solid #eef1f6; border-radius: 12px; padding: 14px; margin-bottom: 12px; }
   .lecture-note-card { border: 1px solid #bfdbfe; background: linear-gradient(145deg, #eff6ff, #fff); border-radius: 14px; padding: 16px; margin-bottom: 16px; }
@@ -101,7 +100,7 @@
     .scope-row-title { font-size: 1.05rem; }
     .context-picker { max-width: none; }
     .workspace { grid-template-columns: 1fr; padding: 12px 12px 24px; }
-    .source-resizer { display: none; }
+    .column-resizer { display: none; }
     .toc-panel, .source-panel {
       position: fixed; top: 0; bottom: 0; z-index: 65; width: min(400px, 92vw);
       max-height: none; box-shadow: 0 20px 60px rgba(15,23,42,.25);
@@ -109,7 +108,7 @@
     }
     .toc-panel { left: 0; transform: translateX(-100%); }
     .toc-panel.open { transform: translateX(0); }
-    .source-panel { right: 0; transform: translateX(100%); }
+    .source-panel { left: 0; transform: translateX(-100%); }
     .source-panel.open { transform: translateX(0); }
     .toc-scrim, .source-scrim { position: fixed; inset: 0; background: rgba(15,23,42,.35); z-index: 60; }
   }
@@ -120,8 +119,8 @@
     <a class="brand" href="/">LinkNote</a>
     <nav class="scope-nav" id="scopeNav" aria-label="학습 자료 경로"></nav>
     <span class="spacer"></span>
-    <button type="button" id="tocToggleBtn" class="btn mobile-only" onclick="StudyWorkspace.toggleToc()">목차</button>
     <button type="button" id="sourceToggleBtn" class="btn mobile-only" onclick="StudyWorkspace.toggleSource()">원문</button>
+    <button type="button" id="tocToggleBtn" class="btn mobile-only" onclick="StudyWorkspace.toggleToc()">목차</button>
     <a class="btn" href="/">My Library</a>
   </div>
 
@@ -130,19 +129,6 @@
   <div id="app" class="loading">학습 작업대를 불러오는 중입니다…</div>
 
   <div class="workspace" id="workspace" hidden>
-    <aside class="toc-panel" id="tocPanel" aria-label="목차">
-      <div class="panel-head"><span>목차</span><button type="button" class="icon-btn mobile-only" onclick="StudyWorkspace.toggleToc(false)" aria-label="목차 닫기">✕</button></div>
-      <div id="tocList"></div>
-    </aside>
-    <div class="toc-scrim mobile-only" id="tocScrim" onclick="StudyWorkspace.toggleToc(false)" hidden></div>
-
-    <main class="concept-panel" id="conceptPanel" aria-label="개념과 노트">
-      <section id="lectureNotePanel" aria-label="수업 필기"></section>
-      <div id="conceptList"></div>
-    </main>
-
-    <button type="button" class="source-resizer" id="sourceResizer" role="separator" aria-label="원문 영역 너비 조절" aria-orientation="vertical" aria-valuemin="240" aria-valuenow="360"></button>
-
     <aside class="source-panel" id="sourcePanel" aria-label="원문">
       <div class="panel-head">
         <span>원문</span>
@@ -154,6 +140,21 @@
       <div id="sourceBody"></div>
     </aside>
     <div class="source-scrim mobile-only" id="sourceScrim" onclick="StudyWorkspace.toggleSource(false)" hidden></div>
+
+    <button type="button" class="column-resizer" id="sourceResizer" role="separator" aria-label="원문 영역 너비 조절" aria-orientation="vertical" aria-valuemin="280" aria-valuenow="620"></button>
+
+    <aside class="toc-panel" id="tocPanel" aria-label="목차">
+      <div class="panel-head"><span>목차</span><button type="button" class="icon-btn mobile-only" onclick="StudyWorkspace.toggleToc(false)" aria-label="목차 닫기">✕</button></div>
+      <div id="tocList"></div>
+    </aside>
+    <div class="toc-scrim mobile-only" id="tocScrim" onclick="StudyWorkspace.toggleToc(false)" hidden></div>
+
+    <button type="button" class="column-resizer" id="tocResizer" role="separator" aria-label="목차 영역 너비 조절" aria-orientation="vertical" aria-valuemin="180" aria-valuenow="220"></button>
+
+    <main class="concept-panel" id="conceptPanel" aria-label="개념과 노트">
+      <section id="lectureNotePanel" aria-label="수업 필기"></section>
+      <div id="conceptList"></div>
+    </main>
   </div>
 
 <script src="/study-workspace-logic.js"></script>

@@ -1,4 +1,4 @@
-// 3열 학습 작업대: 목차(구간) · 개념+노트 · 원문(PDF).
+// 3열 학습 작업대: 원문(PDF) · 목차(구간) · 개념+노트.
 // 학습 작업대와 수업 필기 API를 함께 사용한다.
 (function () {
   'use strict';
@@ -44,8 +44,9 @@
   var lectureNoteDrafts = {};
   var lastFocusedBeforeDrawer = null;
   var lastScopeMenuAnchor = null;
-  var sourceWidthStorageKey = 'ln_study_source_width';
-  var sourceResizeBound = false;
+  var sourceWidthStorageKey = 'ln_study_workspace_source_width_v2';
+  var tocWidthStorageKey = 'ln_study_workspace_toc_width_v2';
+  var layoutResizeBound = false;
 
   function scopeQuery(extra) {
     return new URLSearchParams(Object.assign({}, scope, extra || {})).toString();
@@ -531,53 +532,60 @@
     window.open(fileUrl(false), '_blank', 'noopener');
   }
 
-  // ---- 데스크톱 원문 너비 조절 ----
+  // ---- 데스크톱 3열 너비 조절 ----
 
-  function sourceWidthBounds() {
+  function layoutContentWidth() {
     var workspace = el('workspace');
-    var toc = el('tocPanel');
-    var tocWidth = toc ? toc.getBoundingClientRect().width : 220;
-    var fixedSpace = tocWidth + 320 + 48 + 46;
-    return { min: 240, max: Math.max(240, window.innerWidth - fixedSpace) };
+    if (!workspace) return window.innerWidth;
+    var style = window.getComputedStyle(workspace);
+    return workspace.getBoundingClientRect().width - parseFloat(style.paddingLeft || 0) - parseFloat(style.paddingRight || 0);
   }
 
-  function setSourceWidth(width, persist) {
+  function panelWidthBounds(kind) {
+    var source = el('sourcePanel');
+    var toc = el('tocPanel');
+    var sourceWidth = source ? source.getBoundingClientRect().width : 620;
+    var tocWidth = toc ? toc.getBoundingClientRect().width : 220;
+    var available = layoutContentWidth() - 68; // 조절 바 2개(20px) + 열 간격 4개(48px)
+    if (kind === 'source') return { min: 280, max: Math.max(280, available - tocWidth - 320) };
+    return { min: 180, max: Math.max(180, available - sourceWidth - 320) };
+  }
+
+  function defaultSourceWidth() {
+    return Math.min(720, Math.max(360, Math.round(layoutContentWidth() * 0.46)));
+  }
+
+  function setPanelWidth(kind, width, persist) {
     var workspace = el('workspace');
-    var handle = el('sourceResizer');
+    var handle = el(kind === 'source' ? 'sourceResizer' : 'tocResizer');
     if (!workspace || !handle) return;
-    var bounds = sourceWidthBounds();
-    var next = Math.round(Math.min(bounds.max, Math.max(bounds.min, Number(width) || 360)));
-    workspace.style.setProperty('--source-width', next + 'px');
+    var bounds = panelWidthBounds(kind);
+    var fallback = kind === 'source' ? defaultSourceWidth() : 220;
+    var next = Math.round(Math.min(bounds.max, Math.max(bounds.min, Number(width) || fallback)));
+    workspace.style.setProperty(kind === 'source' ? '--source-width' : '--toc-width', next + 'px');
     handle.setAttribute('aria-valuemin', String(bounds.min));
     handle.setAttribute('aria-valuemax', String(bounds.max));
     handle.setAttribute('aria-valuenow', String(next));
-    if (persist) localStorage.setItem(sourceWidthStorageKey, String(next));
+    if (persist) localStorage.setItem(kind === 'source' ? sourceWidthStorageKey : tocWidthStorageKey, String(next));
   }
 
-  function bindSourceResizer() {
-    if (sourceResizeBound) return;
-    var handle = el('sourceResizer');
-    var sourcePanel = el('sourcePanel');
-    if (!handle || !sourcePanel) return;
-    sourceResizeBound = true;
-    setSourceWidth(localStorage.getItem(sourceWidthStorageKey) || 360, false);
-
+  function bindPanelResizer(kind, handle, panel) {
     handle.addEventListener('pointerdown', function (event) {
       if (window.innerWidth < 900) return;
       var startX = event.clientX;
-      var startWidth = sourcePanel.getBoundingClientRect().width;
+      var startWidth = panel.getBoundingClientRect().width;
       handle.setPointerCapture(event.pointerId);
-      document.body.classList.add('source-resizing');
+      document.body.classList.add('layout-resizing');
       var move = function (moveEvent) {
-        setSourceWidth(startWidth + startX - moveEvent.clientX, false);
+        setPanelWidth(kind, startWidth + moveEvent.clientX - startX, false);
       };
       var finish = function (finishEvent) {
         handle.removeEventListener('pointermove', move);
         handle.removeEventListener('pointerup', finish);
         handle.removeEventListener('pointercancel', finish);
-        document.body.classList.remove('source-resizing');
+        document.body.classList.remove('layout-resizing');
         if (handle.hasPointerCapture(finishEvent.pointerId)) handle.releasePointerCapture(finishEvent.pointerId);
-        setSourceWidth(sourcePanel.getBoundingClientRect().width, true);
+        setPanelWidth(kind, panel.getBoundingClientRect().width, true);
       };
       handle.addEventListener('pointermove', move);
       handle.addEventListener('pointerup', finish);
@@ -585,18 +593,35 @@
       event.preventDefault();
     });
     handle.addEventListener('keydown', function (event) {
-      var current = sourcePanel.getBoundingClientRect().width;
-      var bounds = sourceWidthBounds();
-      if (event.key === 'ArrowLeft') setSourceWidth(current + 24, true);
-      else if (event.key === 'ArrowRight') setSourceWidth(current - 24, true);
-      else if (event.key === 'Home') setSourceWidth(bounds.min, true);
-      else if (event.key === 'End') setSourceWidth(bounds.max, true);
+      var current = panel.getBoundingClientRect().width;
+      var bounds = panelWidthBounds(kind);
+      if (event.key === 'ArrowLeft') setPanelWidth(kind, current - 24, true);
+      else if (event.key === 'ArrowRight') setPanelWidth(kind, current + 24, true);
+      else if (event.key === 'Home') setPanelWidth(kind, bounds.min, true);
+      else if (event.key === 'End') setPanelWidth(kind, bounds.max, true);
       else return;
       event.preventDefault();
     });
-    handle.addEventListener('dblclick', function () { setSourceWidth(360, true); });
+    handle.addEventListener('dblclick', function () {
+      setPanelWidth(kind, kind === 'source' ? defaultSourceWidth() : 220, true);
+    });
+  }
+
+  function bindLayoutResizers() {
+    if (layoutResizeBound) return;
+    var sourceHandle = el('sourceResizer');
+    var tocHandle = el('tocResizer');
+    var sourcePanel = el('sourcePanel');
+    var tocPanel = el('tocPanel');
+    if (!sourceHandle || !tocHandle || !sourcePanel || !tocPanel) return;
+    layoutResizeBound = true;
+    setPanelWidth('source', localStorage.getItem(sourceWidthStorageKey) || defaultSourceWidth(), false);
+    setPanelWidth('toc', localStorage.getItem(tocWidthStorageKey) || 220, false);
+    bindPanelResizer('source', sourceHandle, sourcePanel);
+    bindPanelResizer('toc', tocHandle, tocPanel);
     window.addEventListener('resize', function () {
-      setSourceWidth(sourcePanel.getBoundingClientRect().width, false);
+      setPanelWidth('source', sourcePanel.getBoundingClientRect().width, false);
+      setPanelWidth('toc', tocPanel.getBoundingClientRect().width, false);
     });
   }
 
@@ -681,7 +706,7 @@
         if (requestedSegment >= 0) state.activeSegmentIndex = requestedSegment;
       }
       setStage('ready');
-      bindSourceResizer();
+      bindLayoutResizers();
       renderToc();
       renderLectureNote();
       renderConcepts();
