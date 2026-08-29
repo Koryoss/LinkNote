@@ -35,6 +35,11 @@
   .icon-btn { border: none; background: transparent; color: #64748b; font-size: 1rem; padding: 4px 8px; cursor: pointer; }
   .mobile-only { display: none; }
   .mobile-only[hidden] { display: none !important; }
+  [hidden] { display: none !important; }
+  .panel-controls { display: flex; align-items: center; gap: 6px; flex: 0 0 auto; }
+  .panel-toggle { padding: 7px 10px; color: #475569; white-space: nowrap; }
+  .panel-toggle[aria-pressed="true"] { border-color: #93c5fd; color: #1d4ed8; background: #eff6ff; }
+  .panel-toggle-status { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
 
   #app { width: min(720px, calc(100vw - 32px)); margin: 60px auto; text-align: center; color: #64748b; font-size: .95rem; line-height: 1.7; }
   #app.error-state, #app.empty-state { border: 1px dashed #d8dee9; border-radius: 14px; padding: 28px; background: #fff; }
@@ -46,6 +51,7 @@
   .toc-panel, .source-panel { max-height: calc(100vh - 90px); overflow-y: auto; position: sticky; top: 76px; }
   .concept-panel { min-height: 60vh; padding: 16px; }
   .panel-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 14px 16px; border-bottom: 1px solid #eef1f6; font-weight: 800; color: #0f172a; position: sticky; top: 0; background: #fff; z-index: 1; }
+  .notes-panel-head { margin: -16px -16px 16px; border-radius: 14px 14px 0 0; }
 
   #tocList { padding: 8px; }
   .toc-segment { margin-bottom: 6px; }
@@ -91,8 +97,17 @@
 
   .source-frame { width: 100%; height: calc(100vh - 160px); border: none; display: block; background: #f8fafc; }
 
+  @media (min-width: 900px) and (max-width: 1400px) {
+    .topbar { flex-wrap: wrap; }
+    .panel-controls { order: 3; flex-basis: 100%; justify-content: flex-start; }
+    .toc-panel, .source-panel, .column-resizer { top: 116px; }
+    .toc-panel, .source-panel { max-height: calc(100vh - 130px); }
+    .column-resizer { height: calc(100vh - 132px); }
+  }
+
   @media (max-width: 899px) {
     .mobile-only { display: inline-flex; }
+    .desktop-only { display: none !important; }
     .topbar { flex-wrap: wrap; padding: 10px 12px; }
     .scope-nav { order: 3; flex-basis: 100%; }
     .scope-pill { max-width: 200px; min-height: 34px; padding: 6px 10px; }
@@ -119,6 +134,12 @@
     <a class="brand" href="/">LinkNote</a>
     <nav class="scope-nav" id="scopeNav" aria-label="학습 자료 경로"></nav>
     <span class="spacer"></span>
+    <div class="panel-controls desktop-only" aria-label="학습 영역 표시 설정">
+      <button type="button" class="panel-toggle" data-panel-toggle="source" aria-pressed="true">원문 숨기기</button>
+      <button type="button" class="panel-toggle" data-panel-toggle="toc" aria-pressed="true">목차 숨기기</button>
+      <button type="button" class="panel-toggle" data-panel-toggle="notes" aria-pressed="true">필기·설명 숨기기</button>
+    </div>
+    <span class="panel-toggle-status" id="panelToggleStatus" role="status" aria-live="polite"></span>
     <button type="button" id="sourceToggleBtn" class="btn mobile-only" onclick="StudyWorkspace.toggleSource()">원문</button>
     <button type="button" id="tocToggleBtn" class="btn mobile-only" onclick="StudyWorkspace.toggleToc()">목차</button>
     <a class="btn" href="/">My Library</a>
@@ -134,6 +155,7 @@
         <span>원문</span>
         <div style="display:flex; gap:8px; align-items:center;">
           <button type="button" class="btn" id="openFullBtn">자료 전체 열기</button>
+          <button type="button" class="icon-btn desktop-only" data-panel-toggle="source" data-panel-short aria-label="원문 숨기기">숨기기</button>
           <button type="button" class="icon-btn mobile-only" onclick="StudyWorkspace.toggleSource(false)" aria-label="원문 닫기">✕</button>
         </div>
       </div>
@@ -144,7 +166,13 @@
     <button type="button" class="column-resizer" id="sourceResizer" role="separator" aria-label="원문 영역 너비 조절" aria-orientation="vertical" aria-valuemin="280" aria-valuenow="620"></button>
 
     <aside class="toc-panel" id="tocPanel" aria-label="목차">
-      <div class="panel-head"><span>목차</span><button type="button" class="icon-btn mobile-only" onclick="StudyWorkspace.toggleToc(false)" aria-label="목차 닫기">✕</button></div>
+      <div class="panel-head">
+        <span>목차</span>
+        <div style="display:flex; gap:8px; align-items:center;">
+          <button type="button" class="icon-btn desktop-only" data-panel-toggle="toc" data-panel-short aria-label="목차 숨기기">숨기기</button>
+          <button type="button" class="icon-btn mobile-only" onclick="StudyWorkspace.toggleToc(false)" aria-label="목차 닫기">✕</button>
+        </div>
+      </div>
       <div id="tocList"></div>
     </aside>
     <div class="toc-scrim mobile-only" id="tocScrim" onclick="StudyWorkspace.toggleToc(false)" hidden></div>
@@ -152,6 +180,10 @@
     <button type="button" class="column-resizer" id="tocResizer" role="separator" aria-label="목차 영역 너비 조절" aria-orientation="vertical" aria-valuemin="180" aria-valuenow="220"></button>
 
     <main class="concept-panel" id="conceptPanel" aria-label="개념과 노트">
+      <div class="panel-head notes-panel-head desktop-only">
+        <span>필기·설명</span>
+        <button type="button" class="icon-btn" data-panel-toggle="notes" data-panel-short aria-label="필기·설명 숨기기">숨기기</button>
+      </div>
       <section id="lectureNotePanel" aria-label="수업 필기"></section>
       <div id="conceptList"></div>
     </main>

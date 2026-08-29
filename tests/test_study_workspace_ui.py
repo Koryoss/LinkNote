@@ -111,8 +111,32 @@ class StudyWorkspaceUiTests(unittest.TestCase):
         self.assertIn('ln_study_workspace_toc_width_v2', self.script)
 
     def test_mobile_controls_follow_source_then_toc_order(self):
-        topbar = self.html.split('<div class="topbar">', 1)[1].split('</div>', 1)[0]
+        topbar = self.html.split('<div class="topbar">', 1)[1].split('<section class="document-context"', 1)[0]
         self.assertLess(topbar.index('id="sourceToggleBtn"'), topbar.index('id="tocToggleBtn"'))
+
+    def test_each_desktop_panel_can_be_hidden_and_reopened(self):
+        for panel in ("source", "toc", "notes"):
+            self.assertIn('data-panel-toggle="%s"' % panel, self.html)
+        self.assertIn('aria-label="학습 영역 표시 설정"', self.html)
+        self.assertIn('id="panelToggleStatus"', self.html)
+        self.assertIn("function togglePanel(kind)", self.script)
+        self.assertIn("function applyPanelVisibility(persist)", self.script)
+        self.assertIn("ln_study_workspace_panels_v1", self.script)
+
+    def test_panel_visibility_keeps_at_least_one_area_open(self):
+        self.assertIn("visiblePanelCount() === 1", self.script)
+        self.assertIn("하나 이상의 학습 영역은 열어 두어야 합니다.", self.script)
+        self.assertIn("if (!Object.keys(defaults).some", self.script)
+
+    def test_hidden_panels_release_their_grid_space(self):
+        self.assertIn("el('workspace').style.gridTemplateColumns = panelGridTemplate()", self.script)
+        self.assertIn("el('sourcePanel').hidden = !effective.source", self.script)
+        self.assertIn("el('tocPanel').hidden = !effective.toc", self.script)
+        self.assertIn("el('conceptPanel').hidden = !effective.notes", self.script)
+
+    def test_panel_controls_wrap_before_they_can_clip(self):
+        self.assertIn('@media (min-width: 900px) and (max-width: 1400px)', self.html)
+        self.assertIn('.panel-controls { order: 3; flex-basis: 100%; justify-content: flex-start; }', self.html)
 
     def test_exact_source_page_from_study_evidence_is_selected(self):
         self.assertIn("var requestedPage = Number(params.get('page')) || null;", self.script)

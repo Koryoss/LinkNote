@@ -46,7 +46,21 @@
   var lastScopeMenuAnchor = null;
   var sourceWidthStorageKey = 'ln_study_workspace_source_width_v2';
   var tocWidthStorageKey = 'ln_study_workspace_toc_width_v2';
+  var panelVisibilityStorageKey = 'ln_study_workspace_panels_v1';
   var layoutResizeBound = false;
+  var panelVisibility = loadPanelVisibility();
+
+  function loadPanelVisibility() {
+    var defaults = { source: true, toc: true, notes: true };
+    try {
+      var stored = JSON.parse(localStorage.getItem(panelVisibilityStorageKey) || '{}');
+      Object.keys(defaults).forEach(function (key) {
+        if (typeof stored[key] === 'boolean') defaults[key] = stored[key];
+      });
+    } catch (error) {}
+    if (!Object.keys(defaults).some(function (key) { return defaults[key]; })) defaults.notes = true;
+    return defaults;
+  }
 
   function scopeQuery(extra) {
     return new URLSearchParams(Object.assign({}, scope, extra || {})).toString();
@@ -534,6 +548,15 @@
 
   // ---- 데스크톱 3열 너비 조절 ----
 
+  function visiblePanelCount() {
+    return ['source', 'toc', 'notes'].filter(function (key) { return panelVisibility[key]; }).length;
+  }
+
+  function layoutChromeWidth() {
+    var count = visiblePanelCount();
+    return count > 1 ? ((count - 1) * 10) + ((count * 2 - 2) * 12) : 0;
+  }
+
   function layoutContentWidth() {
     var workspace = el('workspace');
     if (!workspace) return window.innerWidth;
@@ -546,9 +569,11 @@
     var toc = el('tocPanel');
     var sourceWidth = source ? source.getBoundingClientRect().width : 620;
     var tocWidth = toc ? toc.getBoundingClientRect().width : 220;
-    var available = layoutContentWidth() - 68; // 조절 바 2개(20px) + 열 간격 4개(48px)
-    if (kind === 'source') return { min: 280, max: Math.max(280, available - tocWidth - 320) };
-    return { min: 180, max: Math.max(180, available - sourceWidth - 320) };
+    var available = layoutContentWidth() - layoutChromeWidth();
+    if (kind === 'source') {
+      return { min: 280, max: Math.max(280, available - (panelVisibility.toc ? tocWidth : 0) - (panelVisibility.notes ? 320 : 0)) };
+    }
+    return { min: 180, max: Math.max(180, available - (panelVisibility.source ? sourceWidth : 0) - (panelVisibility.notes ? 320 : 0)) };
   }
 
   function defaultSourceWidth() {
@@ -620,9 +645,74 @@
     bindPanelResizer('source', sourceHandle, sourcePanel);
     bindPanelResizer('toc', tocHandle, tocPanel);
     window.addEventListener('resize', function () {
-      setPanelWidth('source', sourcePanel.getBoundingClientRect().width, false);
-      setPanelWidth('toc', tocPanel.getBoundingClientRect().width, false);
+      applyPanelVisibility(false);
+      if (panelVisibility.source) setPanelWidth('source', sourcePanel.getBoundingClientRect().width, false);
+      if (panelVisibility.toc) setPanelWidth('toc', tocPanel.getBoundingClientRect().width, false);
     });
+  }
+
+  function panelGridTemplate() {
+    var visible = ['source', 'toc', 'notes'].filter(function (key) { return panelVisibility[key]; });
+    if (visible.length === 1) {
+      return visible[0] === 'source' ? 'minmax(280px, 1fr)' : (visible[0] === 'toc' ? 'minmax(180px, 1fr)' : 'minmax(320px, 1fr)');
+    }
+    var tracks = [];
+    visible.forEach(function (key, index) {
+      var isLast = index === visible.length - 1;
+      if (key === 'source') tracks.push(isLast ? 'minmax(280px, 1fr)' : 'minmax(280px, var(--source-width))');
+      else if (key === 'toc') tracks.push(isLast ? 'minmax(180px, 1fr)' : 'minmax(180px, var(--toc-width))');
+      else tracks.push('minmax(320px, 1fr)');
+      if (!isLast) tracks.push('10px');
+    });
+    return tracks.join(' ');
+  }
+
+  function updatePanelToggleButtons() {
+    var labels = { source: '원문', toc: '목차', notes: '필기·설명' };
+    document.querySelectorAll('[data-panel-toggle]').forEach(function (button) {
+      var key = button.dataset.panelToggle;
+      var visible = !!panelVisibility[key];
+      button.setAttribute('aria-pressed', String(visible));
+      button.setAttribute('aria-label', labels[key] + (visible ? ' 숨기기' : ' 열기'));
+      button.textContent = button.hasAttribute('data-panel-short') ? (visible ? '숨기기' : '열기') : labels[key] + (visible ? ' 숨기기' : ' 열기');
+    });
+  }
+
+  function applyPanelVisibility(persist) {
+    var desktop = window.innerWidth >= 900;
+    var effective = desktop ? panelVisibility : { source: true, toc: true, notes: true };
+    el('sourcePanel').hidden = !effective.source;
+    el('tocPanel').hidden = !effective.toc;
+    el('conceptPanel').hidden = !effective.notes;
+    el('sourceResizer').hidden = !desktop || !effective.source || !(effective.toc || effective.notes);
+    el('tocResizer').hidden = !desktop || !effective.toc || !effective.notes;
+    if (desktop) el('workspace').style.gridTemplateColumns = panelGridTemplate();
+    else el('workspace').style.removeProperty('grid-template-columns');
+    updatePanelToggleButtons();
+    if (persist) localStorage.setItem(panelVisibilityStorageKey, JSON.stringify(panelVisibility));
+  }
+
+  function togglePanel(kind) {
+    if (!Object.prototype.hasOwnProperty.call(panelVisibility, kind)) return;
+    var status = el('panelToggleStatus');
+    if (panelVisibility[kind] && visiblePanelCount() === 1) {
+      status.textContent = '하나 이상의 학습 영역은 열어 두어야 합니다.';
+      return;
+    }
+    panelVisibility[kind] = !panelVisibility[kind];
+    status.textContent = '';
+    applyPanelVisibility(true);
+    if (panelVisibility.source) setPanelWidth('source', localStorage.getItem(sourceWidthStorageKey) || defaultSourceWidth(), false);
+    if (panelVisibility.toc) setPanelWidth('toc', localStorage.getItem(tocWidthStorageKey) || 220, false);
+  }
+
+  function bindPanelToggles() {
+    document.querySelectorAll('[data-panel-toggle]').forEach(function (button) {
+      if (button.dataset.panelToggleBound) return;
+      button.dataset.panelToggleBound = '1';
+      button.addEventListener('click', function () { togglePanel(button.dataset.panelToggle); });
+    });
+    updatePanelToggleButtons();
   }
 
   // ---- 900px 드로어(목차/원문) ----
@@ -706,6 +796,8 @@
         if (requestedSegment >= 0) state.activeSegmentIndex = requestedSegment;
       }
       setStage('ready');
+      bindPanelToggles();
+      applyPanelVisibility(false);
       bindLayoutResizers();
       renderToc();
       renderLectureNote();
@@ -725,6 +817,7 @@
     toggleLectureTag: toggleLectureTag,
     toggleToc: toggleToc,
     toggleSource: toggleSource,
+    togglePanel: togglePanel,
     closeScopeMenu: closeScopeMenu,
   };
 
