@@ -1,4 +1,4 @@
-// 3열 학습 작업대: 목차(구간) · 개념+노트 · 원문(PDF).
+// 3열 학습 작업대: 원문(PDF) · 목차(구간) · 개념+노트.
 // 학습 작업대와 수업 필기 API를 함께 사용한다.
 (function () {
   'use strict';
@@ -44,8 +44,23 @@
   var lectureNoteDrafts = {};
   var lastFocusedBeforeDrawer = null;
   var lastScopeMenuAnchor = null;
-  var sourceWidthStorageKey = 'ln_study_source_width';
-  var sourceResizeBound = false;
+  var sourceWidthStorageKey = 'ln_study_workspace_source_width_v2';
+  var tocWidthStorageKey = 'ln_study_workspace_toc_width_v2';
+  var panelVisibilityStorageKey = 'ln_study_workspace_panels_v1';
+  var layoutResizeBound = false;
+  var panelVisibility = loadPanelVisibility();
+
+  function loadPanelVisibility() {
+    var defaults = { source: true, toc: true, notes: true };
+    try {
+      var stored = JSON.parse(localStorage.getItem(panelVisibilityStorageKey) || '{}');
+      Object.keys(defaults).forEach(function (key) {
+        if (typeof stored[key] === 'boolean') defaults[key] = stored[key];
+      });
+    } catch (error) {}
+    if (!Object.keys(defaults).some(function (key) { return defaults[key]; })) defaults.notes = true;
+    return defaults;
+  }
 
   function scopeQuery(extra) {
     return new URLSearchParams(Object.assign({}, scope, extra || {})).toString();
@@ -531,53 +546,71 @@
     window.open(fileUrl(false), '_blank', 'noopener');
   }
 
-  // ---- 데스크톱 원문 너비 조절 ----
+  // ---- 데스크톱 3열 너비 조절 ----
 
-  function sourceWidthBounds() {
-    var workspace = el('workspace');
-    var toc = el('tocPanel');
-    var tocWidth = toc ? toc.getBoundingClientRect().width : 220;
-    var fixedSpace = tocWidth + 320 + 48 + 46;
-    return { min: 240, max: Math.max(240, window.innerWidth - fixedSpace) };
+  function visiblePanelCount() {
+    return ['source', 'toc', 'notes'].filter(function (key) { return panelVisibility[key]; }).length;
   }
 
-  function setSourceWidth(width, persist) {
+  function layoutChromeWidth() {
+    var count = visiblePanelCount();
+    return count > 1 ? ((count - 1) * 10) + ((count * 2 - 2) * 12) : 0;
+  }
+
+  function layoutContentWidth() {
     var workspace = el('workspace');
-    var handle = el('sourceResizer');
+    if (!workspace) return window.innerWidth;
+    var style = window.getComputedStyle(workspace);
+    return workspace.getBoundingClientRect().width - parseFloat(style.paddingLeft || 0) - parseFloat(style.paddingRight || 0);
+  }
+
+  function panelWidthBounds(kind) {
+    var source = el('sourcePanel');
+    var toc = el('tocPanel');
+    var sourceWidth = source ? source.getBoundingClientRect().width : 620;
+    var tocWidth = toc ? toc.getBoundingClientRect().width : 220;
+    var available = layoutContentWidth() - layoutChromeWidth();
+    if (kind === 'source') {
+      return { min: 280, max: Math.max(280, available - (panelVisibility.toc ? tocWidth : 0) - (panelVisibility.notes ? 320 : 0)) };
+    }
+    return { min: 180, max: Math.max(180, available - (panelVisibility.source ? sourceWidth : 0) - (panelVisibility.notes ? 320 : 0)) };
+  }
+
+  function defaultSourceWidth() {
+    return Math.min(720, Math.max(360, Math.round(layoutContentWidth() * 0.46)));
+  }
+
+  function setPanelWidth(kind, width, persist) {
+    var workspace = el('workspace');
+    var handle = el(kind === 'source' ? 'sourceResizer' : 'tocResizer');
     if (!workspace || !handle) return;
-    var bounds = sourceWidthBounds();
-    var next = Math.round(Math.min(bounds.max, Math.max(bounds.min, Number(width) || 360)));
-    workspace.style.setProperty('--source-width', next + 'px');
+    var bounds = panelWidthBounds(kind);
+    var fallback = kind === 'source' ? defaultSourceWidth() : 220;
+    var next = Math.round(Math.min(bounds.max, Math.max(bounds.min, Number(width) || fallback)));
+    workspace.style.setProperty(kind === 'source' ? '--source-width' : '--toc-width', next + 'px');
     handle.setAttribute('aria-valuemin', String(bounds.min));
     handle.setAttribute('aria-valuemax', String(bounds.max));
     handle.setAttribute('aria-valuenow', String(next));
-    if (persist) localStorage.setItem(sourceWidthStorageKey, String(next));
+    if (persist) localStorage.setItem(kind === 'source' ? sourceWidthStorageKey : tocWidthStorageKey, String(next));
   }
 
-  function bindSourceResizer() {
-    if (sourceResizeBound) return;
-    var handle = el('sourceResizer');
-    var sourcePanel = el('sourcePanel');
-    if (!handle || !sourcePanel) return;
-    sourceResizeBound = true;
-    setSourceWidth(localStorage.getItem(sourceWidthStorageKey) || 360, false);
-
+  function bindPanelResizer(kind, handle, panel) {
     handle.addEventListener('pointerdown', function (event) {
       if (window.innerWidth < 900) return;
       var startX = event.clientX;
-      var startWidth = sourcePanel.getBoundingClientRect().width;
+      var startWidth = panel.getBoundingClientRect().width;
       handle.setPointerCapture(event.pointerId);
-      document.body.classList.add('source-resizing');
+      document.body.classList.add('layout-resizing');
       var move = function (moveEvent) {
-        setSourceWidth(startWidth + startX - moveEvent.clientX, false);
+        setPanelWidth(kind, startWidth + moveEvent.clientX - startX, false);
       };
       var finish = function (finishEvent) {
         handle.removeEventListener('pointermove', move);
         handle.removeEventListener('pointerup', finish);
         handle.removeEventListener('pointercancel', finish);
-        document.body.classList.remove('source-resizing');
+        document.body.classList.remove('layout-resizing');
         if (handle.hasPointerCapture(finishEvent.pointerId)) handle.releasePointerCapture(finishEvent.pointerId);
-        setSourceWidth(sourcePanel.getBoundingClientRect().width, true);
+        setPanelWidth(kind, panel.getBoundingClientRect().width, true);
       };
       handle.addEventListener('pointermove', move);
       handle.addEventListener('pointerup', finish);
@@ -585,19 +618,101 @@
       event.preventDefault();
     });
     handle.addEventListener('keydown', function (event) {
-      var current = sourcePanel.getBoundingClientRect().width;
-      var bounds = sourceWidthBounds();
-      if (event.key === 'ArrowLeft') setSourceWidth(current + 24, true);
-      else if (event.key === 'ArrowRight') setSourceWidth(current - 24, true);
-      else if (event.key === 'Home') setSourceWidth(bounds.min, true);
-      else if (event.key === 'End') setSourceWidth(bounds.max, true);
+      var current = panel.getBoundingClientRect().width;
+      var bounds = panelWidthBounds(kind);
+      if (event.key === 'ArrowLeft') setPanelWidth(kind, current - 24, true);
+      else if (event.key === 'ArrowRight') setPanelWidth(kind, current + 24, true);
+      else if (event.key === 'Home') setPanelWidth(kind, bounds.min, true);
+      else if (event.key === 'End') setPanelWidth(kind, bounds.max, true);
       else return;
       event.preventDefault();
     });
-    handle.addEventListener('dblclick', function () { setSourceWidth(360, true); });
-    window.addEventListener('resize', function () {
-      setSourceWidth(sourcePanel.getBoundingClientRect().width, false);
+    handle.addEventListener('dblclick', function () {
+      setPanelWidth(kind, kind === 'source' ? defaultSourceWidth() : 220, true);
     });
+  }
+
+  function bindLayoutResizers() {
+    if (layoutResizeBound) return;
+    var sourceHandle = el('sourceResizer');
+    var tocHandle = el('tocResizer');
+    var sourcePanel = el('sourcePanel');
+    var tocPanel = el('tocPanel');
+    if (!sourceHandle || !tocHandle || !sourcePanel || !tocPanel) return;
+    layoutResizeBound = true;
+    setPanelWidth('source', localStorage.getItem(sourceWidthStorageKey) || defaultSourceWidth(), false);
+    setPanelWidth('toc', localStorage.getItem(tocWidthStorageKey) || 220, false);
+    bindPanelResizer('source', sourceHandle, sourcePanel);
+    bindPanelResizer('toc', tocHandle, tocPanel);
+    window.addEventListener('resize', function () {
+      applyPanelVisibility(false);
+      if (panelVisibility.source) setPanelWidth('source', sourcePanel.getBoundingClientRect().width, false);
+      if (panelVisibility.toc) setPanelWidth('toc', tocPanel.getBoundingClientRect().width, false);
+    });
+  }
+
+  function panelGridTemplate() {
+    var visible = ['source', 'toc', 'notes'].filter(function (key) { return panelVisibility[key]; });
+    if (visible.length === 1) {
+      return visible[0] === 'source' ? 'minmax(280px, 1fr)' : (visible[0] === 'toc' ? 'minmax(180px, 1fr)' : 'minmax(320px, 1fr)');
+    }
+    var tracks = [];
+    visible.forEach(function (key, index) {
+      var isLast = index === visible.length - 1;
+      if (key === 'source') tracks.push(isLast ? 'minmax(280px, 1fr)' : 'minmax(280px, var(--source-width))');
+      else if (key === 'toc') tracks.push(isLast ? 'minmax(180px, 1fr)' : 'minmax(180px, var(--toc-width))');
+      else tracks.push('minmax(320px, 1fr)');
+      if (!isLast) tracks.push('10px');
+    });
+    return tracks.join(' ');
+  }
+
+  function updatePanelToggleButtons() {
+    var labels = { source: '원문', toc: '목차', notes: '필기·설명' };
+    document.querySelectorAll('[data-panel-toggle]').forEach(function (button) {
+      var key = button.dataset.panelToggle;
+      var visible = !!panelVisibility[key];
+      button.setAttribute('aria-pressed', String(visible));
+      button.setAttribute('aria-label', labels[key] + (visible ? ' 숨기기' : ' 열기'));
+      button.textContent = button.hasAttribute('data-panel-short') ? (visible ? '숨기기' : '열기') : labels[key] + (visible ? ' 숨기기' : ' 열기');
+    });
+  }
+
+  function applyPanelVisibility(persist) {
+    var desktop = window.innerWidth >= 900;
+    var effective = desktop ? panelVisibility : { source: true, toc: true, notes: true };
+    el('sourcePanel').hidden = !effective.source;
+    el('tocPanel').hidden = !effective.toc;
+    el('conceptPanel').hidden = !effective.notes;
+    el('sourceResizer').hidden = !desktop || !effective.source || !(effective.toc || effective.notes);
+    el('tocResizer').hidden = !desktop || !effective.toc || !effective.notes;
+    if (desktop) el('workspace').style.gridTemplateColumns = panelGridTemplate();
+    else el('workspace').style.removeProperty('grid-template-columns');
+    updatePanelToggleButtons();
+    if (persist) localStorage.setItem(panelVisibilityStorageKey, JSON.stringify(panelVisibility));
+  }
+
+  function togglePanel(kind) {
+    if (!Object.prototype.hasOwnProperty.call(panelVisibility, kind)) return;
+    var status = el('panelToggleStatus');
+    if (panelVisibility[kind] && visiblePanelCount() === 1) {
+      status.textContent = '하나 이상의 학습 영역은 열어 두어야 합니다.';
+      return;
+    }
+    panelVisibility[kind] = !panelVisibility[kind];
+    status.textContent = '';
+    applyPanelVisibility(true);
+    if (panelVisibility.source) setPanelWidth('source', localStorage.getItem(sourceWidthStorageKey) || defaultSourceWidth(), false);
+    if (panelVisibility.toc) setPanelWidth('toc', localStorage.getItem(tocWidthStorageKey) || 220, false);
+  }
+
+  function bindPanelToggles() {
+    document.querySelectorAll('[data-panel-toggle]').forEach(function (button) {
+      if (button.dataset.panelToggleBound) return;
+      button.dataset.panelToggleBound = '1';
+      button.addEventListener('click', function () { togglePanel(button.dataset.panelToggle); });
+    });
+    updatePanelToggleButtons();
   }
 
   // ---- 900px 드로어(목차/원문) ----
@@ -681,7 +796,9 @@
         if (requestedSegment >= 0) state.activeSegmentIndex = requestedSegment;
       }
       setStage('ready');
-      bindSourceResizer();
+      bindPanelToggles();
+      applyPanelVisibility(false);
+      bindLayoutResizers();
       renderToc();
       renderLectureNote();
       renderConcepts();
@@ -700,6 +817,7 @@
     toggleLectureTag: toggleLectureTag,
     toggleToc: toggleToc,
     toggleSource: toggleSource,
+    togglePanel: togglePanel,
     closeScopeMenu: closeScopeMenu,
   };
 
