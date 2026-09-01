@@ -63,7 +63,13 @@ class SearchEngineTests(unittest.TestCase):
         self.assertGreater(relevant, personalized)
 
     def test_algorithm_version_is_explicit(self):
-        self.assertEqual(SEARCH_ALGORITHM_VERSION, "hybrid_personalized_v5")
+        self.assertEqual(SEARCH_ALGORITHM_VERSION, "hybrid_personalized_v6")
+
+    def test_generic_concept_instruction_does_not_become_a_search_term(self):
+        self.assertEqual(
+            tokenize("키나아제(kinase) 관련 개념 설명"),
+            ["키나아제", "kinase"],
+        )
 
     def test_source_relevance_requires_direct_or_strong_semantic_evidence(self):
         self.assertEqual(source_relevance_label({"semantic": 0.55, "keyword": 0.0, "concept": 0.0}), "")

@@ -43,7 +43,7 @@ class SearchApiTests(unittest.TestCase):
             result = api_server._build_search_only_response("user-1", request)
         self.assertEqual(result["intent"], "definition")
         self.assertEqual(result["scope"], "multi")
-        self.assertEqual(result["algorithm_version"], "hybrid_personalized_v5")
+        self.assertEqual(result["algorithm_version"], "hybrid_personalized_v6")
         self.assertTrue(result["semantic_search_used"])
         self.assertTrue(result["search_id"])
 
@@ -91,6 +91,23 @@ class SearchApiTests(unittest.TestCase):
         }]
         aliases = api_server._build_user_alias_map("user-1", concepts, {})
         self.assertNotIn("kinase", aliases)
+
+    def test_generic_concept_names_do_not_match_kinase_concept_query(self):
+        concepts = [
+            {
+                "name": "간호학의 4대 기본 개념", "semester": "2026-1",
+                "course": "인간과 건강", "unit": "간호 메타패러다임",
+            },
+            {
+                "name": "BCR-ABL 티로신 키나제", "keyword": "BCR-ABL tyrosine kinase",
+                "semester": "2026-1", "course": "약물기전과효과", "unit": "항암제",
+            },
+        ]
+        tokens = api_server.tokenize("키나아제(kinase) 관련 개념 설명")
+        result = api_server._search_related_concepts(
+            "user-1", tokens, {}, "multi", 5, concepts, {}, {},
+        )
+        self.assertEqual([item["concept"] for item in result], ["BCR-ABL 티로신 키나제"])
 
     def test_single_term_alias_still_expands_to_its_equivalent(self):
         concepts = [{"name": "죽상경화증", "aliases": ["atherosclerosis"]}]

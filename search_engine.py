@@ -6,10 +6,10 @@ import re
 from typing import Any, Dict, Iterable, List, Mapping, Sequence, Tuple
 
 
-SEARCH_ALGORITHM_VERSION = "hybrid_personalized_v5"
+SEARCH_ALGORITHM_VERSION = "hybrid_personalized_v6"
 
 _STOP_WORDS = {
-    "그리고", "그러나", "관련", "자료", "찾아줘", "보여줘", "설명", "정리", "대해", "대한",
+    "그리고", "그러나", "관련", "자료", "찾아줘", "보여줘", "설명", "정리", "개념", "대해", "대한",
     "무엇", "어떤", "어떻게", "인가", "인지", "the", "and", "for", "with", "what", "how",
 }
 
