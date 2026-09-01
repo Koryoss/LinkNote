@@ -43,9 +43,74 @@ class SearchApiTests(unittest.TestCase):
             result = api_server._build_search_only_response("user-1", request)
         self.assertEqual(result["intent"], "definition")
         self.assertEqual(result["scope"], "multi")
-        self.assertEqual(result["algorithm_version"], "hybrid_personalized_v4")
+        self.assertEqual(result["algorithm_version"], "hybrid_personalized_v5")
         self.assertTrue(result["semantic_search_used"])
         self.assertTrue(result["search_id"])
+
+    def test_related_concept_exposes_grounded_explanation_instead_of_match_reason(self):
+        concepts = [{
+            "name": "글리코겐 합성효소 키나제 3",
+            "keyword": "GSK-3",
+            "aliases": ["glycogen synthase kinase 3"],
+            "definition": "리튬의 작용과 관련된 세포 내 신호전달 효소입니다.",
+            "semester": "2026-1",
+            "course": "정신약물의 이해",
+            "unit": "기분조절제",
+            "filename": "mood.pdf",
+            "pages": [18],
+        }]
+        result = api_server._search_related_concepts(
+            "user-1", ["kinase", "키나제"], {}, "multi", 3,
+            concepts, {}, {},
+        )
+        self.assertEqual(result[0]["explanation"], "리튬의 작용과 관련된 세포 내 신호전달 효소입니다.")
+        self.assertEqual(result[0]["filename"], "mood.pdf")
+        self.assertEqual(result[0]["page"], 18)
+
+    def test_semantic_only_source_below_strict_cutoff_is_excluded(self):
+        chunks = {"items": [{
+            "id": "irrelevant-1", "semester": "2026-1", "course": "인간관계와의사소통",
+            "unit": "심리학적 유형", "filename": "mbti.pdf", "page": 13,
+            "text": "Jung의 심리학적 유형과 MBTI의 역사",
+        }]}
+        with patch.object(api_server, "get_chunks", return_value=chunks), \
+                patch.object(api_server, "search_relevant_chunks", return_value=[{
+                    "id": "irrelevant-1", "distance": (1 / 0.75) - 1,
+                }]):
+            sources, semantic_used = api_server._search_sources(
+                "user-1", "kinase 관련 설명 찾아줘", ["kinase"], {}, "multi", 6, [], {}, {},
+            )
+        self.assertTrue(semantic_used)
+        self.assertEqual(sources, [])
+
+    def test_compound_concept_does_not_expand_one_word_to_neighbouring_terms(self):
+        concepts = [{
+            "name": "ERK 신호전달 경로",
+            "keyword": "ERK pathway",
+            "aliases": ["extracellular signal-regulated kinase"],
+        }]
+        aliases = api_server._build_user_alias_map("user-1", concepts, {})
+        self.assertNotIn("kinase", aliases)
+
+    def test_single_term_alias_still_expands_to_its_equivalent(self):
+        concepts = [{"name": "죽상경화증", "aliases": ["atherosclerosis"]}]
+        aliases = api_server._build_user_alias_map("user-1", concepts, {})
+        self.assertIn("atherosclerosis", aliases["죽상경화증"])
+        self.assertIn("죽상경화증", aliases["atherosclerosis"])
+
+    def test_missing_definition_uses_matching_pdf_excerpt(self):
+        concepts = [{
+            "concept": "BCR-ABL 티로신 키나제", "course": "약물기전과효과", "unit": "항암제",
+            "filename": "40-48장.pdf", "page": 38, "explanation": "", "links": [],
+        }]
+        sources = [{
+            "filename": "40-48장.pdf", "page": 38, "score": 82.0,
+            "matched_concepts": ["BCR-ABL 티로신 키나제"],
+            "chunk_preview": "BCR-ABL 티로신 키나제는 만성골수성백혈병의 표적입니다.",
+        }]
+        enriched = api_server._attach_search_concept_explanations(concepts, sources)
+        self.assertEqual(enriched[0]["explanation_kind"], "source_excerpt")
+        self.assertIn("만성골수성백혈병", enriched[0]["explanation"])
 
     def test_blank_upload_unit_falls_back_to_pdf_filename(self):
         self.assertEqual(

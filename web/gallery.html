@@ -327,6 +327,13 @@
   .search-item { border-top:1px solid #e8ebf2; padding-top:7px; margin-top:7px; }
   .search-item:first-of-type { border-top:none; padding-top:0; margin-top:0; }
   .search-meta { display:block; color:#64748b; font-size:0.74rem; margin-bottom:3px; }
+  .search-card-concepts { background:#f5f8ff; border-color:#dbe7ff; }
+  .search-card-sources { background:#fffdf8; border-color:#f1e6c9; }
+  .search-item-concept { cursor:pointer; }
+  .search-explanation { color:#334155; margin-top:3px; }
+  .search-source-preview { color:#475569; margin-top:5px; }
+  .search-source-link { display:inline-flex; margin-top:7px; color:#1d4ed8; font-weight:700; text-decoration:none; }
+  .search-source-link:hover { text-decoration:underline; }
   .cost-label { display:inline-flex; align-items:center; border:1px solid #dbeafe; background:#eff6ff; color:#1d4ed8; border-radius:999px; padding:3px 8px; font-size:0.72rem; font-weight:700; }
   .iq { margin: 4px 24px 6px; background:#fff; border:1px solid #e8ebf2; border-radius:10px; padding:6px 9px; box-shadow:0 3px 10px rgba(15,23,42,0.035); }
   .iq-row { display:grid; grid-template-columns:minmax(280px,1fr) 112px 142px 170px 72px; gap:6px; align-items:center; }
@@ -1931,12 +1938,19 @@
     if(!items || !items.length) return `<div class="search-item">${esc(empty)}</div>`;
     return items.map(renderItem).join('');
   }
+  function studyWorkspaceSourceHref(x){
+    const params=new URLSearchParams({
+      semester:x.semester||'', course:x.course||'', unit:x.unit||'',
+      filename:x.filename||'', page:String(x.page||1)
+    });
+    return `/study-workspace.html?${params.toString()}`;
+  }
   function renderSearchOnly(d){
     const scopeLabel = d.scope === 'single' ? '단일 자료 검색' : '여러 자료 검색';
     return `<div class="search-result">
       <div class="ask-a">관련 자료를 찾았어요. AI 답변을 생성할까요?<br><span class="cost-label">${esc(scopeLabel)} · ${esc(d.intent_label || '일반 검색')} · ${d.semantic_search_used ? '의미+키워드 검색' : '키워드 검색'} · ${d.from_cache ? '캐시 결과' : '새 검색'}</span></div>
-      <div class="search-card"><h4>관련 개념</h4>${renderSearchList(d.related_concepts, '관련 개념을 찾지 못했습니다.', x=>`<div class="search-item" data-result-type="concept" data-result-id="${esc(x.concept||'')}" data-course="${esc(x.course||'')}" data-concept="${esc(x.concept||'')}" onclick="recordSearchEventFromElement(this)"><strong>${esc(x.concept)}</strong><span class="search-meta">${esc(x.course)} · ${esc(x.unit)} · ${x.origin === 'document' ? '문서에서 확인' : `${esc(x.score || 0)}점`}</span>${esc(x.reason||'')}</div>`)}</div>
-      <div class="search-card"><h4>근거 문서 (PDF 원문)</h4>${renderSearchList(d.sources, '직접 관련된 원문을 찾지 못했습니다.', x=>`<div class="search-item" data-result-type="source" data-result-id="${esc(x.id||x.filename||'')}" data-semester="${esc(x.semester||'')}" data-course="${esc(x.course||'')}" data-unit="${esc(x.unit||'')}" data-concept="${esc((x.matched_concepts||[])[0]||'')}" data-filename="${esc(x.filename||'')}" data-page="${esc(x.page||1)}" onclick="recordSearchEventFromElement(this)"><strong>${esc(x.filename || '파일명 없음')}</strong><span class="search-meta">${esc(x.course)} · ${esc(x.unit)} · p.${esc(x.page || '-')} · ${esc(x.relevance_label || '관련성 높음')}</span>${esc(x.reason || '')}<br>${esc(x.chunk_preview || '')}</div>`)}</div>
+      <div class="search-card search-card-concepts"><h4>관련 개념 · 설명</h4>${renderSearchList(d.related_concepts, '관련 개념을 찾지 못했습니다.', x=>`<div class="search-item search-item-concept" data-result-type="concept" data-result-id="${esc(x.concept||'')}" data-course="${esc(x.course||'')}" data-concept="${esc(x.concept||'')}" onclick="recordSearchEventFromElement(this)"><strong>${esc(x.concept)}</strong><span class="search-meta">${esc(x.course)} · ${esc(x.unit)} · ${x.origin === 'document' ? '문서에서 확인' : `${esc(x.score || 0)}점`}</span><div class="search-explanation">${esc(x.explanation||'설명을 찾지 못했습니다.')}</div></div>`)}</div>
+      <div class="search-card search-card-sources"><h4>근거 문서 · PDF 원문</h4>${renderSearchList(d.sources, '직접 관련된 원문을 찾지 못했습니다.', x=>`<div class="search-item"><strong>${esc(x.filename || '파일명 없음')}</strong><span class="search-meta">${esc(x.course)} · ${esc(x.unit)} · p.${esc(x.page || '-')} · ${esc(x.relevance_label || '관련성 높음')}</span><div class="search-source-preview">${esc(x.chunk_preview || '')}</div><a class="search-source-link" href="${esc(studyWorkspaceSourceHref(x))}" data-result-id="${esc(x.id||x.filename||'')}" data-semester="${esc(x.semester||'')}" data-course="${esc(x.course||'')}" data-unit="${esc(x.unit||'')}" data-filename="${esc(x.filename||'')}" data-page="${esc(x.page||1)}" data-concept="${esc((x.matched_concepts||[])[0]||'')}" onclick="recordSearchSourceLink(this)">원문 p.${esc(x.page || 1)} 열기 →</a></div>`)}</div>
       <div class="search-card"><h4>Learning Memory / Recall</h4>${renderSearchList(d.learning_memory_matches, '관련 Learning Memory/Recall 기록이 없습니다.', x=>`<div class="search-item" data-result-type="learning_memory" data-result-id="${esc(x.id||'')}" data-course="${esc(x.course||'')}" data-concept="${esc(x.concept||'')}" onclick="recordSearchEventFromElement(this)"><strong>${esc(x.concept || '개념 미지정')}</strong><span class="search-meta">${esc(x.course)} · ${esc(x.unit)} · ${esc(x.score || 0)}점</span>${esc(x.reason || '')}<br>${esc(x.improved_summary || x.answer_preview || '')}</div>`)}</div>
       <button onclick="recordSearchEvent('helpful')">도움됨</button>
       ${d.can_generate_ai_answer ? `<button onclick="askInline(true)">AI 답변 생성</button> <span class="ask-mode-note">API 비용이 발생할 수 있습니다.</span>` : ''}
@@ -1957,6 +1971,10 @@
     }else if(el.dataset.resultType === 'learning_memory'){
       window.location.href='/learning-memory.html';
     }
+  }
+  function recordSearchSourceLink(el){
+    if(!el) return;
+    recordSearchEvent('result_opened','source',el.dataset.resultId||'',el.dataset.course||'',el.dataset.concept||'');
   }
   async function recordSearchEvent(eventType, resultType='', resultId='', course='', concept='', searchResult=null){
     const d=searchResult || inlineLastSearchResult;

@@ -2435,11 +2435,22 @@ def _build_user_alias_map(user_id: str, concepts: List[Dict[str, Any]], profile:
 
     alias_map: Dict[str, Set[str]] = {}
     for group in groups:
-        group_tokens = []
-        for phrase in group:
-            group_tokens.extend(tokenize(phrase))
-        for token in group_tokens:
-            alias_map.setdefault(token, set()).update(value for value in group_tokens if value != token)
+        phrase_tokens = [tokenize(phrase) for phrase in group]
+        # Expand only when the entered side is itself a complete one-token
+        # concept/alias.  A token embedded in a compound name is not an alias
+        # for every neighbouring word: "kinase" in "BCR-ABL kinase" must not
+        # expand to BCR, signal, pathway, protein, and so on.
+        for source_tokens in phrase_tokens:
+            if len(source_tokens) != 1:
+                continue
+            token = source_tokens[0]
+            values = {
+                value
+                for target_tokens in phrase_tokens
+                for value in target_tokens
+                if value != token
+            }
+            alias_map.setdefault(token, set()).update(values)
     return {key: sorted(values) for key, values in alias_map.items()}
 
 
@@ -2603,10 +2614,25 @@ def _search_related_concepts(
         if keyword <= 0 and concept_match <= 0:
             continue
         matched = matched_fields(fields, tokens)
+        explanation = str(
+            item.get("definition")
+            or item.get("description")
+            or item.get("summary")
+            or item.get("desc")
+            or ""
+        ).strip()
+        pages = item.get("pages") if isinstance(item.get("pages"), list) else []
+        if not pages and item.get("page") is not None:
+            pages = [item.get("page")]
         concepts.append({
             "concept": concept,
             "course": item.get("course", ""),
             "unit": item.get("unit", ""),
+            "filename": item.get("filename", ""),
+            "page": pages[0] if pages else None,
+            "explanation": explanation,
+            "explanation_kind": "definition" if explanation else "",
+            "links": [str(value) for value in (item.get("links") or []) if str(value).strip()][:4],
             "reason": score_reason(components, matched),
             "score": round(final_score * 100, 1),
             "score_components": components,
@@ -2721,8 +2747,22 @@ def _search_sources(
     concept_terms = []
     for concept_item in concepts_data:
         name = str(concept_item.get("name") or concept_item.get("keyword") or "").strip()
-        if name and raw_text_score(name, tokens) > 0:
-            concept_terms.append((name, _concept_learning_metadata(concept_item, learning_metadata)))
+        searchable_terms = [
+            str(value).strip()
+            for value in [
+                name,
+                concept_item.get("keyword"),
+                *_list_aliases(concept_item.get("aliases")),
+                *_list_aliases(concept_item.get("synonyms")),
+            ]
+            if str(value).strip()
+        ]
+        if name and raw_text_score(" ".join(searchable_terms), tokens) > 0:
+            concept_terms.append((
+                name,
+                _concept_learning_metadata(concept_item, learning_metadata),
+                searchable_terms,
+            ))
 
     scored: List[Dict[str, Any]] = []
     for item in data.get("items", []):
@@ -2732,10 +2772,15 @@ def _search_sources(
         keyword = normalized_keyword_score(text, tokens)
         semantic_item = semantic_by_id.get(str(item.get("id")), {})
         semantic = semantic_score(semantic_item.get("distance")) if semantic_item else 0.0
-        matched_concepts = [(name, meta) for name, meta in concept_terms if name.lower() in text.lower()]
+        lowered_text = text.lower()
+        matched_concepts = [
+            (name, meta, terms)
+            for name, meta, terms in concept_terms
+            if any(term.lower() in lowered_text for term in terms)
+        ]
         concept_match = 1.0 if matched_concepts else 0.0
         learning_meta = max(
-            (meta for _, meta in matched_concepts),
+            (meta for _, meta, _ in matched_concepts),
             key=lambda meta: int(meta.get("review_priority") or 0),
             default={},
         )
@@ -2763,13 +2808,16 @@ def _search_sources(
             "filename": item.get("filename", ""),
             "page": item.get("page"),
             "chunk_index": item.get("chunk_index"),
-            "chunk_preview": _focused_chunk_preview(str(item.get("text", "")), tokens),
+            "chunk_preview": _focused_chunk_preview(
+                str(item.get("text", "")),
+                [*tokens, *[term for _, _, terms in matched_concepts for term in terms]],
+            ),
             "score": round(final_score * 100, 1),
             "relevance_label": relevance_label,
             "score_components": components,
             "matched_fields": matched,
             "reason": score_reason(components, matched),
-            "matched_concepts": [name for name, _ in matched_concepts[:3]],
+            "matched_concepts": [name for name, _, _ in matched_concepts[:3]],
             "_sort": final_score,
         })
     best_by_page: Dict[tuple[str, Any], Dict[str, Any]] = {}
@@ -2900,6 +2948,10 @@ def _document_backed_concepts(
                 "concept": label,
                 "course": source.get("course", ""),
                 "unit": source.get("unit", ""),
+                "filename": source.get("filename", ""),
+                "page": source.get("page"),
+                "explanation": source.get("chunk_preview", ""),
+                "explanation_kind": "source_excerpt",
                 "reason": "추출 개념 목록에는 없지만 업로드한 문서 본문에서 직접 확인되었습니다.",
                 "score": source.get("score", 0),
                 "learning_state": "NEW",
@@ -2910,6 +2962,76 @@ def _document_backed_concepts(
             if len(results) >= limit:
                 return results
     return results
+
+
+def _attach_search_concept_explanations(
+    concepts: List[Dict[str, Any]],
+    sources: List[Dict[str, Any]],
+    user_id: str = "",
+    search_filter: Optional[Dict[str, str]] = None,
+    scope: str = "multi",
+) -> List[Dict[str, Any]]:
+    """Prefer a stored definition, then a matching PDF excerpt, for quick search cards."""
+    source_chunks: List[Dict[str, Any]] = []
+    if user_id and any(not str(item.get("explanation") or "").strip() for item in concepts):
+        try:
+            source_chunks = get_chunks(
+                user_id=user_id,
+                limit=5000,
+                offset=0,
+                search_filter=_filter_for_chroma(search_filter or {}, scope),
+                full=True,
+            ).get("items", [])
+        except Exception as exc:
+            logger.info("quick-search concept explanation fallback unavailable: %s", exc)
+
+    enriched: List[Dict[str, Any]] = []
+    for raw_concept in concepts:
+        concept = dict(raw_concept)
+        if str(concept.get("explanation") or "").strip():
+            enriched.append(concept)
+            continue
+
+        concept_name = str(concept.get("concept") or "").strip().lower()
+        filename = str(concept.get("filename") or "").strip()
+        page = concept.get("page")
+        candidates = []
+        for source in sources:
+            source_concepts = [str(value).strip().lower() for value in (source.get("matched_concepts") or [])]
+            same_location = (
+                filename
+                and filename == str(source.get("filename") or "").strip()
+                and (page is None or page == source.get("page"))
+            )
+            if concept_name in source_concepts or same_location:
+                candidates.append(source)
+        if candidates:
+            best = max(candidates, key=lambda value: float(value.get("score") or 0))
+            concept["explanation"] = str(best.get("chunk_preview") or "").strip()
+            concept["explanation_kind"] = "source_excerpt"
+            concept["filename"] = concept.get("filename") or best.get("filename", "")
+            concept["page"] = concept.get("page") or best.get("page")
+        elif filename and page is not None:
+            matching_chunks = [
+                chunk for chunk in source_chunks
+                if filename == str(chunk.get("filename") or "").strip()
+                and str(page) == str(chunk.get("page"))
+            ]
+            if matching_chunks:
+                excerpt = _focused_chunk_preview(
+                    "\n".join(str(chunk.get("text") or "") for chunk in matching_chunks),
+                    tokenize(str(concept.get("concept") or "")),
+                )
+                concept["explanation"] = excerpt
+                concept["explanation_kind"] = "source_excerpt"
+        if not str(concept.get("explanation") or "").strip() and concept.get("links"):
+            concept["explanation"] = "PDF에서 함께 연결된 개념: " + ", ".join(concept["links"])
+            concept["explanation_kind"] = "concept_links"
+        elif not str(concept.get("explanation") or "").strip():
+            concept["explanation"] = "업로드한 PDF에서 확인된 개념입니다. 원문에서 설명을 확인해 주세요."
+            concept["explanation_kind"] = "source_location"
+        enriched.append(concept)
+    return enriched
 
 
 def _build_search_only_response(user_id: str, request: AskSearchRequest) -> Dict[str, Any]:
@@ -2943,6 +3065,9 @@ def _build_search_only_response(user_id: str, request: AskSearchRequest) -> Dict
     )
     if not related_concepts:
         related_concepts = _document_backed_concepts(base_tokens, alias_map, sources, limit)
+    related_concepts = _attach_search_concept_explanations(
+        related_concepts, sources, user_id, search_filter, scope
+    )
     result = {
         "search_id": uuid.uuid4().hex,
         "question": question,

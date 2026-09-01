@@ -6,7 +6,7 @@ import re
 from typing import Any, Dict, Iterable, List, Mapping, Sequence, Tuple
 
 
-SEARCH_ALGORITHM_VERSION = "hybrid_personalized_v4"
+SEARCH_ALGORITHM_VERSION = "hybrid_personalized_v5"
 
 _STOP_WORDS = {
     "그리고", "그러나", "관련", "자료", "찾아줘", "보여줘", "설명", "정리", "대해", "대한",
@@ -156,7 +156,10 @@ def source_relevance_label(components: Mapping[str, float]) -> str:
     concept = float(components.get("concept", 0.0) or 0.0)
     if concept >= 1.0 or keyword >= 0.55:
         return "직접 일치"
-    if semantic >= 0.72 or (semantic >= 0.62 and keyword >= 0.15):
+    # A semantic-only hit needs unusually strong evidence.  The previous 0.72
+    # cutoff let short queries such as "kinase" surface unrelated lecture
+    # pages that happened to be nearby in embedding space.
+    if semantic >= 0.82 or (semantic >= 0.62 and keyword >= 0.15):
         return "관련성 높음"
     if keyword >= 0.35:
         return "관련성 높음"

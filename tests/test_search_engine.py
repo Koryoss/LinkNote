@@ -63,12 +63,13 @@ class SearchEngineTests(unittest.TestCase):
         self.assertGreater(relevant, personalized)
 
     def test_algorithm_version_is_explicit(self):
-        self.assertEqual(SEARCH_ALGORITHM_VERSION, "hybrid_personalized_v4")
+        self.assertEqual(SEARCH_ALGORITHM_VERSION, "hybrid_personalized_v5")
 
     def test_source_relevance_requires_direct_or_strong_semantic_evidence(self):
         self.assertEqual(source_relevance_label({"semantic": 0.55, "keyword": 0.0, "concept": 0.0}), "")
         self.assertEqual(source_relevance_label({"semantic": 0.0, "keyword": 0.7, "concept": 0.0}), "직접 일치")
-        self.assertEqual(source_relevance_label({"semantic": 0.75, "keyword": 0.0, "concept": 0.0}), "관련성 높음")
+        self.assertEqual(source_relevance_label({"semantic": 0.75, "keyword": 0.0, "concept": 0.0}), "")
+        self.assertEqual(source_relevance_label({"semantic": 0.83, "keyword": 0.0, "concept": 0.0}), "관련성 높음")
 
     def test_source_reason_prioritizes_direct_evidence_over_personalization(self):
         reason = score_reason({
