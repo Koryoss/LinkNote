@@ -156,6 +156,14 @@ class StudyWorkspaceUiTests(unittest.TestCase):
         self.assertIn("method: 'DELETE'", self.script)
         self.assertNotIn('confirm(', self.script)
 
+    def test_each_lecture_note_has_an_autosaved_keyword_title(self):
+        self.assertIn('class="lecture-note-name-input"', self.script)
+        self.assertIn('placeholder="필기 제목 (예: 수치심)"', self.script)
+        self.assertIn('maxlength="120"', self.script)
+        self.assertIn('function onLectureNoteTitleInput(key, value)', self.script)
+        self.assertIn('title: draft.title', self.script)
+        self.assertIn('title: stored.title ||', self.script)
+
     def test_exact_source_page_from_study_evidence_is_selected(self):
         self.assertIn("var requestedPage = Number(params.get('page')) || null;", self.script)
         self.assertIn("var requestedPageExists = requestedPage && state.pages.some", self.script)

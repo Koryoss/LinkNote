@@ -184,6 +184,7 @@ class ConceptNoteUpsertRequest(BaseModel):
 
 class LectureNoteUpsertRequest(BaseModel):
     note_id: Optional[str] = None
+    title: str = ""
     semester: str
     course: str
     unit: str
@@ -572,6 +573,10 @@ def _normalize_lecture_note_tags(tags: Any) -> List[str]:
     return [tag for tag in allowed if tag in requested]
 
 
+def _clean_lecture_note_title(title: Any) -> str:
+    return " ".join(str(title or "").split())[:120]
+
+
 def _lecture_note_identity_and_range(payload: Dict[str, Any]) -> tuple[Dict[str, str], int, int]:
     identity = {
         key: str(payload.get(key) or "").strip()
@@ -639,11 +644,12 @@ def _upsert_lecture_note(user_id: str, payload: Dict[str, Any]) -> Dict[str, Any
         ), None)
         if note_id and matched_index is None:
             raise HTTPException(status_code=404, detail="수업 필기를 찾을 수 없습니다.")
+        title = _clean_lecture_note_title(payload.get("title"))
         note_text = _clean_note_text(payload.get("note_text"))
         tags = _normalize_lecture_note_tags(payload.get("tags"))
         if matched_index is not None:
             note = dict(notes[matched_index])
-            note.update(note_text=note_text, tags=tags, updated_at=now)
+            note.update(title=title, note_text=note_text, tags=tags, updated_at=now)
             notes[matched_index] = note
         else:
             note = {
@@ -652,6 +658,7 @@ def _upsert_lecture_note(user_id: str, payload: Dict[str, Any]) -> Dict[str, Any
                 **identity,
                 "start_page": start_page,
                 "end_page": end_page,
+                "title": title,
                 "note_text": note_text,
                 "tags": tags,
                 "created_at": now,
@@ -671,6 +678,7 @@ def _create_lecture_note(user_id: str, payload: Dict[str, Any]) -> Dict[str, Any
         **identity,
         "start_page": start_page,
         "end_page": end_page,
+        "title": _clean_lecture_note_title(payload.get("title")),
         "note_text": _clean_note_text(payload.get("note_text")),
         "tags": _normalize_lecture_note_tags(payload.get("tags")),
         "created_at": now,

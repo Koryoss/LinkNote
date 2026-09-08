@@ -830,16 +830,24 @@ class SearchApiTests(unittest.TestCase):
         self.assertEqual(context.exception.status_code, 400)
 
     def test_create_lecture_note_allows_multiple_notes_for_same_page_range(self):
-        payload = self._lecture_note_payload(note_text="첫 번째 필기")
+        payload = self._lecture_note_payload(title="수치심", note_text="첫 번째 필기")
         first = api_server._create_lecture_note("user-1", payload)
         second = api_server._create_lecture_note(
-            "user-1", self._lecture_note_payload(note_text="두 번째 필기")
+            "user-1", self._lecture_note_payload(title="죄책감", note_text="두 번째 필기")
         )
 
         notes = api_server._get_lecture_notes_for_user("user-1")
         self.assertEqual(len(notes), 2)
         self.assertNotEqual(first["id"], second["id"])
+        self.assertEqual([note["title"] for note in notes], ["수치심", "죄책감"])
         self.assertEqual([note["note_text"] for note in notes], ["첫 번째 필기", "두 번째 필기"])
+
+    def test_lecture_note_title_is_normalized_and_limited(self):
+        note = api_server._create_lecture_note(
+            "user-1", self._lecture_note_payload(title="  자기\n  효능감  " + "가" * 130)
+        )
+        self.assertTrue(note["title"].startswith("자기 효능감"))
+        self.assertEqual(len(note["title"]), 120)
 
     def test_upsert_lecture_note_by_id_updates_only_selected_note(self):
         first = api_server._create_lecture_note(
@@ -1053,6 +1061,7 @@ class SearchApiTests(unittest.TestCase):
             "filename": "염증과 치유.pdf",
             "start_page": 3,
             "end_page": 7,
+            "title": "핵심 키워드",
             "note_text": "수업 필기",
             "tags": ["important"],
         }

@@ -332,6 +332,7 @@
     lectureNoteDrafts[key] = {
       note_id: '',
       segment_key: segmentKey(segment),
+      title: '',
       note_text: '',
       tags: [],
       is_new: true,
@@ -347,6 +348,7 @@
     lectureNoteDrafts[key] = {
       note_id: noteId,
       segment_key: stored.start_page + '-' + stored.end_page,
+      title: stored.title || '',
       note_text: stored.note_text || '',
       tags: Array.isArray(stored.tags) ? stored.tags.slice() : [],
       is_new: false,
@@ -400,6 +402,7 @@
       return '<div class="lecture-note-card" data-lecture-note-card="' + esc(entry.key) + '">' +
         '<div class="lecture-note-card-head"><strong>필기 ' + (index + 1) + '</strong>' +
         '<button type="button" class="lecture-note-delete' + (lectureNoteDeleteArmed[entry.key] ? ' armed' : '') + '" data-lecture-note-delete="' + esc(entry.key) + '" aria-label="필기 ' + (index + 1) + ' ' + deleteLabel + '">' + deleteLabel + '</button></div>' +
+        '<input class="lecture-note-name-input" data-note-key="' + esc(entry.key) + '" aria-label="필기 ' + (index + 1) + ' 제목" maxlength="120" placeholder="필기 제목 (예: 수치심)" value="' + esc(draft.title) + '">' +
         '<textarea class="lecture-note-input" data-note-key="' + esc(entry.key) + '" aria-label="필기 ' + (index + 1) + '" placeholder="예: 이 부분은 시험에 자주 나온다고 강조하심">' + esc(draft.note_text) + '</textarea>' +
         '<div class="lecture-note-footer">' + tagsHTML + '<div class="note-status" id="' + lectureNoteStatusId(entry.key) + '" role="status" aria-live="polite"></div></div>' +
         '</div>';
@@ -435,6 +438,13 @@
     scheduleLectureNoteSave(key);
   }
 
+  function onLectureNoteTitleInput(key, value) {
+    var draft = lectureNoteDraft(key);
+    if (!draft) return;
+    draft.title = value;
+    scheduleLectureNoteSave(key);
+  }
+
   function toggleLectureTag(key, tag) {
     var draft = lectureNoteDraft(key);
     if (!draft) return;
@@ -450,6 +460,7 @@
     var pages = draft.segment_key.split('-').map(Number);
     return {
       note_id: draft.note_id || null,
+      title: draft.title,
       semester: scope.semester,
       course: scope.course,
       unit: scope.unit,
@@ -469,7 +480,7 @@
       return;
     }
     lectureNoteSaveInFlight[key] = true;
-    var snapshot = { note_text: draft.note_text, tags: draft.tags.slice(), is_new: draft.is_new };
+    var snapshot = { title: draft.title, note_text: draft.note_text, tags: draft.tags.slice(), is_new: draft.is_new };
     setLectureNoteStatus(key, 'saving', '저장 중…');
     fetch(API + '/lecture-notes', {
       method: draft.is_new ? 'POST' : 'PUT',
@@ -483,7 +494,7 @@
         else state.lectureNotes.push(d.note);
         draft.note_id = d.note.id;
         draft.is_new = false;
-        var unchanged = draft.note_text === snapshot.note_text && draft.tags.join(',') === snapshot.tags.join(',');
+        var unchanged = draft.title === snapshot.title && draft.note_text === snapshot.note_text && draft.tags.join(',') === snapshot.tags.join(',');
         lectureNoteSaveInFlight[key] = false;
         setLectureNoteStatus(key, unchanged ? 'saved' : 'pending', unchanged ? '저장됨' : '저장 대기 중…');
         if (!unchanged) scheduleLectureNoteSave(key);
@@ -499,7 +510,7 @@
     if (!segment) return;
     var key = newLectureNoteDraft(segment);
     renderLectureNote();
-    var input = document.querySelector('.lecture-note-input[data-note-key="' + key + '"]');
+    var input = document.querySelector('.lecture-note-name-input[data-note-key="' + key + '"]');
     if (input) input.focus();
   }
 
@@ -574,6 +585,7 @@
   // 위임 리스너(#conceptList)에서 data-concept로 대상을 찾는다.
   function bindNoteInputDelegation() {
     el('lectureNotePanel').addEventListener('input', function (e) {
+      if (e.target.classList.contains('lecture-note-name-input')) onLectureNoteTitleInput(e.target.dataset.noteKey, e.target.value);
       if (e.target.classList.contains('lecture-note-input')) onLectureNoteInput(e.target.dataset.noteKey, e.target.value);
     });
     el('lectureNotePanel').addEventListener('click', function (e) {
