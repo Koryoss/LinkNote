@@ -138,6 +138,32 @@ class StudyWorkspaceUiTests(unittest.TestCase):
         self.assertIn('@media (min-width: 900px) and (max-width: 1400px)', self.html)
         self.assertIn('.panel-controls { order: 3; flex-basis: 100%; justify-content: flex-start; }', self.html)
 
+    def test_lecture_note_area_can_add_multiple_independent_notes(self):
+        self.assertIn('data-lecture-note-add', self.script)
+        self.assertIn('+ 필기 추가', self.script)
+        self.assertIn('function newLectureNoteDraft(segment)', self.script)
+        self.assertIn("method: draft.is_new ? 'POST' : 'PUT'", self.script)
+        self.assertIn('note_id: draft.note_id || null', self.script)
+        self.assertIn('data-note-key=', self.script)
+        self.assertIn('var included = {}', self.script)
+        self.assertIn('!included[draftKey]', self.script)
+
+    def test_each_lecture_note_has_autosave_tags_and_inline_delete_confirmation(self):
+        self.assertIn("setTimeout(function () {\n      saveLectureNote(key);\n    }, 600)", self.script)
+        for tag in ('important', 'exam', 'question'):
+            self.assertIn(tag, self.script)
+        self.assertIn('한 번 더 눌러 삭제', self.script)
+        self.assertIn("method: 'DELETE'", self.script)
+        self.assertNotIn('confirm(', self.script)
+
+    def test_each_lecture_note_has_an_autosaved_keyword_title(self):
+        self.assertIn('class="lecture-note-name-input"', self.script)
+        self.assertIn('placeholder="필기 제목 (예: 수치심)"', self.script)
+        self.assertIn('maxlength="120"', self.script)
+        self.assertIn('function onLectureNoteTitleInput(key, value)', self.script)
+        self.assertIn('title: draft.title', self.script)
+        self.assertIn('title: stored.title ||', self.script)
+
     def test_exact_source_page_from_study_evidence_is_selected(self):
         self.assertIn("var requestedPage = Number(params.get('page')) || null;", self.script)
         self.assertIn("var requestedPageExists = requestedPage && state.pages.some", self.script)

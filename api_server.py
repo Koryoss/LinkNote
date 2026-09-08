@@ -183,6 +183,8 @@ class ConceptNoteUpsertRequest(BaseModel):
 
 
 class LectureNoteUpsertRequest(BaseModel):
+    note_id: Optional[str] = None
+    title: str = ""
     semester: str
     course: str
     unit: str
@@ -571,6 +573,30 @@ def _normalize_lecture_note_tags(tags: Any) -> List[str]:
     return [tag for tag in allowed if tag in requested]
 
 
+def _clean_lecture_note_title(title: Any) -> str:
+    return " ".join(str(title or "").split())[:120]
+
+
+def _lecture_note_identity_and_range(payload: Dict[str, Any]) -> tuple[Dict[str, str], int, int]:
+    identity = {
+        key: str(payload.get(key) or "").strip()
+        for key in ("semester", "course", "unit", "filename")
+    }
+    if not all(identity.values()):
+        raise HTTPException(
+            status_code=400,
+            detail="semester, course, unit, filename은 모두 필요합니다.",
+        )
+    try:
+        start_page = int(payload.get("start_page"))
+        end_page = int(payload.get("end_page"))
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail="페이지 구간이 올바르지 않습니다.") from exc
+    if start_page < 1 or end_page < start_page:
+        raise HTTPException(status_code=400, detail="페이지 구간이 올바르지 않습니다.")
+    return identity, start_page, end_page
+
+
 def _get_lecture_notes_for_user(
     user_id: str,
     filters: Optional[Dict[str, Any]] = None,
@@ -598,22 +624,8 @@ def _get_lecture_notes_for_user(
 
 
 def _upsert_lecture_note(user_id: str, payload: Dict[str, Any]) -> Dict[str, Any]:
-    identity = {
-        key: str(payload.get(key) or "").strip()
-        for key in ("semester", "course", "unit", "filename")
-    }
-    if not all(identity.values()):
-        raise HTTPException(
-            status_code=400,
-            detail="semester, course, unit, filename은 모두 필요합니다.",
-        )
-    try:
-        start_page = int(payload.get("start_page"))
-        end_page = int(payload.get("end_page"))
-    except (TypeError, ValueError) as exc:
-        raise HTTPException(status_code=400, detail="페이지 구간이 올바르지 않습니다.") from exc
-    if start_page < 1 or end_page < start_page:
-        raise HTTPException(status_code=400, detail="페이지 구간이 올바르지 않습니다.")
+    identity, start_page, end_page = _lecture_note_identity_and_range(payload)
+    note_id = str(payload.get("note_id") or "").strip()
 
     now = datetime.now(timezone.utc).isoformat()
     with _lecture_notes_lock:
@@ -622,6 +634,7 @@ def _upsert_lecture_note(user_id: str, payload: Dict[str, Any]) -> Dict[str, Any
             index for index, note in enumerate(notes)
             if isinstance(note, dict)
             and note.get("user_id") == user_id
+            and (not note_id or str(note.get("id") or "") == note_id)
             and all(
                 str(note.get(key) or "").strip() == value
                 for key, value in identity.items()
@@ -629,11 +642,14 @@ def _upsert_lecture_note(user_id: str, payload: Dict[str, Any]) -> Dict[str, Any
             and note.get("start_page") == start_page
             and note.get("end_page") == end_page
         ), None)
+        if note_id and matched_index is None:
+            raise HTTPException(status_code=404, detail="수업 필기를 찾을 수 없습니다.")
+        title = _clean_lecture_note_title(payload.get("title"))
         note_text = _clean_note_text(payload.get("note_text"))
         tags = _normalize_lecture_note_tags(payload.get("tags"))
         if matched_index is not None:
             note = dict(notes[matched_index])
-            note.update(note_text=note_text, tags=tags, updated_at=now)
+            note.update(title=title, note_text=note_text, tags=tags, updated_at=now)
             notes[matched_index] = note
         else:
             note = {
@@ -642,12 +658,35 @@ def _upsert_lecture_note(user_id: str, payload: Dict[str, Any]) -> Dict[str, Any
                 **identity,
                 "start_page": start_page,
                 "end_page": end_page,
+                "title": title,
                 "note_text": note_text,
                 "tags": tags,
                 "created_at": now,
                 "updated_at": now,
             }
             notes.append(note)
+        _save_lecture_notes(notes)
+    return note
+
+
+def _create_lecture_note(user_id: str, payload: Dict[str, Any]) -> Dict[str, Any]:
+    identity, start_page, end_page = _lecture_note_identity_and_range(payload)
+    now = datetime.now(timezone.utc).isoformat()
+    note = {
+        "id": uuid.uuid4().hex,
+        "user_id": user_id,
+        **identity,
+        "start_page": start_page,
+        "end_page": end_page,
+        "title": _clean_lecture_note_title(payload.get("title")),
+        "note_text": _clean_note_text(payload.get("note_text")),
+        "tags": _normalize_lecture_note_tags(payload.get("tags")),
+        "created_at": now,
+        "updated_at": now,
+    }
+    with _lecture_notes_lock:
+        notes = _load_lecture_notes()
+        notes.append(note)
         _save_lecture_notes(notes)
     return note
 
@@ -4979,6 +5018,15 @@ async def lecture_notes_put(
     data_user_id: str = Depends(current_uid),
 ) -> Dict[str, Any]:
     note = _upsert_lecture_note(data_user_id, payload.dict())
+    return {"ok": True, "note": note}
+
+
+@app.post("/lecture-notes")
+async def lecture_notes_post(
+    payload: LectureNoteUpsertRequest,
+    data_user_id: str = Depends(current_uid),
+) -> Dict[str, Any]:
+    note = _create_lecture_note(data_user_id, payload.dict())
     return {"ok": True, "note": note}
 
 
