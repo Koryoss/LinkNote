@@ -829,6 +829,47 @@ class SearchApiTests(unittest.TestCase):
             )
         self.assertEqual(context.exception.status_code, 400)
 
+    def test_create_lecture_note_allows_multiple_notes_for_same_page_range(self):
+        payload = self._lecture_note_payload(note_text="첫 번째 필기")
+        first = api_server._create_lecture_note("user-1", payload)
+        second = api_server._create_lecture_note(
+            "user-1", self._lecture_note_payload(note_text="두 번째 필기")
+        )
+
+        notes = api_server._get_lecture_notes_for_user("user-1")
+        self.assertEqual(len(notes), 2)
+        self.assertNotEqual(first["id"], second["id"])
+        self.assertEqual([note["note_text"] for note in notes], ["첫 번째 필기", "두 번째 필기"])
+
+    def test_upsert_lecture_note_by_id_updates_only_selected_note(self):
+        first = api_server._create_lecture_note(
+            "user-1", self._lecture_note_payload(note_text="첫 번째")
+        )
+        second = api_server._create_lecture_note(
+            "user-1", self._lecture_note_payload(note_text="두 번째")
+        )
+        updated = api_server._upsert_lecture_note(
+            "user-1",
+            self._lecture_note_payload(note_id=second["id"], note_text="두 번째 수정"),
+        )
+
+        notes = api_server._get_lecture_notes_for_user("user-1")
+        self.assertEqual(updated["id"], second["id"])
+        self.assertEqual(
+            {note["id"]: note["note_text"] for note in notes},
+            {first["id"]: "첫 번째", second["id"]: "두 번째 수정"},
+        )
+
+    def test_upsert_lecture_note_by_id_enforces_owner_and_scope(self):
+        note = api_server._create_lecture_note("user-1", self._lecture_note_payload())
+        for payload in (
+            self._lecture_note_payload(note_id=note["id"]),
+            self._lecture_note_payload(note_id=note["id"], course="다른 과목"),
+        ):
+            with self.assertRaises(api_server.HTTPException) as context:
+                api_server._upsert_lecture_note("user-2" if payload["course"] == "병태생리학" else "user-1", payload)
+            self.assertEqual(context.exception.status_code, 404)
+
     def test_page_locations_merge_all_pages_and_ignore_invalid_pages(self):
         concepts = [{
             "name": "염증 매개물질",
