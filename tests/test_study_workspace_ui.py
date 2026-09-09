@@ -164,6 +164,21 @@ class StudyWorkspaceUiTests(unittest.TestCase):
         self.assertIn('title: draft.title', self.script)
         self.assertIn('title: stored.title ||', self.script)
 
+    def test_long_concept_occurrence_lists_are_collapsed_and_accessible(self):
+        self.assertIn('Logic.occurrencePagePreview(concept.pages, state.activePage, 5)', self.script)
+        self.assertIn('data-occurrence-overflow="true"', self.script)
+        self.assertIn('data-occurrence-toggle=', self.script)
+        self.assertIn('더보기 +', self.script)
+        self.assertIn("toggleButton.setAttribute('aria-expanded', String(expanded))", self.script)
+        self.assertIn("toggleButton.textContent = expanded ? '접기'", self.script)
+        self.assertIn('.occurrence-chip[aria-current="page"]', self.html)
+
+    def test_occurrence_page_buttons_use_delegated_clicks(self):
+        concept_card_source = self.script.split('function conceptCardHTML(concept)', 1)[1].split('function bindNoteInputDelegation()', 1)[0]
+        self.assertIn('data-occurrence-page=', concept_card_source)
+        self.assertNotIn('onclick=', concept_card_source)
+        self.assertIn("e.target.closest('[data-occurrence-page]')", self.script)
+
     def test_exact_source_page_from_study_evidence_is_selected(self):
         self.assertIn("var requestedPage = Number(params.get('page')) || null;", self.script)
         self.assertIn("var requestedPageExists = requestedPage && state.pages.some", self.script)

@@ -69,6 +69,21 @@
     return [];
   }
 
+  function occurrencePagePreview(pages, activePage, limit) {
+    var previewLimit = Math.max(1, Math.floor(Number(limit) || 5));
+    var all = Array.from(new Set((pages || [])
+      .map(Number)
+      .filter(function (page) { return Number.isInteger(page) && page > 0; })))
+      .sort(function (a, b) { return a - b; });
+    var visible = all.slice(0, previewLimit);
+    var active = Number(activePage);
+    if (all.indexOf(active) >= 0 && visible.indexOf(active) < 0 && visible.length === previewLimit) {
+      visible[visible.length - 1] = active;
+      visible.sort(function (a, b) { return a - b; });
+    }
+    return { all: all, visible: visible, hiddenCount: Math.max(0, all.length - visible.length) };
+  }
+
   // Builds ordered page-range segments ("구간") from concept first-appearance
   // boundaries. Pages before the first concept's first_page join the first
   // segment rather than forming their own unlabeled group. When no concept
@@ -133,6 +148,7 @@
     segmentLabel: segmentLabel,
     pageDisplayTitle: pageDisplayTitle,
     scopeNavigationOptions: scopeNavigationOptions,
+    occurrencePagePreview: occurrencePagePreview,
   };
 
   if (typeof module !== 'undefined' && module.exports) {
