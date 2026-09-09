@@ -45,6 +45,7 @@
   var lectureNoteSaveInFlight = {};
   var lectureNoteDraftCounter = 0;
   var lectureNoteDeleteArmed = {};
+  var expandedConceptOccurrences = Object.create(null);
   var lastFocusedBeforeDrawer = null;
   var lastScopeMenuAnchor = null;
   var sourceWidthStorageKey = 'ln_study_workspace_source_width_v2';
@@ -566,15 +567,27 @@
   function conceptCardHTML(concept) {
     var key = esc(concept.name);
     var noteText = concept.note && concept.note.note_text ? concept.note.note_text : '';
-    var occurrences = (concept.pages || []).map(function (p) {
+    var preview = Logic.occurrencePagePreview(concept.pages, state.activePage, 5);
+    var expanded = !!expandedConceptOccurrences[concept.name];
+    var visiblePages = {};
+    preview.visible.forEach(function (page) { visiblePages[page] = true; });
+    var occurrences = preview.all.map(function (p) {
       var label = 'p.' + p;
       var inToc = state.pages.some(function (pg) { return pg.page === p; });
-      return '<button type="button" class="occurrence-chip" onclick="StudyWorkspace.jumpToPage(' + p + ')">' + label + (inToc ? '' : ' · 목차에 없는 출현 위치') + '</button>';
+      var overflow = !visiblePages[p];
+      return '<button type="button" class="occurrence-chip" data-occurrence-page="' + p + '"' +
+        (overflow ? ' data-occurrence-overflow="true"' : '') +
+        (!expanded && overflow ? ' hidden' : '') +
+        (state.activePage === p ? ' aria-current="page"' : '') + '>' +
+        label + (inToc ? '' : ' · 목차에 없는 출현 위치') + '</button>';
     }).join('');
+    var occurrenceToggle = preview.hiddenCount ?
+      '<button type="button" class="occurrence-more" data-occurrence-toggle="' + key + '" data-hidden-count="' + preview.hiddenCount + '" aria-expanded="' + expanded + '">' +
+      (expanded ? '접기' : '더보기 +' + preview.hiddenCount) + '</button>' : '';
     return '<div class="concept-card" data-concept="' + key + '">' +
       '<div class="concept-name">' + key + '</div>' +
       (concept.definition ? '<div class="concept-def">' + esc(concept.definition) + '</div>' : '') +
-      '<div class="occurrence-row">' + occurrences + '</div>' +
+      '<div class="occurrence-row">' + occurrences + occurrenceToggle + '</div>' +
       '<label class="note-label" for="note-' + key + '">내 노트</label>' +
       '<textarea id="note-' + key + '" class="note-input">' + esc(noteText) + '</textarea>' +
       '<div class="note-status" id="note-status-' + key + '"></div>' +
@@ -602,6 +615,24 @@
       var conceptName = card ? card.getAttribute('data-concept') : null;
       if (conceptName == null) return;
       onNoteInput(conceptName, e.target.value);
+    });
+    el('conceptList').addEventListener('click', function (e) {
+      var pageButton = e.target.closest('[data-occurrence-page]');
+      if (pageButton) {
+        jumpToPage(Number(pageButton.dataset.occurrencePage));
+        return;
+      }
+      var toggleButton = e.target.closest('[data-occurrence-toggle]');
+      if (!toggleButton) return;
+      var expanded = toggleButton.getAttribute('aria-expanded') !== 'true';
+      var conceptName = toggleButton.dataset.occurrenceToggle;
+      expandedConceptOccurrences[conceptName] = expanded;
+      var row = toggleButton.closest('.occurrence-row');
+      Array.prototype.forEach.call(row.querySelectorAll('[data-occurrence-overflow]'), function (chip) {
+        chip.hidden = !expanded;
+      });
+      toggleButton.setAttribute('aria-expanded', String(expanded));
+      toggleButton.textContent = expanded ? '접기' : '더보기 +' + toggleButton.dataset.hiddenCount;
     });
   }
 

@@ -2,7 +2,7 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { buildSegments, conceptsForSegment, pageDisplayTitle, scopeNavigationOptions } = require('../../web/study-workspace-logic.js');
+const { buildSegments, conceptsForSegment, pageDisplayTitle, scopeNavigationOptions, occurrencePagePreview } = require('../../web/study-workspace-logic.js');
 
 function page(n, concepts) {
   return { page: n, title: 'file.pdf', text_preview: 'p' + n, concepts: concepts || [] };
@@ -111,4 +111,17 @@ test('scopeNavigationOptions exposes semester, course, unit, and file choices', 
   assert.deepEqual(scopeNavigationOptions('course', scope, library, units), ['간호학', '약리학']);
   assert.deepEqual(scopeNavigationOptions('unit', scope, library, units), ['1주', '2주']);
   assert.deepEqual(scopeNavigationOptions('filename', scope, library, units), ['a.pdf', 'b.pdf']);
+});
+
+test('occurrencePagePreview shows five sorted unique positive pages by default', () => {
+  const preview = occurrencePagePreview([8, 2, '3', 2, 1, 20, 7, 6, 5, 4, 0, -1, 'bad'], null);
+  assert.deepEqual(preview.all, [1, 2, 3, 4, 5, 6, 7, 8, 20]);
+  assert.deepEqual(preview.visible, [1, 2, 3, 4, 5]);
+  assert.equal(preview.hiddenCount, 4);
+});
+
+test('occurrencePagePreview keeps the active occurrence visible outside the first five', () => {
+  const preview = occurrencePagePreview([1, 2, 3, 4, 5, 6, 20], 20, 5);
+  assert.deepEqual(preview.visible, [1, 2, 3, 4, 20]);
+  assert.equal(preview.hiddenCount, 2);
 });
