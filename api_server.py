@@ -4008,6 +4008,10 @@ async def study_workspace(
         note_obj = note_list[0] if note_list else None
         final = {
             "name": c.get("name"),
+            "english_name": c.get("english_name") or "",
+            "keyword": c.get("keyword") or "",
+            "aliases": c.get("aliases") if isinstance(c.get("aliases"), list) else [],
+            "synonyms": c.get("synonyms") if isinstance(c.get("synonyms"), list) else [],
             "definition": c.get("definition") or c.get("desc") or "",
             "first_page": first_page,
             "pages": pages,

@@ -566,6 +566,7 @@
 
   function conceptCardHTML(concept) {
     var key = esc(concept.name);
+    var englishName = Logic.conceptEnglishName(concept);
     var noteText = concept.note && concept.note.note_text ? concept.note.note_text : '';
     var preview = Logic.occurrencePagePreview(concept.pages, state.activePage, 5);
     var expanded = !!expandedConceptOccurrences[concept.name];
@@ -585,7 +586,8 @@
       '<button type="button" class="occurrence-more" data-occurrence-toggle="' + key + '" data-hidden-count="' + preview.hiddenCount + '" aria-expanded="' + expanded + '">' +
       (expanded ? '접기' : '더보기 +' + preview.hiddenCount) + '</button>' : '';
     return '<div class="concept-card" data-concept="' + key + '">' +
-      '<div class="concept-name">' + key + '</div>' +
+      '<div class="concept-name">' + key +
+      (englishName ? ' <span class="concept-english" lang="en">(' + esc(englishName) + ')</span>' : '') + '</div>' +
       (concept.definition ? '<div class="concept-def">' + esc(concept.definition) + '</div>' : '') +
       '<div class="occurrence-row">' + occurrences + occurrenceToggle + '</div>' +
       '<label class="note-label" for="note-' + key + '">내 노트</label>' +

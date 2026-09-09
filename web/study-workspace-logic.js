@@ -84,6 +84,30 @@
     return { all: all, visible: visible, hiddenCount: Math.max(0, all.length - visible.length) };
   }
 
+  function conceptEnglishName(concept) {
+    var conceptName = String(concept && concept.name || '').trim();
+    if (!concept || !/[가-힣]/.test(conceptName) || /\([A-Za-z][^)]*\)/.test(conceptName)) return '';
+    var candidates = [];
+    if (concept.english_name) candidates.push(concept.english_name);
+    if (concept.keyword) candidates.push(concept.keyword);
+    if (Array.isArray(concept.aliases)) candidates = candidates.concat(concept.aliases);
+    if (Array.isArray(concept.synonyms)) candidates = candidates.concat(concept.synonyms);
+
+    var usable = candidates.map(function (value) { return String(value || '').trim(); })
+      .filter(function (value, index, values) {
+        return value && value.length <= 80 && /[A-Za-z]/.test(value) && !/[가-힣]/.test(value) &&
+          value.toLocaleLowerCase() !== conceptName.toLocaleLowerCase() &&
+          values.findIndex(function (candidate) {
+            return candidate.toLocaleLowerCase() === value.toLocaleLowerCase();
+          }) === index;
+      });
+    if (!usable.length) return '';
+
+    return usable.find(function (value) {
+      return /[a-z]/.test(value) || /\s/.test(value);
+    }) || usable[0];
+  }
+
   // Builds ordered page-range segments ("구간") from concept first-appearance
   // boundaries. Pages before the first concept's first_page join the first
   // segment rather than forming their own unlabeled group. When no concept
@@ -149,6 +173,7 @@
     pageDisplayTitle: pageDisplayTitle,
     scopeNavigationOptions: scopeNavigationOptions,
     occurrencePagePreview: occurrencePagePreview,
+    conceptEnglishName: conceptEnglishName,
   };
 
   if (typeof module !== 'undefined' && module.exports) {

@@ -2,7 +2,7 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { buildSegments, conceptsForSegment, pageDisplayTitle, scopeNavigationOptions, occurrencePagePreview } = require('../../web/study-workspace-logic.js');
+const { buildSegments, conceptsForSegment, pageDisplayTitle, scopeNavigationOptions, occurrencePagePreview, conceptEnglishName } = require('../../web/study-workspace-logic.js');
 
 function page(n, concepts) {
   return { page: n, title: 'file.pdf', text_preview: 'p' + n, concepts: concepts || [] };
@@ -124,4 +124,24 @@ test('occurrencePagePreview keeps the active occurrence visible outside the firs
   const preview = occurrencePagePreview([1, 2, 3, 4, 5, 6, 20], 20, 5);
   assert.deepEqual(preview.visible, [1, 2, 3, 4, 20]);
   assert.equal(preview.hiddenCount, 2);
+});
+
+test('conceptEnglishName selects an English full term for a Korean concept', () => {
+  assert.equal(conceptEnglishName({
+    name: '서맥',
+    keyword: 'Bradycardia',
+    aliases: ['HR', 'bradycardia'],
+  }), 'Bradycardia');
+  assert.equal(conceptEnglishName({ name: '혈압', aliases: ['BP'] }), 'BP');
+});
+
+test('conceptEnglishName does not repeat English names or mixed-language fragments', () => {
+  assert.equal(conceptEnglishName({ name: 'Bradycardia', aliases: ['서맥'] }), '');
+  assert.equal(conceptEnglishName({ name: '서맥 (Bradycardia)', aliases: ['Bradycardia'] }), '');
+  assert.equal(conceptEnglishName({ name: '서맥', aliases: ['서맥 bradycardia'] }), '');
+  assert.equal(conceptEnglishName({ name: '서맥', aliases: [] }), '');
+});
+
+test('conceptEnglishName supports Korean concepts that contain Latin abbreviations', () => {
+  assert.equal(conceptEnglishName({ name: 'B세포', aliases: ['B cell'] }), 'B cell');
 });

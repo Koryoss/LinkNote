@@ -179,6 +179,11 @@ class StudyWorkspaceUiTests(unittest.TestCase):
         self.assertNotIn('onclick=', concept_card_source)
         self.assertIn("e.target.closest('[data-occurrence-page]')", self.script)
 
+    def test_concept_cards_show_available_english_names(self):
+        self.assertIn("Logic.conceptEnglishName(concept)", self.script)
+        self.assertIn('class="concept-english" lang="en"', self.script)
+        self.assertIn(".concept-english", self.html)
+
     def test_exact_source_page_from_study_evidence_is_selected(self):
         self.assertIn("var requestedPage = Number(params.get('page')) || null;", self.script)
         self.assertIn("var requestedPageExists = requestedPage && state.pages.some", self.script)
