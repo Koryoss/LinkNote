@@ -657,6 +657,27 @@ class SearchApiTests(unittest.TestCase):
         self.assertFalse(result[1]["source_available"])
         self.assertFalse(result[1].get("filename"))
 
+    def test_cached_search_results_are_upgraded_with_source_links(self):
+        request = api_server.AskSearchRequest(question="심부전", scope="multi", limit=3)
+        cache_key = api_server._search_cache_key("user-1", "심부전", {}, "multi", "")
+        api_server._save_search_cache({cache_key: {
+            "user_id": "user-1",
+            "result": {
+                "related_concepts": [{
+                    "concept": "심부전", "semester": "2026-1", "course": "병태생리학",
+                    "unit": "순환계", "filename": "순환계.pdf", "page": 7,
+                }],
+                "sources": [],
+            },
+        }})
+
+        with patch.object(api_server, "_iter_user_concepts_with_context", return_value=[]), \
+                patch.object(api_server, "_search_profile", return_value={}):
+            result = api_server._build_search_only_response("user-1", request)
+
+        self.assertTrue(result["from_cache"])
+        self.assertTrue(result["related_concepts"][0]["source_available"])
+
     def test_chunk_preview_cleans_bilingual_ocr_definition(self):
         preview = api_server._focused_chunk_preview(
             "A|24(Bradycardia)\n분당609] 미만의느린심박동\n4194(Tachycardia)\n분당100회이상의빠른심박동",

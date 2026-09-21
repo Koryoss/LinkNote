@@ -3040,6 +3040,10 @@ def _build_search_only_response(user_id: str, request: AskSearchRequest) -> Dict
         cached = _load_search_cache().get(cache_key)
         if isinstance(cached, dict) and cached.get("user_id") == user_id:
             result = dict(cached.get("result") or {})
+            result["related_concepts"] = _attach_search_concept_sources(
+                result.get("related_concepts") or [],
+                result.get("sources") or [],
+            )
             result["from_cache"] = True
             result["search_id"] = uuid.uuid4().hex
             return result
