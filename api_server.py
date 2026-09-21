@@ -2766,6 +2766,18 @@ def _definition_evidence_score(text: str, preview: str, tokens: List[str]) -> fl
     for token in tokens:
         term = re.escape(str(token or "").strip())
         if term and re.search(
+            rf"{term}\s*(?:은|는|이란|란)\s*.{{2,140}}(?:상태|질환|현상|과정|반응|장애|증후군)(?:이다|입니다|를?\s*말한다|를?\s*의미한다)",
+            evidence,
+            re.IGNORECASE,
+        ):
+            score += 0.45
+        if term and re.search(
+            rf"{term}.{{0,40}}(?:is defined as|refers to|is (?:a|an) (?:condition|disease|reaction|disorder|syndrome))",
+            evidence,
+            re.IGNORECASE,
+        ):
+            score += 0.45
+        if term and re.search(
             rf"(?:^|[\n·])\s*[^\n·:]{{0,24}}{term}\s*(?:\([^)]{{1,40}}\))?\s*[:：-]",
             f"{preview}\n{text}",
             re.IGNORECASE,
@@ -2777,6 +2789,57 @@ def _definition_evidence_score(text: str, preview: str, tokens: List[str]) -> fl
     if any(marker in evidence for marker in ("느린 심박동", "빠른 심박동", "말한다", "상태이다")):
         score += 0.25
     return round(min(1.0, score), 4)
+
+
+_SEARCH_EVIDENCE_TYPES = {
+    "definition": ("정의", 1.0),
+    "mechanism": ("기전·원리", 0.8),
+    "treatment": ("치료·활용", 0.65),
+    "case": ("사례·문제", 0.45),
+    "caution": ("부작용·주의", 0.25),
+    "mention": ("관련 언급", 0.0),
+}
+
+
+def _classify_search_evidence(
+    text: str,
+    preview: str,
+    tokens: List[str],
+    definition_score: float,
+) -> tuple[str, str, float]:
+    """Classify why a source is useful without pretending examples are definitions."""
+    evidence = re.sub(r"\s+", " ", preview or text).strip().lower()
+    segments = [
+        segment.strip()
+        for segment in re.split(r"\s+·\s+|(?<=[.!?])\s+", evidence)
+        if segment.strip()
+    ]
+    matching_segments = [
+        segment for segment in segments
+        if any(str(token or "").lower() in segment for token in tokens)
+    ]
+    if matching_segments:
+        evidence = matching_segments[0]
+    positions = [evidence.find(str(token or "").lower()) for token in tokens]
+    positions = [position for position in positions if position >= 0]
+    if positions:
+        position = min(positions)
+        evidence = evidence[max(0, position - 80):position + 180]
+
+    if definition_score > 0:
+        kind = "definition"
+    elif re.search(r"(?:부작용|위험|금기|주의|무효|독성|이상반응|과민반응)", evidence):
+        kind = "caution"
+    elif "?" in evidence or re.search(r"(?:환자|사례|예시|가장 적절|무엇인가)", evidence):
+        kind = "case"
+    elif re.search(r"(?:기전|병태|원인|유발|매개|경로|활성화|억제|결합)", evidence):
+        kind = "mechanism"
+    elif re.search(r"(?:치료|선택약물|선택제|사용|투여|적응증|예방|병용|해독|관리)", evidence):
+        kind = "treatment"
+    else:
+        kind = "mention"
+    label, score = _SEARCH_EVIDENCE_TYPES[kind]
+    return kind, label, score
 
 
 def _diversify_search_sources(items: List[Dict[str, Any]], limit: int) -> List[Dict[str, Any]]:
@@ -2859,11 +2922,16 @@ def _search_sources(
             default={},
         )
         preview = _focused_chunk_preview(str(item.get("text", "")), tokens)
+        definition = _definition_evidence_score(str(item.get("text", "")), preview, tokens)
+        evidence_kind, evidence_label, evidence_score = _classify_search_evidence(
+            str(item.get("text", "")), preview, tokens, definition
+        )
         components = {
             "semantic": semantic,
             "keyword": keyword,
             "concept": concept_match,
-            "definition": _definition_evidence_score(str(item.get("text", "")), preview, tokens),
+            "definition": definition,
+            "evidence": evidence_score,
             "learning": learning_score(learning_meta),
             "preference": preference_score(profile, str(item.get("course") or ""), matched_concepts[0][0] if matched_concepts else ""),
         }
@@ -2891,6 +2959,8 @@ def _search_sources(
             "matched_fields": matched,
             "reason": score_reason(components, matched),
             "matched_concepts": [name for name, _ in matched_concepts[:3]],
+            "evidence_kind": evidence_kind,
+            "evidence_label": evidence_label,
             "_sort": final_score,
         })
     best_by_page: Dict[tuple[str, Any], Dict[str, Any]] = {}
@@ -3037,6 +3107,8 @@ def _document_backed_concepts(
                 "review_priority": 70,
                 "origin": "document",
                 "source_id": source.get("id", ""),
+                "evidence_kind": source.get("evidence_kind", "mention"),
+                "evidence_label": source.get("evidence_label", "관련 언급"),
             })
             if len(results) >= limit:
                 return results
@@ -3070,7 +3142,7 @@ def _attach_search_concept_sources(
 
         if candidates:
             best = max(candidates, key=lambda value: float(value.get("score") or 0))
-            for key in ("semester", "course", "unit", "filename", "page"):
+            for key in ("semester", "course", "unit", "filename", "page", "evidence_kind", "evidence_label"):
                 if not concept.get(key):
                     concept[key] = best.get(key, "")
 
@@ -3138,6 +3210,8 @@ def _build_search_only_response(user_id: str, request: AskSearchRequest) -> Dict
         "from_cache": False,
         "related_concepts": related_concepts,
         "sources": sources,
+        "definition_found": any(source.get("evidence_kind") == "definition" for source in sources),
+        "evidence_order": ["정의", "기전·원리", "치료·활용", "사례·문제", "부작용·주의", "관련 언급"],
         "learning_memory_matches": _search_learning_memory(
             user_id, tokens, search_filter, scope, limit, learning_metadata, profile
         ),

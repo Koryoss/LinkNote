@@ -63,7 +63,7 @@ class SearchEngineTests(unittest.TestCase):
         self.assertGreater(relevant, personalized)
 
     def test_algorithm_version_is_explicit(self):
-        self.assertEqual(SEARCH_ALGORITHM_VERSION, "definition_diversified_v7")
+        self.assertEqual(SEARCH_ALGORITHM_VERSION, "evidence_sequence_v8")
 
     def test_source_relevance_requires_direct_or_strong_semantic_evidence(self):
         self.assertEqual(source_relevance_label({"semantic": 0.55, "keyword": 0.0, "concept": 0.0}), "")

@@ -20,6 +20,11 @@ class QuickSearchUiTests(unittest.TestCase):
         self.assertIn("if(!x.source_available)", self.html)
         self.assertIn("search-item-concept-unlinked", self.html)
 
+    def test_search_results_show_evidence_types_and_missing_definition_notice(self):
+        self.assertIn("x.evidence_label", self.html)
+        self.assertIn("d.definition_found === false", self.html)
+        self.assertIn("정의형 원문은 확인되지 않아", self.html)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -43,7 +43,7 @@ class SearchApiTests(unittest.TestCase):
             result = api_server._build_search_only_response("user-1", request)
         self.assertEqual(result["intent"], "definition")
         self.assertEqual(result["scope"], "multi")
-        self.assertEqual(result["algorithm_version"], "definition_diversified_v7")
+        self.assertEqual(result["algorithm_version"], "evidence_sequence_v8")
         self.assertTrue(result["semantic_search_used"])
         self.assertTrue(result["search_id"])
 
@@ -801,6 +801,56 @@ class SearchApiTests(unittest.TestCase):
             )
 
         self.assertEqual(sources[0]["id"], "old-semester-definition")
+
+    def test_search_evidence_classifier_separates_learning_roles(self):
+        cases = [
+            ("서맥: 분당 60회 미만의 느린 심박동", "definition"),
+            ("아나필락시스는 전신적으로 급격히 나타나는 중증 과민반응이다", "definition"),
+            ("아나필락시스는 IgE 매개 반응으로 유발된다", "mechanism"),
+            ("아나필락시스 치료의 선택약물은 epinephrine이다", "treatment"),
+            ("땅콩 아나필락시스 환자에게 가장 적절한 약물은?", "case"),
+            ("항-IgE 약물은 아나필락시스 위험이 있다", "caution"),
+            ("침분비·서맥·경련. · Atropine은 AChE를 억제한다", "mention"),
+        ]
+        for text, expected in cases:
+            with self.subTest(expected=expected):
+                definition = api_server._definition_evidence_score(text, text, ["아나필락시스", "서맥"])
+                kind, label, score = api_server._classify_search_evidence(
+                    text, text, ["아나필락시스", "서맥"], definition
+                )
+                self.assertEqual(kind, expected)
+                self.assertTrue(label)
+                self.assertGreaterEqual(score, 0)
+
+    def test_anaphylaxis_results_order_treatment_case_caution_without_definition(self):
+        chunks = [
+            {
+                "id": "caution", "semester": "2026-2", "course": "약물학",
+                "unit": "항체", "filename": "drug.pdf", "page": 35, "chunk_index": 0,
+                "text": "항-IgE 단클론항체는 아나필락시스 위험이 있다.",
+            },
+            {
+                "id": "case", "semester": "2026-2", "course": "약물학",
+                "unit": "응급", "filename": "drug.pdf", "page": 72, "chunk_index": 0,
+                "text": "땅콩 아나필락시스 환자에게 가장 적절한 약물은? Epinephrine",
+            },
+            {
+                "id": "treatment", "semester": "2026-2", "course": "약물학",
+                "unit": "응급", "filename": "drug.pdf", "page": 67, "chunk_index": 0,
+                "text": "아나필락시스 치료의 일차선택제로 epinephrine을 사용한다.",
+            },
+        ]
+        with patch.object(api_server, "get_chunks", return_value={"items": chunks}), \
+                patch.object(api_server, "search_relevant_chunks", return_value=[]):
+            sources, _ = api_server._search_sources(
+                "user-1", "아나필락시스", ["아나필락시스"], {}, "multi", 3, [], {}, {}
+            )
+
+        self.assertEqual([source["id"] for source in sources], ["treatment", "case", "caution"])
+        self.assertEqual(
+            [source["evidence_label"] for source in sources],
+            ["치료·활용", "사례·문제", "부작용·주의"],
+        )
 
     def test_concept_notes_upsert_no_duplicate(self):
         user = "user-1"
