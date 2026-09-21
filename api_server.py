@@ -2754,6 +2754,59 @@ def _chunk_preview_quality(item: Dict[str, Any]) -> tuple[int, float]:
     return definition_bonus, korean_ratio
 
 
+def _definition_evidence_score(text: str, preview: str, tokens: List[str]) -> float:
+    """Score direct explanatory evidence above incidental term mentions."""
+    evidence = re.sub(r"\s+", " ", f"{preview}\n{text}").strip().lower()
+    if not evidence or not any(str(token or "").lower() in evidence for token in tokens):
+        return 0.0
+
+    score = 0.0
+    if re.search(r"(?:정의|뜻|의미|이란|란\s)", evidence):
+        score += 0.35
+    for token in tokens:
+        term = re.escape(str(token or "").strip())
+        if term and re.search(
+            rf"(?:^|[\n·])\s*[^\n·:]{{0,24}}{term}\s*(?:\([^)]{{1,40}}\))?\s*[:：-]",
+            f"{preview}\n{text}",
+            re.IGNORECASE,
+        ):
+            score += 0.25
+            break
+    if re.search(r"(?:미만|이상|이하|초과).{0,18}(?:심박동|회|번|수치)", evidence):
+        score += 0.30
+    if any(marker in evidence for marker in ("느린 심박동", "빠른 심박동", "말한다", "상태이다")):
+        score += 0.25
+    return round(min(1.0, score), 4)
+
+
+def _diversify_search_sources(items: List[Dict[str, Any]], limit: int) -> List[Dict[str, Any]]:
+    """Round-robin relevant courses so one class cannot consume every slot."""
+    groups: Dict[tuple[str, str], List[Dict[str, Any]]] = {}
+    group_order: List[tuple[str, str]] = []
+    for item in items:
+        key = (str(item.get("semester") or ""), str(item.get("course") or ""))
+        if key not in groups:
+            groups[key] = []
+            group_order.append(key)
+        groups[key].append(item)
+
+    selected: List[Dict[str, Any]] = []
+    depth = 0
+    while len(selected) < limit:
+        added = False
+        for key in group_order:
+            group = groups[key]
+            if depth < len(group):
+                selected.append(group[depth])
+                added = True
+                if len(selected) >= limit:
+                    break
+        if not added:
+            break
+        depth += 1
+    return selected
+
+
 def _search_sources(
     user_id: str,
     question: str,
@@ -2766,7 +2819,9 @@ def _search_sources(
     profile: Dict[str, Any],
 ) -> tuple[List[Dict[str, Any]], bool]:
     chroma_filter = _filter_for_chroma(search_filter, scope)
-    data = get_chunks(user_id=user_id, limit=5000, offset=0, search_filter=chroma_filter, full=True)
+    # get_chunks already materializes the complete filtered collection. Avoid
+    # slicing at 5,000: older semesters can otherwise disappear from search.
+    data = get_chunks(user_id=user_id, limit=None, offset=0, search_filter=chroma_filter, full=True)
     semantic_by_id: Dict[str, Dict[str, Any]] = {}
     semantic_used = False
     try:
@@ -2803,10 +2858,12 @@ def _search_sources(
             key=lambda meta: int(meta.get("review_priority") or 0),
             default={},
         )
+        preview = _focused_chunk_preview(str(item.get("text", "")), tokens)
         components = {
             "semantic": semantic,
             "keyword": keyword,
             "concept": concept_match,
+            "definition": _definition_evidence_score(str(item.get("text", "")), preview, tokens),
             "learning": learning_score(learning_meta),
             "preference": preference_score(profile, str(item.get("course") or ""), matched_concepts[0][0] if matched_concepts else ""),
         }
@@ -2827,7 +2884,7 @@ def _search_sources(
             "filename": item.get("filename", ""),
             "page": item.get("page"),
             "chunk_index": item.get("chunk_index"),
-            "chunk_preview": _focused_chunk_preview(str(item.get("text", "")), tokens),
+            "chunk_preview": preview,
             "score": round(final_score * 100, 1),
             "relevance_label": relevance_label,
             "score_components": components,
@@ -2843,8 +2900,15 @@ def _search_sources(
         if existing is None or (_chunk_preview_quality(item), item["_sort"]) > (_chunk_preview_quality(existing), existing["_sort"]):
             best_by_page[page_key] = item
     unique = list(best_by_page.values())
-    unique.sort(key=lambda item: (-item["_sort"], str(item.get("course", "")), str(item.get("filename", "")), int(item.get("page") or 0)))
-    return ([{k: v for k, v in item.items() if k != "_sort"} for item in unique[:limit]], semantic_used)
+    unique.sort(key=lambda item: (
+        -item["_sort"],
+        -float(item.get("score_components", {}).get("definition", 0.0) or 0.0),
+        str(item.get("course", "")),
+        str(item.get("filename", "")),
+        int(item.get("page") or 0),
+    ))
+    diversified = _diversify_search_sources(unique, limit)
+    return ([{k: v for k, v in item.items() if k != "_sort"} for item in diversified], semantic_used)
 
 
 def _memory_list_field(item: Dict[str, Any], key: str) -> List[str]:
@@ -3048,15 +3112,18 @@ def _build_search_only_response(user_id: str, request: AskSearchRequest) -> Dict
             result["search_id"] = uuid.uuid4().hex
             return result
 
-    sources, semantic_used = _search_sources(
-        user_id, question, tokens, search_filter, scope, limit, concepts_data, learning_metadata, profile
+    candidate_limit = min(36, max(12, limit * 3))
+    source_candidates, semantic_used = _search_sources(
+        user_id, question, tokens, search_filter, scope, candidate_limit,
+        concepts_data, learning_metadata, profile
     )
+    sources = source_candidates[:limit]
     related_concepts = _search_related_concepts(
         user_id, tokens, search_filter, scope, limit, concepts_data, learning_metadata, profile
     )
     if not related_concepts:
-        related_concepts = _document_backed_concepts(base_tokens, alias_map, sources, limit)
-    related_concepts = _attach_search_concept_sources(related_concepts, sources)
+        related_concepts = _document_backed_concepts(base_tokens, alias_map, source_candidates, limit)
+    related_concepts = _attach_search_concept_sources(related_concepts, source_candidates)
     result = {
         "search_id": uuid.uuid4().hex,
         "question": question,

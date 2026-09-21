@@ -43,7 +43,7 @@ class SearchApiTests(unittest.TestCase):
             result = api_server._build_search_only_response("user-1", request)
         self.assertEqual(result["intent"], "definition")
         self.assertEqual(result["scope"], "multi")
-        self.assertEqual(result["algorithm_version"], "hybrid_personalized_v4")
+        self.assertEqual(result["algorithm_version"], "definition_diversified_v7")
         self.assertTrue(result["semantic_search_used"])
         self.assertTrue(result["search_id"])
 
@@ -734,6 +734,73 @@ class SearchApiTests(unittest.TestCase):
             )
         self.assertEqual(len(sources), 1)
         self.assertEqual(sources[0]["relevance_label"], "직접 일치")
+
+    def test_source_search_ranks_definition_above_personalized_incidental_mentions(self):
+        chunks = [
+            {
+                "id": "definition", "semester": "2026-1", "course": "병태생리학 1",
+                "unit": "심장 부정맥", "filename": "심혈관계.pdf", "page": 4, "chunk_index": 0,
+                "text": "Bradycardia\n분당 60회 미만의 느린 심박동",
+            },
+            {
+                "id": "incidental", "semester": "2026-2", "course": "약물기전과효과",
+                "unit": "1-7강", "filename": "약물.pdf", "page": 53, "chunk_index": 0,
+                "text": "유기인계 중독의 부작용으로 서맥이 나타날 수 있다.",
+            },
+        ]
+        profile = {"course_counts": {"약물기전과효과": 100}}
+        with patch.object(api_server, "get_chunks", return_value={"items": chunks}), \
+                patch.object(api_server, "search_relevant_chunks", return_value=[]):
+            sources, _ = api_server._search_sources(
+                "user-1", "서맥", ["서맥", "bradycardia"], {}, "multi", 2, [], {}, profile
+            )
+
+        self.assertEqual(sources[0]["id"], "definition")
+        self.assertGreater(sources[0]["score_components"]["definition"], 0)
+        self.assertEqual(sources[1]["id"], "incidental")
+
+    def test_source_search_interleaves_distinct_courses_before_repeated_pages(self):
+        chunks = [
+            {
+                "id": "a-1", "semester": "2026-2", "course": "약물학", "unit": "중독",
+                "filename": "a.pdf", "page": 1, "chunk_index": 0, "text": "서맥 부작용",
+            },
+            {
+                "id": "a-2", "semester": "2026-2", "course": "약물학", "unit": "중독",
+                "filename": "a.pdf", "page": 2, "chunk_index": 0, "text": "서맥 치료",
+            },
+            {
+                "id": "b-1", "semester": "2026-1", "course": "병태생리학", "unit": "부정맥",
+                "filename": "b.pdf", "page": 4, "chunk_index": 0, "text": "서맥 심박동",
+            },
+        ]
+        with patch.object(api_server, "get_chunks", return_value={"items": chunks}), \
+                patch.object(api_server, "search_relevant_chunks", return_value=[]):
+            sources, _ = api_server._search_sources(
+                "user-1", "서맥", ["서맥"], {}, "multi", 3, [], {}, {}
+            )
+
+        self.assertEqual({sources[0]["course"], sources[1]["course"]}, {"약물학", "병태생리학"})
+        self.assertEqual(sources[2]["course"], "약물학")
+
+    def test_source_search_does_not_apply_a_fixed_chunk_cap(self):
+        chunk = {
+            "id": "old-semester-definition", "semester": "2026-1", "course": "병태생리학",
+            "unit": "부정맥", "filename": "old.pdf", "page": 4, "chunk_index": 0,
+            "text": "서맥 (Bradycardia): 분당 60회 미만의 느린 심박동",
+        }
+
+        def fake_get_chunks(*, limit, **_kwargs):
+            self.assertIsNone(limit)
+            return {"total": 5001, "items": [chunk]}
+
+        with patch.object(api_server, "get_chunks", side_effect=fake_get_chunks), \
+                patch.object(api_server, "search_relevant_chunks", return_value=[]):
+            sources, _ = api_server._search_sources(
+                "user-1", "서맥", ["서맥", "bradycardia"], {}, "multi", 5, [], {}, {}
+            )
+
+        self.assertEqual(sources[0]["id"], "old-semester-definition")
 
     def test_concept_notes_upsert_no_duplicate(self):
         user = "user-1"

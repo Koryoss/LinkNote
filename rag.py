@@ -638,7 +638,8 @@ def get_chunks(user_id, limit=50, offset=0, search_filter=None, full=False):
     results = collection.get(where=where_filter, include=["metadatas", "documents"])
     items = [{**meta, "id": id_val, "text": doc if full else doc[:200]} for id_val, meta, doc in zip(results["ids"], results["metadatas"], results["documents"])]
     items.sort(key=lambda x: (x.get("filename", ""), x.get("page", 0), x.get("chunk_index", 0)))
-    return {"total": len(items), "limit": limit, "offset": offset, "items": items[offset:offset + limit]}
+    selected = items[offset:] if limit is None else items[offset:offset + limit]
+    return {"total": len(items), "limit": limit, "offset": offset, "items": selected}
 
 def _chunk_key(chunk):
     return (chunk.get("filename", ""), chunk.get("page", ""), chunk.get("chunk_index", ""))
