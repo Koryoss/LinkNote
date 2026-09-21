@@ -597,8 +597,11 @@ class SearchApiTests(unittest.TestCase):
             {"서맥": ["bradycardia"]},
             [{
                 "id": "chunk-1",
+                "semester": "2026-1",
                 "course": "병태생리학 1",
                 "unit": "심장 부정맥, 염증과 감염",
+                "filename": "심혈관계.pdf",
+                "page": 4,
                 "chunk_preview": "서맥 (Bradycardia): 분당 60회 미만의 느린 심박동",
                 "score": 72.5,
             }],
@@ -607,6 +610,52 @@ class SearchApiTests(unittest.TestCase):
         self.assertEqual(len(concepts), 1)
         self.assertEqual(concepts[0]["concept"], "서맥 (Bradycardia)")
         self.assertEqual(concepts[0]["origin"], "document")
+        self.assertEqual(concepts[0]["semester"], "2026-1")
+        self.assertEqual(concepts[0]["filename"], "심혈관계.pdf")
+        self.assertEqual(concepts[0]["page"], 4)
+
+    def test_related_concept_uses_first_verified_occurrence_as_source_page(self):
+        result = api_server._search_related_concepts(
+            "user-1", ["심부전"], {}, "multi", 5,
+            [{
+                "name": "심부전",
+                "semester": "2026-1",
+                "course": "병태생리학",
+                "unit": "순환계",
+                "occurrences": [
+                    {"filename": "순환계.pdf", "page": 7},
+                    {"filename": "순환계.pdf", "page": 11},
+                ],
+            }],
+            {}, {},
+        )
+
+        self.assertEqual(result[0]["semester"], "2026-1")
+        self.assertEqual(result[0]["filename"], "순환계.pdf")
+        self.assertEqual(result[0]["page"], 7)
+
+    def test_concept_source_attachment_only_uses_matching_evidence(self):
+        concepts = [
+            {"concept": "심부전", "course": "병태생리학", "unit": "순환계"},
+            {"concept": "고혈압", "course": "병태생리학", "unit": "순환계"},
+        ]
+        sources = [{
+            "semester": "2026-1",
+            "course": "병태생리학",
+            "unit": "순환계",
+            "filename": "순환계.pdf",
+            "page": 7,
+            "score": 90,
+            "matched_concepts": ["심부전"],
+        }]
+
+        result = api_server._attach_search_concept_sources(concepts, sources)
+
+        self.assertTrue(result[0]["source_available"])
+        self.assertEqual(result[0]["filename"], "순환계.pdf")
+        self.assertEqual(result[0]["page"], 7)
+        self.assertFalse(result[1]["source_available"])
+        self.assertFalse(result[1].get("filename"))
 
     def test_chunk_preview_cleans_bilingual_ocr_definition(self):
         preview = api_server._focused_chunk_preview(

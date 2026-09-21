@@ -2522,6 +2522,7 @@ def _search_cache_key(
 ) -> str:
     payload = {
         "algorithm_version": SEARCH_ALGORITHM_VERSION,
+        "result_schema": "concept_source_page_v1",
         "user_id": user_id,
         "question": " ".join((question or "").lower().split()),
         "search_filter": search_filter,
@@ -2605,6 +2606,14 @@ def _concept_learning_metadata(item: Dict[str, Any], learning_metadata: Dict[str
     )
 
 
+def _search_page_number(value: Any) -> Optional[int]:
+    try:
+        page = int(value)
+    except (TypeError, ValueError):
+        return None
+    return page if page > 0 else None
+
+
 def _search_related_concepts(
     user_id: str,
     tokens: List[str],
@@ -2642,10 +2651,26 @@ def _search_related_concepts(
         if keyword <= 0 and concept_match <= 0:
             continue
         matched = matched_fields(fields, tokens)
+        occurrences = item.get("occurrences") if isinstance(item.get("occurrences"), list) else []
+        source_occurrence = next((
+            occurrence for occurrence in occurrences
+            if isinstance(occurrence, dict)
+            and str(occurrence.get("filename") or "").strip()
+            and _search_page_number(occurrence.get("page")) is not None
+        ), {})
+        pages = item.get("pages") if isinstance(item.get("pages"), list) else []
+        source_page = (
+            _search_page_number(item.get("page"))
+            or _search_page_number(source_occurrence.get("page"))
+            or next((_search_page_number(page) for page in pages if _search_page_number(page) is not None), None)
+        )
         concepts.append({
             "concept": concept,
+            "semester": item.get("semester", ""),
             "course": item.get("course", ""),
             "unit": item.get("unit", ""),
+            "filename": item.get("filename") or source_occurrence.get("filename", ""),
+            "page": source_page,
             "reason": score_reason(components, matched),
             "score": round(final_score * 100, 1),
             "score_components": components,
@@ -2937,8 +2962,11 @@ def _document_backed_concepts(
                 label = f"{token} ({english_alias.title()})"
             results.append({
                 "concept": label,
+                "semester": source.get("semester", ""),
                 "course": source.get("course", ""),
                 "unit": source.get("unit", ""),
+                "filename": source.get("filename", ""),
+                "page": source.get("page"),
                 "reason": "추출 개념 목록에는 없지만 업로드한 문서 본문에서 직접 확인되었습니다.",
                 "score": source.get("score", 0),
                 "learning_state": "NEW",
@@ -2949,6 +2977,48 @@ def _document_backed_concepts(
             if len(results) >= limit:
                 return results
     return results
+
+
+def _attach_search_concept_sources(
+    concepts: List[Dict[str, Any]],
+    sources: List[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    """Attach a verified source page to concept results without guessing across documents."""
+    enriched: List[Dict[str, Any]] = []
+    for raw_concept in concepts:
+        concept = dict(raw_concept)
+        filename = str(concept.get("filename") or "").strip()
+        page = _search_page_number(concept.get("page"))
+        candidates: List[Dict[str, Any]] = []
+        concept_key = _concept_key(concept.get("concept"))
+        for source in sources:
+            source_filename = str(source.get("filename") or "").strip()
+            source_page = _search_page_number(source.get("page"))
+            same_location = bool(
+                filename and source_filename == filename and page is not None and source_page == page
+            )
+            matched_keys = {
+                _concept_key(value) for value in (source.get("matched_concepts") or [])
+                if _concept_key(value)
+            }
+            if same_location or (concept_key and concept_key in matched_keys):
+                candidates.append(source)
+
+        if candidates:
+            best = max(candidates, key=lambda value: float(value.get("score") or 0))
+            for key in ("semester", "course", "unit", "filename", "page"):
+                if not concept.get(key):
+                    concept[key] = best.get(key, "")
+
+        concept["page"] = _search_page_number(concept.get("page"))
+        concept["source_available"] = bool(
+            str(concept.get("semester") or "").strip()
+            and str(concept.get("course") or "").strip()
+            and str(concept.get("filename") or "").strip()
+            and concept.get("page") is not None
+        )
+        enriched.append(concept)
+    return enriched
 
 
 def _build_search_only_response(user_id: str, request: AskSearchRequest) -> Dict[str, Any]:
@@ -2982,6 +3052,7 @@ def _build_search_only_response(user_id: str, request: AskSearchRequest) -> Dict
     )
     if not related_concepts:
         related_concepts = _document_backed_concepts(base_tokens, alias_map, sources, limit)
+    related_concepts = _attach_search_concept_sources(related_concepts, sources)
     result = {
         "search_id": uuid.uuid4().hex,
         "question": question,
