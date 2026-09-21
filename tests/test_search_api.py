@@ -339,7 +339,7 @@ class SearchApiTests(unittest.TestCase):
                     course: {
                         unit: [
                             {"name": "C10", "keyword": "C10", "occurrences": [{"filename": filename, "page": 10}]},
-                            {"name": "C2", "keyword": "C2", "occurrences": [{"filename": filename, "page": 2}]},
+                            {"name": "C2", "keyword": "C2", "aliases": ["Concept two"], "occurrences": [{"filename": filename, "page": 2}]},
                         ]
                     }
                 }
@@ -381,6 +381,8 @@ class SearchApiTests(unittest.TestCase):
         c2 = next(c for c in resp["concepts"] if c["name"] == "C2")
         self.assertIsNotNone(c2.get("note"))
         self.assertEqual(c2["note"]["note_text"], "note1")
+        self.assertEqual(c2["keyword"], "C2")
+        self.assertEqual(c2["aliases"], ["Concept two"])
 
     def test_study_workspace_returns_404_for_wrong_scope_with_same_filename(self):
         user = "user-1"
