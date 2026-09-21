@@ -43,7 +43,7 @@ class SearchApiTests(unittest.TestCase):
             result = api_server._build_search_only_response("user-1", request)
         self.assertEqual(result["intent"], "definition")
         self.assertEqual(result["scope"], "multi")
-        self.assertEqual(result["algorithm_version"], "hybrid_personalized_v4")
+        self.assertEqual(result["algorithm_version"], "evidence_sequence_v8")
         self.assertTrue(result["semantic_search_used"])
         self.assertTrue(result["search_id"])
 
@@ -734,6 +734,123 @@ class SearchApiTests(unittest.TestCase):
             )
         self.assertEqual(len(sources), 1)
         self.assertEqual(sources[0]["relevance_label"], "직접 일치")
+
+    def test_source_search_ranks_definition_above_personalized_incidental_mentions(self):
+        chunks = [
+            {
+                "id": "definition", "semester": "2026-1", "course": "병태생리학 1",
+                "unit": "심장 부정맥", "filename": "심혈관계.pdf", "page": 4, "chunk_index": 0,
+                "text": "Bradycardia\n분당 60회 미만의 느린 심박동",
+            },
+            {
+                "id": "incidental", "semester": "2026-2", "course": "약물기전과효과",
+                "unit": "1-7강", "filename": "약물.pdf", "page": 53, "chunk_index": 0,
+                "text": "유기인계 중독의 부작용으로 서맥이 나타날 수 있다.",
+            },
+        ]
+        profile = {"course_counts": {"약물기전과효과": 100}}
+        with patch.object(api_server, "get_chunks", return_value={"items": chunks}), \
+                patch.object(api_server, "search_relevant_chunks", return_value=[]):
+            sources, _ = api_server._search_sources(
+                "user-1", "서맥", ["서맥", "bradycardia"], {}, "multi", 2, [], {}, profile
+            )
+
+        self.assertEqual(sources[0]["id"], "definition")
+        self.assertGreater(sources[0]["score_components"]["definition"], 0)
+        self.assertEqual(sources[1]["id"], "incidental")
+
+    def test_source_search_interleaves_distinct_courses_before_repeated_pages(self):
+        chunks = [
+            {
+                "id": "a-1", "semester": "2026-2", "course": "약물학", "unit": "중독",
+                "filename": "a.pdf", "page": 1, "chunk_index": 0, "text": "서맥 부작용",
+            },
+            {
+                "id": "a-2", "semester": "2026-2", "course": "약물학", "unit": "중독",
+                "filename": "a.pdf", "page": 2, "chunk_index": 0, "text": "서맥 치료",
+            },
+            {
+                "id": "b-1", "semester": "2026-1", "course": "병태생리학", "unit": "부정맥",
+                "filename": "b.pdf", "page": 4, "chunk_index": 0, "text": "서맥 심박동",
+            },
+        ]
+        with patch.object(api_server, "get_chunks", return_value={"items": chunks}), \
+                patch.object(api_server, "search_relevant_chunks", return_value=[]):
+            sources, _ = api_server._search_sources(
+                "user-1", "서맥", ["서맥"], {}, "multi", 3, [], {}, {}
+            )
+
+        self.assertEqual({sources[0]["course"], sources[1]["course"]}, {"약물학", "병태생리학"})
+        self.assertEqual(sources[2]["course"], "약물학")
+
+    def test_source_search_does_not_apply_a_fixed_chunk_cap(self):
+        chunk = {
+            "id": "old-semester-definition", "semester": "2026-1", "course": "병태생리학",
+            "unit": "부정맥", "filename": "old.pdf", "page": 4, "chunk_index": 0,
+            "text": "서맥 (Bradycardia): 분당 60회 미만의 느린 심박동",
+        }
+
+        def fake_get_chunks(*, limit, **_kwargs):
+            self.assertIsNone(limit)
+            return {"total": 5001, "items": [chunk]}
+
+        with patch.object(api_server, "get_chunks", side_effect=fake_get_chunks), \
+                patch.object(api_server, "search_relevant_chunks", return_value=[]):
+            sources, _ = api_server._search_sources(
+                "user-1", "서맥", ["서맥", "bradycardia"], {}, "multi", 5, [], {}, {}
+            )
+
+        self.assertEqual(sources[0]["id"], "old-semester-definition")
+
+    def test_search_evidence_classifier_separates_learning_roles(self):
+        cases = [
+            ("서맥: 분당 60회 미만의 느린 심박동", "definition"),
+            ("아나필락시스는 전신적으로 급격히 나타나는 중증 과민반응이다", "definition"),
+            ("아나필락시스는 IgE 매개 반응으로 유발된다", "mechanism"),
+            ("아나필락시스 치료의 선택약물은 epinephrine이다", "treatment"),
+            ("땅콩 아나필락시스 환자에게 가장 적절한 약물은?", "case"),
+            ("항-IgE 약물은 아나필락시스 위험이 있다", "caution"),
+            ("침분비·서맥·경련. · Atropine은 AChE를 억제한다", "mention"),
+        ]
+        for text, expected in cases:
+            with self.subTest(expected=expected):
+                definition = api_server._definition_evidence_score(text, text, ["아나필락시스", "서맥"])
+                kind, label, score = api_server._classify_search_evidence(
+                    text, text, ["아나필락시스", "서맥"], definition
+                )
+                self.assertEqual(kind, expected)
+                self.assertTrue(label)
+                self.assertGreaterEqual(score, 0)
+
+    def test_anaphylaxis_results_order_treatment_case_caution_without_definition(self):
+        chunks = [
+            {
+                "id": "caution", "semester": "2026-2", "course": "약물학",
+                "unit": "항체", "filename": "drug.pdf", "page": 35, "chunk_index": 0,
+                "text": "항-IgE 단클론항체는 아나필락시스 위험이 있다.",
+            },
+            {
+                "id": "case", "semester": "2026-2", "course": "약물학",
+                "unit": "응급", "filename": "drug.pdf", "page": 72, "chunk_index": 0,
+                "text": "땅콩 아나필락시스 환자에게 가장 적절한 약물은? Epinephrine",
+            },
+            {
+                "id": "treatment", "semester": "2026-2", "course": "약물학",
+                "unit": "응급", "filename": "drug.pdf", "page": 67, "chunk_index": 0,
+                "text": "아나필락시스 치료의 일차선택제로 epinephrine을 사용한다.",
+            },
+        ]
+        with patch.object(api_server, "get_chunks", return_value={"items": chunks}), \
+                patch.object(api_server, "search_relevant_chunks", return_value=[]):
+            sources, _ = api_server._search_sources(
+                "user-1", "아나필락시스", ["아나필락시스"], {}, "multi", 3, [], {}, {}
+            )
+
+        self.assertEqual([source["id"] for source in sources], ["treatment", "case", "caution"])
+        self.assertEqual(
+            [source["evidence_label"] for source in sources],
+            ["치료·활용", "사례·문제", "부작용·주의"],
+        )
 
     def test_concept_notes_upsert_no_duplicate(self):
         user = "user-1"

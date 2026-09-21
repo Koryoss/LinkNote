@@ -1944,7 +1944,8 @@
   }
   function renderSearchConceptResult(x){
     const page=x.page ? ` · p.${esc(x.page)}` : '';
-    const body=`<strong>${esc(x.concept)}</strong><span class="search-meta">${esc(x.course)} · ${esc(x.unit)}${page} · ${x.origin === 'document' ? '문서에서 확인' : `${esc(x.score || 0)}점`}</span>${esc(x.reason||'')}`;
+    const evidence=x.evidence_label ? ` · ${esc(x.evidence_label)}` : '';
+    const body=`<strong>${esc(x.concept)}</strong><span class="search-meta">${esc(x.course)} · ${esc(x.unit)}${page} · ${x.origin === 'document' ? '문서에서 확인' : `${esc(x.score || 0)}점`}${evidence}</span>${esc(x.reason||'')}`;
     if(!x.source_available){
       return `<div class="search-item search-item-concept search-item-concept-unlinked">${body}</div>`;
     }
@@ -1952,10 +1953,13 @@
   }
   function renderSearchOnly(d){
     const scopeLabel = d.scope === 'single' ? '단일 자료 검색' : '여러 자료 검색';
+    const definitionNotice = d.sources && d.sources.length && d.definition_found === false
+      ? `<div class="ask-a">정의형 원문은 확인되지 않아 기전·활용·사례·주의 자료 순으로 보여드려요.</div>` : '';
     return `<div class="search-result">
       <div class="ask-a">관련 자료를 찾았어요. AI 답변을 생성할까요?<br><span class="cost-label">${esc(scopeLabel)} · ${esc(d.intent_label || '일반 검색')} · ${d.semantic_search_used ? '의미+키워드 검색' : '키워드 검색'} · ${d.from_cache ? '캐시 결과' : '새 검색'}</span></div>
+      ${definitionNotice}
       <div class="search-card"><h4>관련 개념</h4>${renderSearchList(d.related_concepts, '관련 개념을 찾지 못했습니다.', renderSearchConceptResult)}</div>
-      <div class="search-card"><h4>근거 문서 (PDF 원문)</h4>${renderSearchList(d.sources, '직접 관련된 원문을 찾지 못했습니다.', x=>`<div class="search-item" data-result-type="source" data-result-id="${esc(x.id||x.filename||'')}" data-semester="${esc(x.semester||'')}" data-course="${esc(x.course||'')}" data-unit="${esc(x.unit||'')}" data-concept="${esc((x.matched_concepts||[])[0]||'')}" data-filename="${esc(x.filename||'')}" data-page="${esc(x.page||1)}" onclick="recordSearchEventFromElement(this)"><strong>${esc(x.filename || '파일명 없음')}</strong><span class="search-meta">${esc(x.course)} · ${esc(x.unit)} · p.${esc(x.page || '-')} · ${esc(x.relevance_label || '관련성 높음')}</span>${esc(x.reason || '')}<br>${esc(x.chunk_preview || '')}</div>`)}</div>
+      <div class="search-card"><h4>근거 문서 (PDF 원문)</h4>${renderSearchList(d.sources, '직접 관련된 원문을 찾지 못했습니다.', x=>`<div class="search-item" data-result-type="source" data-result-id="${esc(x.id||x.filename||'')}" data-semester="${esc(x.semester||'')}" data-course="${esc(x.course||'')}" data-unit="${esc(x.unit||'')}" data-concept="${esc((x.matched_concepts||[])[0]||'')}" data-filename="${esc(x.filename||'')}" data-page="${esc(x.page||1)}" onclick="recordSearchEventFromElement(this)"><strong>${esc(x.filename || '파일명 없음')}</strong><span class="search-meta">${esc(x.course)} · ${esc(x.unit)} · p.${esc(x.page || '-')} · ${esc(x.evidence_label || x.relevance_label || '관련 언급')}</span>${esc(x.reason || '')}<br>${esc(x.chunk_preview || '')}</div>`)}</div>
       <div class="search-card"><h4>Learning Memory / Recall</h4>${renderSearchList(d.learning_memory_matches, '관련 Learning Memory/Recall 기록이 없습니다.', x=>`<div class="search-item" data-result-type="learning_memory" data-result-id="${esc(x.id||'')}" data-course="${esc(x.course||'')}" data-concept="${esc(x.concept||'')}" onclick="recordSearchEventFromElement(this)"><strong>${esc(x.concept || '개념 미지정')}</strong><span class="search-meta">${esc(x.course)} · ${esc(x.unit)} · ${esc(x.score || 0)}점</span>${esc(x.reason || '')}<br>${esc(x.improved_summary || x.answer_preview || '')}</div>`)}</div>
       <button onclick="recordSearchEvent('helpful')">도움됨</button>
       ${d.can_generate_ai_answer ? `<button onclick="askInline(true)">AI 답변 생성</button> <span class="ask-mode-note">API 비용이 발생할 수 있습니다.</span>` : ''}

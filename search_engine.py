@@ -6,7 +6,7 @@ import re
 from typing import Any, Dict, Iterable, List, Mapping, Sequence, Tuple
 
 
-SEARCH_ALGORITHM_VERSION = "hybrid_personalized_v4"
+SEARCH_ALGORITHM_VERSION = "evidence_sequence_v8"
 
 _STOP_WORDS = {
     "그리고", "그러나", "관련", "자료", "찾아줘", "보여줘", "설명", "정리", "대해", "대한",
@@ -35,11 +35,13 @@ INTENT_LABELS = {
 }
 
 SOURCE_WEIGHTS = {
-    "semantic": 0.40,
-    "keyword": 0.25,
-    "concept": 0.15,
-    "learning": 0.14,
-    "preference": 0.06,
+    "semantic": 0.30,
+    "keyword": 0.23,
+    "concept": 0.14,
+    "definition": 0.17,
+    "evidence": 0.10,
+    "learning": 0.03,
+    "preference": 0.03,
 }
 
 
@@ -168,10 +170,11 @@ def score_reason(components: Mapping[str, float], matched_fields: Iterable[str] 
         "semantic": "질문과 의미가 가깝습니다",
         "keyword": "질문 키워드가 포함되어 있습니다",
         "concept": "관련 개념과 일치합니다",
+        "definition": "개념의 정의를 직접 설명합니다",
         "learning": "현재 복습 흐름과 관련이 있습니다",
         "preference": "자주 학습한 범위와 관련이 있습니다",
     }
-    direct_keys = ("keyword", "concept", "semantic")
+    direct_keys = ("definition", "keyword", "concept", "semantic")
     personal_keys = ("learning", "preference")
     ranked_direct = sorted(
         ((key, float(components.get(key, 0.0) or 0.0)) for key in direct_keys),
